@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { ChevronLeft, Home, Search, ShoppingBag, UserRound, ClipboardList, Minus, Plus, MapPin, PackageOpen } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
-import { categories, euro, productById } from '../data/products';
+import { categories, euro } from '../data/products';
 import type { OrderStatus, Product } from '../types/app';
 import { useCart } from './CartContext';
 
