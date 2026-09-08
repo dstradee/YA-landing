@@ -1,0 +1,8 @@
+{
+  "name": "YA — Delivery bajo demanda en Jerez",
+  "description": "YA llega a Jerez. Pide lo que necesitas y nosotros te lo llevamos. Próximamente.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
