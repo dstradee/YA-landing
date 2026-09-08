@@ -1,15 +1,40 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { supabase } from '../../lib/supabase';
 
 export function Waitlist() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if(email) {
-      setSubmitted(true);
-      setEmail('');
+    if (!email) return;
+
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      const { error } = await supabase
+        .from('waitlist')
+        .insert([{ email }]);
+
+      if (error) {
+        // Código de error 23505 en PostgreSQL significa violación de unicidad (Unique constraint)
+        if (error.code === '23505') {
+          setErrorMsg('¡Ya estás en la lista! Te avisaremos pronto.');
+        } else {
+          setErrorMsg('Hubo un error al guardarlo. Inténtalo de nuevo.');
+        }
+      } else {
+        setSubmitted(true);
+        setEmail('');
+      }
+    } catch (err) {
+      setErrorMsg('Error de conexión. Inténtalo más tarde.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -33,22 +58,33 @@ export function Waitlist() {
             ¡Apuntado! Te avisaremos cuando YA esté listo.
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-xl mx-auto">
-            <input 
-              type="email" 
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com" 
-              className="flex-1 bg-ya-white text-ya-black px-6 py-4 text-xl font-bold border-4 border-ya-black focus:outline-none focus:border-white"
-            />
-            <button 
-              type="submit" 
-              className="bg-ya-black text-ya-lime px-8 py-4 text-xl font-black uppercase border-4 border-ya-black hover:bg-white hover:text-ya-black transition-colors"
-            >
-              Avisarme
-            </button>
-          </form>
+          <div className="max-w-xl mx-auto">
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 mb-4">
+              <input 
+                type="email" 
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                placeholder="tu@email.com" 
+                className="flex-1 bg-ya-white text-ya-black px-6 py-4 text-xl font-bold border-4 border-ya-black focus:outline-none focus:border-white disabled:opacity-50"
+              />
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="bg-ya-black text-ya-lime px-8 py-4 text-xl font-black uppercase border-4 border-ya-black hover:bg-white hover:text-ya-black transition-colors disabled:opacity-80 disabled:hover:bg-ya-black disabled:hover:text-ya-lime disabled:cursor-wait"
+              >
+                {loading ? 'Enviando...' : 'Avisarme'}
+              </button>
+            </form>
+            
+            {/* Mensajes de error o duplicado integrados con el diseño brutalista */}
+            {errorMsg && (
+              <div className="bg-ya-black text-ya-white p-3 font-bold border-2 border-ya-black uppercase text-sm">
+                {errorMsg}
+              </div>
+            )}
+          </div>
         )}
       </motion.div>
     </section>
