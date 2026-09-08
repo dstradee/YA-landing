@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { euro, productById } from '../data/products';
+import { euro } from '../data/products';
 import { AppHeader, EmptyState } from './components';
 import { loadOrders } from './CartContext';
 
