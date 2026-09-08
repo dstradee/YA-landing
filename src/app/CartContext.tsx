@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { productById } from '../data/products';
 import type { CartLine, LocalOrder } from '../types/app';
 
@@ -6,7 +6,7 @@ type CartApi = { lines: CartLine[]; addToCart: (id: string, quantity?: number) =
 const CartContext = createContext<CartApi | undefined>(undefined);
 const CART_KEY = 'ya-cart-v1';
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
+export function CartProvider({ children }: { children: ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>(() => { try { return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') as CartLine[]; } catch { return []; } });
   useEffect(() => localStorage.setItem(CART_KEY, JSON.stringify(lines)), [lines]);
   const api = useMemo<CartApi>(() => {
