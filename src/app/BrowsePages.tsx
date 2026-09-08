@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
-import { categories, products, productById, euro } from '../data/products';
+import { euro } from '../data/products';
 import { AppHeader, CategoryCard, EmptyState, ProductCard, QuantitySelector } from './components';
 import { SearchBar } from './SearchBar';
 import { useCart } from './CartContext';
+import { useCatalog } from './CatalogContext';
 
 export function AppHome() {
+  const { categories, products } = useCatalog();
   const currentHour = new Date().getHours();
   const greeting =
     currentHour >= 21 || currentHour < 6
@@ -138,8 +140,9 @@ export function AppHome() {
 
 export function CategoryPage() {
   const { slug } = useParams();
+  const { categories, products } = useCatalog();
   const category = categories.find((item) => item.slug === slug);
-  const items = products.filter((item) => item.category === slug);
+  const items = products.filter((item) => item.category === slug && item.active);
 
   if (!category) {
     return (
@@ -198,15 +201,17 @@ export function CategoryPage() {
 }
 
 export function SearchPage() {
+  const { products } = useCatalog();
   const [query, setQuery] = useState('');
 
   const result = useMemo(() => {
     const term = query.toLowerCase().trim();
-    if (!term) return products;
+    if (!term) return products.filter((p) => p.active);
     return products.filter((item) =>
+      item.active &&
       [item.name, item.category, item.description].join(' ').toLowerCase().includes(term)
     );
-  }, [query]);
+  }, [query, products]);
 
   return (
     <>
@@ -254,7 +259,8 @@ export function SearchPage() {
 
 export function ProductPage() {
   const { id } = useParams();
-  const product = productById(id ?? '');
+  const { getProductById } = useCatalog();
+  const product = getProductById(id ?? '');
   const { lines, addToCart, increaseQuantity, decreaseQuantity } = useCart();
   const [addedNotice, setAddedNotice] = useState(false);
 
@@ -279,6 +285,7 @@ export function ProductPage() {
   }
 
   const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
+  const isImageEmoji = !product.image.startsWith('http') && !product.image.startsWith('/');
 
   const handleAdd = () => {
     addToCart(product.id);
@@ -291,8 +298,17 @@ export function ProductPage() {
       <AppHeader back />
       <main id={`product-page-${product.id}`} className="max-w-2xl mx-auto px-4 pt-6 pb-28">
         {/* Visual Box */}
-        <div className="h-64 sm:h-80 bg-ya-gray border-2 border-ya-gray grid place-items-center text-8xl sm:text-9xl relative">
-          <span>{product.image}</span>
+        <div className="h-64 sm:h-80 bg-ya-gray border-2 border-ya-gray grid place-items-center text-8xl sm:text-9xl relative overflow-hidden">
+          {isImageEmoji ? (
+            <span>{product.image}</span>
+          ) : (
+            <img
+              src={product.image}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          )}
           <span className="absolute top-3 left-3 bg-ya-black border border-ya-gray px-2 py-1 text-[10px] font-black text-ya-lime uppercase tracking-widest">
             {product.category}
           </span>

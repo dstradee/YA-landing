@@ -1,10 +1,11 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { euro, productById } from '../data/products';
+import { euro } from '../data/products';
 import type { Address, LocalOrder, OrderStatus } from '../types/app';
 import { AppHeader, EmptyState, OrderTimeline } from './components';
 import { CartItem } from './CartItem';
 import { loadOrders, saveOrder, useCart } from './CartContext';
+import { useCatalog } from './CatalogContext';
 
 const deliveryFee = 2.9;
 
@@ -326,6 +327,7 @@ export function CheckoutPage() {
 
 export function OrderPage() {
   const { id } = useParams();
+  const { getProductById } = useCatalog();
   const [orders, setOrders] = useState(loadOrders);
   const order = orders.find((item) => item.id === id);
 
@@ -442,7 +444,7 @@ export function OrderPage() {
           <h2 className="font-black text-lg uppercase tracking-wider mb-3">Productos</h2>
           <div className="divide-y-2 divide-ya-gray">
             {order.lines.map((item) => {
-              const prod = productById(item.productId);
+              const prod = getProductById(item.productId);
               return (
                 <div key={item.productId} className="py-3 flex justify-between items-center text-sm font-bold">
                   <div className="flex items-center gap-2">

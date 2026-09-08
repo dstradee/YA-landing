@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { productById } from '../data/products';
+import { productById as fallbackProductById } from '../data/products';
+import { useCatalog } from './CatalogContext';
 import type { CartLine, LocalOrder } from '../types/app';
 
 type CartApi = {
@@ -45,6 +46,7 @@ const INITIAL_MOCK_ORDERS: LocalOrder[] = [
 ];
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { getProductById } = useCatalog();
   const [lines, setLines] = useState<CartLine[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') as CartLine[];
@@ -93,7 +95,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const count = lines.reduce((sum, item) => sum + item.quantity, 0);
 
     const subtotal = lines.reduce((sum, item) => {
-      const prod = productById(item.productId);
+      const prod = getProductById(item.productId) || fallbackProductById(item.productId);
       return sum + (prod?.price ?? 0) * item.quantity;
     }, 0);
 
@@ -107,7 +109,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       count,
       subtotal,
     };
-  }, [lines]);
+  }, [lines, getProductById]);
 
   return <CartContext.Provider value={api}>{children}</CartContext.Provider>;
 }

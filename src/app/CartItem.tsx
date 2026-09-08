@@ -1,21 +1,34 @@
-import { euro, productById } from '../data/products';
+import { euro, productById as fallbackProductById } from '../data/products';
 import { QuantitySelector } from './components';
 import { useCart } from './CartContext';
+import { useCatalog } from './CatalogContext';
 import type { CartLine } from '../types/app';
 
 export function CartItem({ line }: { line: CartLine }) {
   const { increaseQuantity, decreaseQuantity, removeFromCart } = useCart();
-  const product = productById(line.productId);
+  const { getProductById } = useCatalog();
+  const product = getProductById(line.productId) || fallbackProductById(line.productId);
 
   if (!product) return null;
+
+  const isImageEmoji = !product.image.startsWith('http') && !product.image.startsWith('/');
 
   return (
     <article
       id={`cart-item-${product.id}`}
       className="flex gap-3 bg-ya-gray p-3 border-2 border-ya-gray hover:border-ya-lime transition-colors"
     >
-      <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl">
-        {product.image}
+      <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden">
+        {isImageEmoji ? (
+          <span>{product.image}</span>
+        ) : (
+          <img
+            src={product.image}
+            alt={product.name}
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-black truncate">{product.name}</h3>

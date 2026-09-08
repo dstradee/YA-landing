@@ -12,9 +12,10 @@ import {
   PackageOpen,
 } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
-import { categories, euro } from '../data/products';
+import { euro } from '../data/products';
 import type { OrderStatus, Product } from '../types/app';
 import { useCart } from './CartContext';
+import { useCatalog } from './CatalogContext';
 
 export function AppHeader({ back }: { back?: boolean }) {
   const { count } = useCart();
@@ -149,8 +150,10 @@ export function QuantitySelector({
 
 export function ProductCard({ product }: { product: Product }) {
   const { lines, addToCart, increaseQuantity, decreaseQuantity } = useCart();
+  const { categories } = useCatalog();
   const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
   const category = categories.find((item) => item.slug === product.category);
+  const isImageEmoji = !product.image.startsWith('http') && !product.image.startsWith('/');
 
   return (
     <motion.article
@@ -161,8 +164,17 @@ export function ProductCard({ product }: { product: Product }) {
       className="bg-ya-gray border-2 border-ya-gray hover:border-ya-lime flex flex-col justify-between transition-colors"
     >
       <Link to={'/app/producto/' + product.id} className="block p-4 flex-1">
-        <div className="h-28 bg-ya-black border border-ya-gray flex items-center justify-center text-5xl mb-3 relative">
-          <span>{product.image}</span>
+        <div className="h-28 bg-ya-black border border-ya-gray flex items-center justify-center text-5xl mb-3 relative overflow-hidden">
+          {isImageEmoji ? (
+            <span>{product.image}</span>
+          ) : (
+            <img
+              src={product.image}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          )}
           {product.inStock && (
             <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-ya-lime bg-ya-black/80 px-1.5 py-0.5 border border-ya-lime/30">
               Stock
@@ -201,6 +213,7 @@ export function ProductCard({ product }: { product: Product }) {
 }
 
 export function CategoryCard({ slug }: { slug: string }) {
+  const { categories } = useCatalog();
   const category = categories.find((item) => item.slug === slug);
   if (!category) return null;
 
@@ -222,18 +235,24 @@ const statusText: Record<OrderStatus, string> = {
   received: 'Pedido recibido',
   preparing: 'Preparando pedido',
   shopping: 'Comprando pedido',
+  sourcing: 'Comprando pedido',
   ready: 'Pedido preparado',
+  prepared: 'Pedido preparado',
   delivering: 'Ya estoy repartiendo',
   delivered: 'Entregado',
+  cancelled: 'Cancelado',
 };
 
 const statusDescriptions: Record<OrderStatus, string> = {
   received: 'Hemos recibido tu orden en Jerez de la Frontera.',
   preparing: 'Asignando repartidor y preparando la ruta.',
   shopping: 'Adquiriendo los artículos seleccionados.',
+  sourcing: 'Adquiriendo los artículos en comercio de Jerez.',
   ready: 'Bolsa lista con bebidas frías y precintada.',
+  prepared: 'Bolsa lista y precintada en punto de salida.',
   delivering: 'Tu repartidor YA va de camino a tu ubicación.',
   delivered: 'Pedido entregado en tu puerta. ¡Disfrútalo!',
+  cancelled: 'El pedido ha sido cancelado.',
 };
 
 const statuses: OrderStatus[] = [
