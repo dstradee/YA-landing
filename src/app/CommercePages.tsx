@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { euro, productById } from '../data/products';
 import type { Address, LocalOrder, OrderStatus } from '../types/app';
 import { AppHeader, EmptyState, OrderTimeline, QuantitySelector } from './components';
-import { clearCart, } from './unused';
 import { loadOrders, saveOrder, useCart } from './CartContext';
 
 const deliveryFee = 2.9;
