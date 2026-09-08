@@ -23,7 +23,6 @@ import {
   type AdminProductItem,
 } from '../lib/catalog';
 import { useAuth } from '../lib/auth';
-import { isSupabaseConfigured } from '../lib/supabase';
 import { euro } from '../data/products';
 
 // ==============================================================================
@@ -62,8 +61,6 @@ function AdminAccessDenied({ reason }: { reason: string }) {
 // 2. LAYOUT DEL PANEL DE ADMINISTRACIÓN (BAUHAUS MODERNO / BRUTALISMO LIMPIO)
 // ==============================================================================
 function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { isAdmin } = useAuth();
-
   return (
     <div className="min-h-screen bg-ya-black text-white font-sans flex flex-col selection:bg-ya-lime selection:text-ya-black">
       {/* Topbar */}
@@ -110,12 +107,9 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-gray-400">
               <span className="w-2 h-2 rounded-full bg-ya-lime animate-pulse"></span>
-              <span>Supabase {isSupabaseConfigured ? 'Conectado' : 'Mock Local'}</span>
-              {isAdmin && (
-                <span className="bg-ya-gray px-2 py-0.5 text-[10px] font-black uppercase text-ya-lime ml-2 border border-ya-lime/30">
-                  ADMIN
-                </span>
-              )}
+              <span className="bg-ya-gray px-2 py-0.5 text-[10px] font-black uppercase text-ya-lime border border-ya-lime/30">
+                ADMIN AUTORIZADO
+              </span>
             </div>
 
             <Link
@@ -1092,16 +1086,31 @@ export function AdminProductsPage() {
 export function AdminRoutes() {
   const { user, role, isAdmin, loading } = useAuth();
 
-  // Si Supabase está configurado pero el usuario no es admin (o no está autenticado aún)
-  // mostramos la denegación de acceso protegida.
-  if (!loading && isSupabaseConfigured && !isAdmin) {
+  // Pantalla de carga mientras se verifica la sesión en Supabase Auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-ya-black text-white flex items-center justify-center p-4">
+        <div className="text-center font-mono text-xs uppercase tracking-widest text-ya-lime animate-pulse">
+          Verificando credenciales de administrador...
+        </div>
+      </div>
+    );
+  }
+
+  // REGLAS ESTRICTAS DE SEGURIDAD (SIN NINGÚN BYPASS):
+  // 1. Usuario no autenticado -> Acceso denegado
+  // 2. Usuario con rol diferente a 'admin' ('customer', 'courier' u otros) -> Acceso denegado
+  // Únicamente usuario autenticado con profile.role === 'admin' puede acceder.
+  if (!user || !isAdmin) {
     if (!user) {
       return (
         <AdminAccessDenied reason="Debes iniciar sesión con una cuenta autorizada con rol 'admin' para acceder al panel de administración de YA." />
       );
     }
     return (
-      <AdminAccessDenied reason={`Tu cuenta (${user.email}) tiene rol '${role || 'customer'}'. Únicamente usuarios con rol 'admin' tienen permisos para modificar el catálogo.`} />
+      <AdminAccessDenied
+        reason={`Acceso denegado: Tu cuenta (${user.email}) tiene rol '${role || 'sin rol asignado'}'. Únicamente usuarios autenticados con rol 'admin' tienen permisos para acceder al panel de administración.`}
+      />
     );
   }
 
