@@ -106,6 +106,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshCommercialData();
+    const handleCommercialUpdate = () => {
+      refreshCommercialData();
+    };
+    window.addEventListener('ya-commercial-updated', handleCommercialUpdate);
+    return () => {
+      window.removeEventListener('ya-commercial-updated', handleCommercialUpdate);
+    };
   }, [refreshCommercialData]);
 
   useEffect(() => {
@@ -264,10 +271,51 @@ export function CartProvider({ children }: { children: ReactNode }) {
   return <CartContext.Provider value={api}>{children}</CartContext.Provider>;
 }
 
-export const useCart = () => {
+const SAFE_FALLBACK_PRICING: CartPricingSummary = {
+  rawSubtotal: 0,
+  totalLineDiscounts: 0,
+  subtotal: 0,
+  appliedPromotion: null,
+  promotionDiscount: 0,
+  subtotalAfterPromotion: 0,
+  standardDeliveryFee: 2.9,
+  deliveryFee: 2.9,
+  freeShippingEnabled: true,
+  isFreeShipping: false,
+  freeShippingThreshold: 30.0,
+  freeShippingRemaining: 30.0,
+  freeShippingProgress: 0,
+  minOrderEnabled: true,
+  minOrderAmount: 10.0,
+  isMinOrderSatisfied: true,
+  minOrderRemaining: 0,
+  total: 0,
+  totalSavings: 0,
+  lines: [],
+};
+
+export const useCart = (): CartApi => {
   const context = useContext(CartContext);
   if (!context) {
-    throw new Error('useCart debe usarse dentro de CartProvider');
+    // Fallback seguro si se usa fuera de CartProvider (ej: componentes administrativos o tests)
+    return {
+      lines: [],
+      addToCart: () => {},
+      addPackToCart: () => {},
+      removeFromCart: () => {},
+      increaseQuantity: () => {},
+      decreaseQuantity: () => {},
+      clearCart: () => {},
+      count: 0,
+      subtotal: 0,
+      pricing: SAFE_FALLBACK_PRICING,
+      commercialSettings: DEFAULT_COMMERCIAL_SETTINGS,
+      activePacks: [],
+      packs: [],
+      activeDiscounts: [],
+      activePromotions: [],
+      refreshCommercialData: async () => {},
+    };
   }
   return context;
 };

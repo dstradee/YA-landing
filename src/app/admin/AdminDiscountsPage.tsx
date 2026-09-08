@@ -25,10 +25,8 @@ import {
 import { adminFetchProducts, adminFetchCategories, type AdminCategoryWithCount, type AdminProductItem } from '../../lib/catalog';
 import type { DbDiscount, DiscountScope, DiscountType } from '../../types/app';
 import { euro } from '../../data/products';
-import { useCart } from '../CartContext';
 
 export function AdminDiscountsPage() {
-  const { refreshCommercialData } = useCart();
   const [discounts, setDiscounts] = useState<DbDiscount[]>([]);
   const [products, setProducts] = useState<AdminProductItem[]>([]);
   const [categories, setCategories] = useState<AdminCategoryWithCount[]>([]);
@@ -163,7 +161,7 @@ export function AdminDiscountsPage() {
         setActionSuccess(`Descuento "${payload.name}" actualizado correctamente.`);
         closeModal();
         await loadData();
-        await refreshCommercialData();
+        window.dispatchEvent(new Event('ya-commercial-updated'));
       }
     } else {
       const res = await createDiscount(payload);
@@ -173,7 +171,7 @@ export function AdminDiscountsPage() {
         setActionSuccess(`Descuento "${payload.name}" creado con éxito.`);
         closeModal();
         await loadData();
-        await refreshCommercialData();
+        window.dispatchEvent(new Event('ya-commercial-updated'));
       }
     }
 
@@ -188,7 +186,7 @@ export function AdminDiscountsPage() {
     } else {
       setActionSuccess(`Descuento "${d.name}" ${!d.active ? 'activado' : 'desactivado'}.`);
       await loadData();
-      await refreshCommercialData();
+      window.dispatchEvent(new Event('ya-commercial-updated'));
     }
   };
 
@@ -201,7 +199,7 @@ export function AdminDiscountsPage() {
     } else {
       setActionSuccess(`Descuento "${name}" eliminado.`);
       await loadData();
-      await refreshCommercialData();
+      window.dispatchEvent(new Event('ya-commercial-updated'));
     }
   };
 
@@ -289,6 +287,20 @@ export function AdminDiscountsPage() {
       {loading ? (
         <div className="py-24 text-center font-mono text-xs uppercase text-ya-lime animate-pulse">
           Cargando reglas de descuento...
+        </div>
+      ) : actionError && discounts.length === 0 ? (
+        <div className="border-4 border-red-500 bg-ya-black p-12 text-center space-y-4 shadow-[6px_6px_0px_0px_#EF4444]">
+          <AlertTriangle size={40} className="text-red-400 mx-auto" />
+          <h3 className="text-lg font-black uppercase text-white">Error al cargar reglas de descuento</h3>
+          <p className="text-xs font-mono text-gray-300 max-w-md mx-auto">{actionError}</p>
+          <button
+            type="button"
+            onClick={loadData}
+            className="px-6 py-2.5 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-xs border-2 border-ya-lime hover:bg-white hover:border-white transition-all inline-flex items-center gap-2"
+          >
+            <RefreshCw size={14} />
+            <span>Reintentar Carga</span>
+          </button>
         </div>
       ) : filteredDiscounts.length === 0 ? (
         <div className="border-4 border-ya-gray bg-ya-black p-12 text-center space-y-4">

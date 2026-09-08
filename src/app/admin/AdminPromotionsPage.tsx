@@ -24,10 +24,8 @@ import {
 } from '../../lib/adminPromotions';
 import type { DbPromotion, DiscountType } from '../../types/app';
 import { euro } from '../../data/products';
-import { useCart } from '../CartContext';
 
 export function AdminPromotionsPage() {
-  const { refreshCommercialData } = useCart();
   const [promotions, setPromotions] = useState<DbPromotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -155,7 +153,7 @@ export function AdminPromotionsPage() {
         setActionSuccess(`Promoción "${cleanCode}" actualizada correctamente.`);
         closeModal();
         await loadData();
-        await refreshCommercialData();
+        window.dispatchEvent(new Event('ya-commercial-updated'));
       }
     } else {
       const res = await createPromotion(payload);
@@ -165,7 +163,7 @@ export function AdminPromotionsPage() {
         setActionSuccess(`Promoción "${cleanCode}" creada con éxito.`);
         closeModal();
         await loadData();
-        await refreshCommercialData();
+        window.dispatchEvent(new Event('ya-commercial-updated'));
       }
     }
 
@@ -180,7 +178,7 @@ export function AdminPromotionsPage() {
     } else {
       setActionSuccess(`Promoción "${p.code}" ${!p.active ? 'activada' : 'desactivada'}.`);
       await loadData();
-      await refreshCommercialData();
+      window.dispatchEvent(new Event('ya-commercial-updated'));
     }
   };
 
@@ -193,7 +191,7 @@ export function AdminPromotionsPage() {
     } else {
       setActionSuccess(`Promoción "${codeStr}" eliminada.`);
       await loadData();
-      await refreshCommercialData();
+      window.dispatchEvent(new Event('ya-commercial-updated'));
     }
   };
 
@@ -257,6 +255,20 @@ export function AdminPromotionsPage() {
       {loading ? (
         <div className="py-24 text-center font-mono text-xs uppercase text-ya-lime animate-pulse">
           Cargando promociones...
+        </div>
+      ) : actionError && promotions.length === 0 ? (
+        <div className="border-4 border-red-500 bg-ya-black p-12 text-center space-y-4 shadow-[6px_6px_0px_0px_#EF4444]">
+          <AlertTriangle size={40} className="text-red-400 mx-auto" />
+          <h3 className="text-lg font-black uppercase text-white">Error al cargar promociones</h3>
+          <p className="text-xs font-mono text-gray-300 max-w-md mx-auto">{actionError}</p>
+          <button
+            type="button"
+            onClick={loadData}
+            className="px-6 py-2.5 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-xs border-2 border-ya-lime hover:bg-white hover:border-white transition-all inline-flex items-center gap-2"
+          >
+            <RefreshCw size={14} />
+            <span>Reintentar Carga</span>
+          </button>
         </div>
       ) : promotions.length === 0 ? (
         <div className="border-4 border-ya-gray bg-ya-black p-12 text-center space-y-4">

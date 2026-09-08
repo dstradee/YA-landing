@@ -25,10 +25,8 @@ import {
 import { adminFetchProducts, type AdminProductItem } from '../../lib/catalog';
 import type { PackWithDetails, PackType } from '../../types/app';
 import { euro } from '../../data/products';
-import { useCart } from '../CartContext';
 
 export function AdminPacksPage() {
-  const { refreshCommercialData } = useCart();
   const [packs, setPacks] = useState<PackWithDetails[]>([]);
   const [products, setProducts] = useState<AdminProductItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -278,7 +276,7 @@ export function AdminPacksPage() {
         setActionSuccess(`Pack "${packData.name}" actualizado correctamente.`);
         closeModal();
         await loadData();
-        await refreshCommercialData();
+        window.dispatchEvent(new Event('ya-commercial-updated'));
       }
     } else {
       const res = await createPack({
@@ -292,7 +290,7 @@ export function AdminPacksPage() {
         setActionSuccess(`Pack "${packData.name}" creado con éxito.`);
         closeModal();
         await loadData();
-        await refreshCommercialData();
+        window.dispatchEvent(new Event('ya-commercial-updated'));
       }
     }
 
@@ -307,7 +305,7 @@ export function AdminPacksPage() {
     } else {
       setActionSuccess(`Pack "${p.name}" ${!p.active ? 'activado' : 'desactivado'}.`);
       await loadData();
-      await refreshCommercialData();
+      window.dispatchEvent(new Event('ya-commercial-updated'));
     }
   };
 
@@ -320,7 +318,7 @@ export function AdminPacksPage() {
     } else {
       setActionSuccess(`Pack "${packName}" eliminado.`);
       await loadData();
-      await refreshCommercialData();
+      window.dispatchEvent(new Event('ya-commercial-updated'));
     }
   };
 
@@ -408,6 +406,20 @@ export function AdminPacksPage() {
       {loading ? (
         <div className="py-24 text-center font-mono text-xs uppercase text-ya-lime animate-pulse">
           Cargando catálogo de packs...
+        </div>
+      ) : actionError && packs.length === 0 ? (
+        <div className="border-4 border-red-500 bg-ya-black p-12 text-center space-y-4 shadow-[6px_6px_0px_0px_#EF4444]">
+          <AlertTriangle size={40} className="text-red-400 mx-auto" />
+          <h3 className="text-lg font-black uppercase text-white">Error al cargar catálogo de packs</h3>
+          <p className="text-xs font-mono text-gray-300 max-w-md mx-auto">{actionError}</p>
+          <button
+            type="button"
+            onClick={loadData}
+            className="px-6 py-2.5 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-xs border-2 border-ya-lime hover:bg-white hover:border-white transition-all inline-flex items-center gap-2"
+          >
+            <RefreshCw size={14} />
+            <span>Reintentar Carga</span>
+          </button>
         </div>
       ) : filteredPacks.length === 0 ? (
         <div className="border-4 border-ya-gray bg-ya-black p-12 text-center space-y-4">

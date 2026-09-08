@@ -17,10 +17,8 @@ import {
 } from 'lucide-react';
 import { getCommercialSettings, updateCommercialSettings } from '../../lib/commercialSettings';
 import { euro } from '../../data/products';
-import { useCart } from '../CartContext';
 
 export function AdminCommercialPage() {
-  const { refreshCommercialData } = useCart();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -94,8 +92,8 @@ export function AdminCommercialPage() {
       setErrorMsg(res.error || 'No se pudo guardar la configuración.');
     } else {
       setSuccessMsg('Configuración comercial actualizada correctamente.');
-      // Actualizar contexto global del carrito
-      await refreshCommercialData();
+      // Notificar al contexto global del carrito y la app
+      window.dispatchEvent(new Event('ya-commercial-updated'));
     }
     setSaving(false);
   };

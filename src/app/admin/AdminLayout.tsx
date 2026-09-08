@@ -20,6 +20,7 @@ import {
   Sliders,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
+import { AdminErrorBoundary } from './AdminErrorBoundary';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -229,7 +230,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* Content Container */}
         <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-          {children}
+          <AdminErrorBoundary>
+            {children}
+          </AdminErrorBoundary>
         </div>
       </div>
 
