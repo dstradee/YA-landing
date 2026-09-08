@@ -40,16 +40,16 @@ function AdminAccessDenied({ reason }: { reason: string }) {
 
         <div className="space-y-3">
           <Link
-            to="/app"
+            to="/login"
             className="block w-full py-3 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-xs hover:bg-white transition-colors"
           >
-            Ir a la tienda YA
+            Iniciar sesión como Admin
           </Link>
           <Link
-            to="/"
+            to="/app"
             className="block w-full py-3 border-2 border-ya-gray text-gray-300 font-black uppercase tracking-wider text-xs hover:border-white hover:text-white transition-colors"
           >
-            Volver a la landing
+            Ir a la tienda YA
           </Link>
         </div>
       </div>
