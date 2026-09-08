@@ -1,3 +1,4 @@
+import { Route, Routes } from 'react-router-dom';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { Hero } from './components/sections/Hero';
@@ -6,22 +7,8 @@ import { HowItWorks } from './components/sections/HowItWorks';
 import { Categories } from './components/sections/Categories';
 import { Waitlist } from './components/sections/Waitlist';
 import { Local } from './components/sections/Local';
+import { CustomerRoutes } from './app/CustomerRoutes';
 
-function App() {
-  return (
-    <div className="min-h-screen flex flex-col font-sans">
-      <Navbar />
-      <main className="flex-grow">
-        <Hero />
-        <Problem />
-        <HowItWorks />
-        <Categories />
-        <Waitlist />
-        <Local />
-      </main>
-      <Footer />
-    </div>
-  );
-}
-
+function Landing() { return <div className="min-h-screen flex flex-col font-sans"><Navbar/><main className="flex-grow"><Hero/><Problem/><HowItWorks/><Categories/><Waitlist/><Local/></main><Footer/></div>; }
+function App() { return <><Routes><Route path="/" element={<Landing/>}/></Routes><CustomerRoutes/></>; }
 export default App;
