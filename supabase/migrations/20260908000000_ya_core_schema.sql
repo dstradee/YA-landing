@@ -283,15 +283,35 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+    v_full_name TEXT;
+    v_phone TEXT;
 BEGIN
+    v_full_name := COALESCE(
+        NEW.raw_user_meta_data->>'full_name',
+        NEW.raw_user_meta_data->>'name',
+        'Usuario YA'
+    );
+
+    v_phone := COALESCE(
+        NEW.raw_user_meta_data->>'phone',
+        NEW.raw_user_meta_data->>'phone_number',
+        NEW.phone
+    );
+
     INSERT INTO public.profiles (id, full_name, phone, role)
     VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', 'Usuario YA'),
-        NEW.raw_user_meta_data->>'phone',
+        v_full_name,
+        v_phone,
         'customer'
     )
-    ON CONFLICT (id) DO NOTHING;
+    ON CONFLICT (id) DO UPDATE
+    SET
+        full_name = EXCLUDED.full_name,
+        phone = COALESCE(public.profiles.phone, EXCLUDED.phone),
+        updated_at = timezone('utc'::text, now());
+
     RETURN NEW;
 END;
 $$;

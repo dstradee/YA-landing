@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const cleanEmail = email.trim().toLowerCase();
       const cleanName = fullName.trim();
-      const cleanPhone = phone ? phone.trim() : null;
+      const cleanPhone = phone && phone.trim() ? phone.trim() : null;
 
       if (!cleanEmail || !cleanName || !password) {
         return { success: false, error: 'Por favor, completa todos los campos obligatorios.' };
@@ -229,6 +229,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
+        // Redirección segura para que Supabase Auth nunca apunte a localhost en emails de confirmación
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin
+            ? `${window.location.origin}/app`
+            : 'https://landing-nine.vercel.app/app';
+
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
@@ -236,7 +242,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             data: {
               full_name: cleanName,
               phone: cleanPhone,
+              phone_number: cleanPhone,
             },
+            emailRedirectTo: redirectUrl,
           },
         });
 

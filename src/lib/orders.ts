@@ -1,0 +1,308 @@
+import { supabase, isSupabaseConfigured } from './supabase';
+import type { DbAddress, DbDeliveryZone, DbOrder, DbOrderItem, PaymentMethod } from '../types/app';
+
+// ==============================================================================
+// 1. GESTIÓN DE DIRECCIONES (addresses)
+// ==============================================================================
+
+export async function fetchUserAddresses(userId: string): Promise<DbAddress[]> {
+  if (!isSupabaseConfigured || !userId) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      console.warn('Error al cargar direcciones de usuario:', error);
+      return [];
+    }
+
+    return data as DbAddress[];
+  } catch (err) {
+    console.warn('Excepción al cargar direcciones:', err);
+    return [];
+  }
+}
+
+export async function createUserAddress(params: {
+  userId: string;
+  name: string;
+  phone?: string;
+  street: string;
+  number: string;
+  floor_door?: string;
+  postal_code: string;
+  city?: string;
+  notes?: string;
+  is_default?: boolean;
+}): Promise<{ address: DbAddress | null; error: string | null }> {
+  if (!isSupabaseConfigured) {
+    return { address: null, error: 'Supabase no está configurado.' };
+  }
+
+  try {
+    const payload = {
+      user_id: params.userId,
+      name: params.name.trim(),
+      phone: params.phone ? params.phone.trim() : null,
+      street: params.street.trim(),
+      number: params.number.trim(),
+      floor_door: params.floor_door ? params.floor_door.trim() : null,
+      postal_code: params.postal_code.trim(),
+      city: params.city ? params.city.trim() : 'Jerez de la Frontera',
+      notes: params.notes ? params.notes.trim() : null,
+      is_default: Boolean(params.is_default),
+    };
+
+    const { data, error } = await supabase
+      .from('addresses')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) {
+      return { address: null, error: error.message };
+    }
+
+    return { address: data as DbAddress, error: null };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Error inesperado al guardar la dirección.';
+    return { address: null, error: message };
+  }
+}
+
+// ==============================================================================
+// 2. ZONAS DE ENTREGA (delivery_zones)
+// ==============================================================================
+
+export async function fetchActiveDeliveryZone(): Promise<{ fee: number; zone: DbDeliveryZone | null }> {
+  const fallback = { fee: 2.90, zone: null };
+
+  if (!isSupabaseConfigured) {
+    return fallback;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('delivery_zones')
+      .select('*')
+      .eq('active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      return fallback;
+    }
+
+    return {
+      fee: Number(data.delivery_fee) || 2.90,
+      zone: data as DbDeliveryZone,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+// ==============================================================================
+// 3. CREACIÓN SEGURA DE PEDIDOS (RPC create_order)
+// ==============================================================================
+
+const PAYMENT_MAP: Record<string, PaymentMethod> = {
+  Tarjeta: 'card',
+  'Apple Pay': 'apple_pay',
+  'Google Pay': 'google_pay',
+  Bizum: 'bizum',
+  Efectivo: 'cash',
+};
+
+export type CreateOrderInput = {
+  addressId: string;
+  lines: Array<{ productId: string; quantity: number }>;
+  notes?: string;
+  paymentMethod?: string;
+};
+
+export type CreateOrderResult = {
+  success: boolean;
+  orderId?: string;
+  orderNumber?: string;
+  subtotal?: number;
+  deliveryFee?: number;
+  total?: number;
+  error?: string;
+};
+
+export async function createOrderViaRpc(input: CreateOrderInput): Promise<CreateOrderResult> {
+  if (!isSupabaseConfigured) {
+    return {
+      success: false,
+      error: 'Supabase no está configurado. Conéctate a una instancia activa de Supabase.',
+    };
+  }
+
+  try {
+    const paymentMethodType = PAYMENT_MAP[input.paymentMethod || 'Tarjeta'] || 'card';
+
+    const rpcPayload = {
+      p_address_id: input.addressId,
+      p_items: input.lines.map((l) => ({
+        product_id: l.productId,
+        quantity: l.quantity,
+      })),
+      p_notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
+      p_payment_method: paymentMethodType,
+    };
+
+    const { data, error } = await supabase.rpc('create_order', rpcPayload);
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || 'No se pudo crear el pedido en Supabase.',
+      };
+    }
+
+    if (!data || !data.success) {
+      return {
+        success: false,
+        error: 'Respuesta inválida del servidor al crear el pedido.',
+      };
+    }
+
+    return {
+      success: true,
+      orderId: data.order_id,
+      orderNumber: data.order_number,
+      subtotal: Number(data.subtotal),
+      deliveryFee: Number(data.delivery_fee),
+      total: Number(data.total),
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado de comunicación con la base de datos.';
+    return {
+      success: false,
+      error: msg,
+    };
+  }
+}
+
+// ==============================================================================
+// 4. CONSULTA DE PEDIDO INDIVIDUAL (orders + order_items)
+// ==============================================================================
+
+export type OrderWithDetails = DbOrder & {
+  order_items: DbOrderItem[];
+};
+
+export async function fetchOrderByIdOrNumber(
+  idOrNumber: string
+): Promise<{ order: OrderWithDetails | null; error: string | null }> {
+  if (!isSupabaseConfigured || !idOrNumber) {
+    return { order: null, error: 'Identificador de pedido no válido.' };
+  }
+
+  try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrNumber);
+
+    let query = supabase
+      .from('orders')
+      .select('*, order_items(*)');
+
+    if (isUuid) {
+      query = query.eq('id', idOrNumber);
+    } else {
+      query = query.eq('order_number', idOrNumber);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      return { order: null, error: error.message };
+    }
+
+    if (!data) {
+      return { order: null, error: 'Pedido no encontrado.' };
+    }
+
+    return { order: data as OrderWithDetails, error: null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error al consultar el pedido.';
+    return { order: null, error: msg };
+  }
+}
+
+// ==============================================================================
+// 5. CONSULTA DE HISTORIAL DE PEDIDOS DEL USUARIO
+// ==============================================================================
+
+export async function fetchUserOrders(userId: string): Promise<{
+  orders: OrderWithDetails[];
+  error: string | null;
+}> {
+  if (!isSupabaseConfigured || !userId) {
+    return { orders: [], error: null };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { orders: [], error: error.message };
+    }
+
+    return { orders: (data || []) as OrderWithDetails[], error: null };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error al cargar los pedidos del usuario.';
+    return { orders: [], error: msg };
+  }
+}
+
+// ==============================================================================
+// 6. SUSCRIPCIÓN EN TIEMPO REAL AL ESTADO DE UN PEDIDO
+// ==============================================================================
+
+export function subscribeToOrderStatus(
+  orderId: string,
+  onStatusChange: (updatedOrder: Partial<DbOrder>) => void
+): () => void {
+  if (!isSupabaseConfigured || !orderId || typeof supabase.channel !== 'function') {
+    return () => {};
+  }
+
+  try {
+    const channel = supabase
+      .channel(`order-realtime-${orderId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${orderId}`,
+        },
+        (payload) => {
+          if (payload.new) {
+            onStatusChange(payload.new as Partial<DbOrder>);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  } catch {
+    return () => {};
+  }
+}

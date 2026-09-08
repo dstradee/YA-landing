@@ -1,6 +1,7 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { euro } from '../data/products';
+import type { Address } from '../types/app';
 import { AppHeader, EmptyState } from './components';
 import { loadOrders } from './CartContext';
 import {
@@ -18,30 +19,143 @@ import {
   AlertCircle,
   Loader2,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { fetchUserOrders, type OrderWithDetails } from '../lib/orders';
 
 export function OrdersPage() {
-  const orders = loadOrders();
+  const { user, loading: authLoading } = useAuth();
+  const [dbOrders, setDbOrders] = useState<OrderWithDetails[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  const loadRealOrders = () => {
+    if (!user) return;
+    setLoadingOrders(true);
+    setError(null);
+    fetchUserOrders(user.id)
+      .then((res) => {
+        if (res.error) {
+          setError(res.error);
+        } else {
+          setDbOrders(res.orders);
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Error al cargar pedidos.');
+      })
+      .finally(() => setLoadingOrders(false));
+  };
+
+  useEffect(() => {
+    if (user) {
+      loadRealOrders();
+    }
+  }, [user]);
+
+  if (authLoading) {
+    return (
+      <>
+        <AppHeader />
+        <main className="max-w-2xl mx-auto px-4 pt-12 text-center">
+          <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-ya-lime animate-pulse">
+            <Loader2 size={16} className="animate-spin" /> Verificando sesión...
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  // CASO A: Usuario NO autenticado
+  if (!user) {
+    return (
+      <>
+        <AppHeader />
+        <main id="orders-page-guest" className="max-w-2xl mx-auto px-4 pt-6 pb-28">
+          <h1 className="font-black text-4xl uppercase tracking-tight">Mis pedidos</h1>
+          <p className="text-gray-400 font-bold text-xs uppercase tracking-wider mt-1">
+            Historial de entregas y seguimiento en Jerez
+          </p>
+
+          <div className="mt-8 border-2 border-ya-gray bg-ya-gray/30 p-8 text-center">
+            <div className="w-14 h-14 bg-ya-black border-2 border-ya-lime text-ya-lime flex items-center justify-center mx-auto mb-4">
+              <ShoppingBag size={28} />
+            </div>
+            <h2 className="font-black text-2xl uppercase tracking-tight text-white">
+              Inicia sesión para ver tus pedidos
+            </h2>
+            <p className="text-gray-300 font-medium text-sm mt-2 max-w-md mx-auto">
+              Accede a tu cuenta de YA para consultar tus entregas en tiempo real, ver comprobantes y repetir pedidos.
+            </p>
+
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center max-w-sm mx-auto">
+              <Link
+                to="/login"
+                className="block flex-1 bg-ya-lime text-ya-black font-black uppercase tracking-wider p-4 text-center hover:bg-white transition-colors"
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                to="/registro"
+                className="block flex-1 border-2 border-white text-white font-black uppercase tracking-wider p-4 text-center hover:bg-white hover:text-ya-black transition-colors"
+              >
+                Crear cuenta
+              </Link>
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  // CASO B: Usuario AUTENTICADO
   return (
     <>
       <AppHeader />
       <main id="orders-page" className="max-w-2xl mx-auto px-4 pt-6 pb-28">
-        <h1 className="font-black text-4xl uppercase tracking-tight">Mis pedidos</h1>
+        <div className="flex items-baseline justify-between">
+          <h1 className="font-black text-4xl uppercase tracking-tight">Mis pedidos</h1>
+          <button
+            onClick={loadRealOrders}
+            disabled={loadingOrders}
+            className="text-xs font-black uppercase tracking-wider text-ya-lime hover:text-white flex items-center gap-1.5 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={loadingOrders ? 'animate-spin' : ''} /> Actualizar
+          </button>
+        </div>
         <p className="text-gray-400 font-bold text-xs uppercase tracking-wider mt-1">
           Historial de entregas y seguimiento en Jerez
         </p>
 
-        {orders.length ? (
+        {loadingOrders ? (
+          <div className="mt-12 text-center py-12">
+            <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-ya-lime animate-pulse">
+              <Loader2 size={16} className="animate-spin" /> Cargando pedidos de Supabase...
+            </div>
+          </div>
+        ) : error ? (
+          <div className="mt-8 border-2 border-red-500 bg-red-950/30 p-6 text-center">
+            <AlertCircle size={32} className="mx-auto text-red-400 mb-2" />
+            <p className="font-black text-red-200">{error}</p>
+            <button
+              onClick={loadRealOrders}
+              className="mt-4 px-4 py-2 bg-ya-lime text-ya-black font-black uppercase text-xs tracking-wider hover:bg-white transition-colors"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : dbOrders.length > 0 ? (
           <div className="mt-6 space-y-4">
-            {orders.map((order) => {
-              const count = order.lines.reduce((sum, line) => sum + line.quantity, 0);
-              const dateStr = new Date(order.createdAt).toLocaleDateString('es-ES', {
+            {dbOrders.map((order) => {
+              const count = order.order_items.reduce((sum, item) => sum + item.quantity, 0);
+              const dateStr = new Date(order.created_at).toLocaleDateString('es-ES', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric',
               });
+              const orderIdDisplay = order.order_number || order.id.slice(0, 8);
+              const address = (order.delivery_address_snapshot as Address | null);
 
               return (
                 <article
@@ -51,13 +165,18 @@ export function OrdersPage() {
                 >
                   <div className="flex justify-between items-start font-black">
                     <div>
-                      <span className="text-ya-lime text-xs uppercase tracking-wider block">
-                        PEDIDO
-                      </span>
-                      <span className="text-2xl tracking-tight">{order.id}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-ya-lime text-xs uppercase tracking-wider block">
+                          PEDIDO
+                        </span>
+                        <span className="bg-ya-lime/20 text-ya-lime text-[9px] font-black uppercase px-1.5 py-0.2 border border-ya-lime/30">
+                          REAL
+                        </span>
+                      </div>
+                      <span className="text-2xl tracking-tight">{orderIdDisplay}</span>
                     </div>
                     <span className="text-2xl text-ya-lime tracking-tight">
-                      {euro(order.total)}
+                      {euro(Number(order.total))}
                     </span>
                   </div>
 
@@ -65,9 +184,12 @@ export function OrdersPage() {
                     <p>
                       {dateStr} · {count} {count === 1 ? 'producto' : 'productos'}
                     </p>
-                    <p className="text-gray-300">
-                      📍 {order.address.street}, {order.address.number}
-                    </p>
+                    {address && (
+                      <p className="text-gray-300">
+                        📍 {address.street}, {address.number}
+                        {address.floor ? ` (${address.floor})` : ''} · {address.city}
+                      </p>
+                    )}
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-ya-gray/70 flex items-center justify-between">
@@ -76,16 +198,18 @@ export function OrdersPage() {
                         ? '✓ Entregado'
                         : order.status === 'delivering'
                         ? '● Repartiendo'
-                        : order.status === 'ready'
+                        : order.status === 'prepared' || order.status === 'ready'
                         ? '● Preparado'
-                        : order.status === 'shopping'
+                        : order.status === 'sourcing' || order.status === 'shopping'
                         ? '● Comprando'
                         : order.status === 'preparing'
                         ? '● Preparando'
+                        : order.status === 'cancelled'
+                        ? '✕ Cancelado'
                         : '● Recibido'}
                     </span>
                     <Link
-                      to={'/app/pedido/' + order.id}
+                      to={'/app/pedido/' + (order.order_number || order.id)}
                       className="text-xs font-black uppercase tracking-wider text-ya-lime hover:text-white flex items-center gap-1"
                     >
                       Ver seguimiento <ChevronRight size={14} />
@@ -99,7 +223,7 @@ export function OrdersPage() {
           <div className="mt-8">
             <EmptyState
               title="Todavía no tienes pedidos"
-              text="Cuando confirmes tu primer pedido en Jerez aparecerá aquí con seguimiento en directo."
+              text="Cuando confirmes tu primer pedido en Jerez aparecerá aquí con seguimiento en directo y guardado en tu cuenta."
             />
             <Link
               to="/app"
@@ -115,9 +239,20 @@ export function OrdersPage() {
 }
 
 export function ProfilePage() {
-  const orders = loadOrders();
+  const localOrders = loadOrders();
   const { user, profile, role, isAdmin, loading, signOut, updateProfile } = useAuth();
   const navigate = useNavigate();
+  const [realOrdersCount, setRealOrdersCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      fetchUserOrders(user.id).then((res) => {
+        if (res.orders) {
+          setRealOrdersCount(res.orders.length);
+        }
+      });
+    }
+  }, [user]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -374,7 +509,9 @@ export function ProfilePage() {
         <div className="grid grid-cols-2 gap-3 mt-6">
           <div className="bg-ya-gray border-2 border-ya-gray p-4">
             <p className="text-xs font-bold text-gray-400 uppercase">Pedidos totales</p>
-            <p className="text-3xl font-black text-ya-lime mt-1">{orders.length}</p>
+            <p className="text-3xl font-black text-ya-lime mt-1">
+              {realOrdersCount !== null ? realOrdersCount : localOrders.length}
+            </p>
           </div>
           <div className="bg-ya-gray border-2 border-ya-gray p-4">
             <p className="text-xs font-bold text-gray-400 uppercase">Ciudad activa</p>
@@ -708,6 +845,7 @@ export function RegisterPage() {
               Teléfono móvil
               <input
                 id="auth-phone"
+                required
                 type="tel"
                 placeholder="612 345 678"
                 value={phone}
