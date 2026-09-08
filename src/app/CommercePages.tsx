@@ -10,7 +10,6 @@ import { useAuth } from '../lib/auth';
 import {
   fetchUserAddresses,
   createUserAddress,
-  fetchActiveDeliveryZone,
   createOrderViaRpc,
   fetchOrderByIdOrNumber,
   subscribeToOrderStatus,
@@ -29,18 +28,7 @@ import {
 } from 'lucide-react';
 
 export function CartPage() {
-  const { lines, subtotal, clearCart } = useCart();
-  const [deliveryFee, setDeliveryFee] = useState(2.9);
-
-  useEffect(() => {
-    fetchActiveDeliveryZone().then((res) => {
-      if (res && res.fee) {
-        setDeliveryFee(res.fee);
-      }
-    });
-  }, []);
-
-  const total = subtotal + (lines.length ? deliveryFee : 0);
+  const { lines, clearCart, pricing } = useCart();
 
   return (
     <>
@@ -63,46 +51,145 @@ export function CartPage() {
           <div className="mt-8">
             <EmptyState
               title="Tu carrito está vacío"
-              text="¿Una energética bien fría o unos snacks? Elige lo que necesitas."
+              text="¿Una energética bien fría, un pack o unos snacks? Elige lo que necesitas."
             />
             <Link
               id="empty-cart-explore-btn"
               to="/app"
               className="block bg-ya-lime text-ya-black font-black text-center p-4 mt-6 uppercase tracking-wider hover:bg-white transition-colors"
             >
-              Explorar productos
+              Explorar productos y packs
             </Link>
           </div>
         ) : (
           <>
-            <div className="mt-6 space-y-3">
+            {/* Barra de progreso de Envío Gratis */}
+            {pricing.freeShippingEnabled && (
+              <div
+                id="cart-free-shipping-banner"
+                className={`mt-4 p-3.5 border-2 ${
+                  pricing.isFreeShipping
+                    ? 'border-ya-lime bg-ya-lime/10 text-white'
+                    : 'border-ya-gray bg-ya-black text-gray-300'
+                }`}
+              >
+                <div className="flex justify-between items-center text-xs font-black uppercase tracking-wider">
+                  <span className={pricing.isFreeShipping ? 'text-ya-lime' : 'text-gray-300'}>
+                    {pricing.isFreeShipping
+                      ? '⚡ ¡ENVÍO GRATIS CONSEGUIDO EN JEREZ!'
+                      : `Añade ${euro(pricing.freeShippingRemaining)} más para ENVÍO GRATIS`}
+                  </span>
+                  <span className="font-mono text-gray-400">
+                    {euro(pricing.subtotal)} / {euro(pricing.freeShippingThreshold)}
+                  </span>
+                </div>
+                <div className="w-full bg-ya-gray h-2 mt-2 overflow-hidden">
+                  <div
+                    className="bg-ya-lime h-full transition-all duration-300"
+                    style={{ width: `${pricing.freeShippingProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Alerta de Pedido Mínimo si no se alcanza */}
+            {pricing.minOrderEnabled && !pricing.isMinOrderSatisfied && (
+              <div
+                id="cart-min-order-alert"
+                className="mt-3 p-3.5 border-2 border-amber-400/80 bg-amber-950/30 text-amber-200 text-xs font-bold flex items-center gap-2"
+              >
+                <AlertCircle size={16} className="text-amber-400 shrink-0" />
+                <span>
+                  Pedido mínimo requerido: <strong className="text-white">{euro(pricing.minOrderAmount)}</strong>.
+                  Te faltan <strong className="text-amber-300">{euro(pricing.minOrderRemaining)}</strong> para poder tramitar el pedido.
+                </span>
+              </div>
+            )}
+
+            {/* Listado de artículos */}
+            <div className="mt-4 space-y-3">
               {lines.map((line) => (
-                <CartItem key={line.productId} line={line} />
+                <CartItem key={line.lineId || line.productId} line={line} />
               ))}
             </div>
 
+            {/* Resumen Comercial */}
             <aside id="cart-summary" className="mt-6 border-2 border-ya-gray bg-ya-gray/40 p-4 space-y-2 font-bold">
-              <p className="flex justify-between text-gray-300">
-                <span>Productos</span>
-                <span className="font-black text-white">{euro(subtotal)}</span>
-              </p>
-              <p className="flex justify-between text-gray-300">
+              <div className="flex justify-between text-gray-300 text-sm">
+                <span>Subtotal catálogo</span>
+                <span className="font-black text-white">{euro(pricing.rawSubtotal)}</span>
+              </div>
+
+              {/* Descuentos de productos o categorías */}
+              {pricing.totalSavings > 0 && (
+                <div className="flex justify-between text-ya-lime text-sm">
+                  <span>Descuentos automáticos</span>
+                  <span className="font-black">-{euro(pricing.totalSavings)}</span>
+                </div>
+              )}
+
+              {/* Promoción global por volumen */}
+              {pricing.appliedPromotion && (
+                <div className="flex justify-between text-ya-lime text-sm bg-ya-black/50 p-2 border border-ya-lime/30">
+                  <span className="truncate pr-2">
+                    Promo: {pricing.appliedPromotion.name}
+                  </span>
+                  <span className="font-black shrink-0">
+                    -{euro(pricing.promotionDiscount)}
+                  </span>
+                </div>
+              )}
+
+              {/* Coste de entrega */}
+              <div className="flex justify-between text-gray-300 text-sm">
                 <span>Entrega exprés en Jerez</span>
-                <span className="font-black text-white">{euro(deliveryFee)}</span>
-              </p>
+                <span className="font-black text-white">
+                  {pricing.isFreeShipping ? (
+                    <span className="text-ya-lime uppercase">GRATIS</span>
+                  ) : (
+                    euro(pricing.deliveryFee)
+                  )}
+                </span>
+              </div>
+
+              {/* Total final */}
               <div className="border-t-2 border-ya-gray pt-3 mt-3 flex justify-between items-baseline">
-                <span className="text-xl font-black text-white">Total</span>
-                <span className="text-3xl font-black text-ya-lime">{euro(total)}</span>
+                <div>
+                  <span className="text-xl font-black text-white block">Total</span>
+                  {pricing.totalSavings > 0 && (
+                    <span className="text-[11px] text-ya-lime font-bold">
+                      Ahorras {euro(pricing.totalSavings)} en este pedido
+                    </span>
+                  )}
+                </div>
+                <span className="text-3xl font-black text-ya-lime">{euro(pricing.total)}</span>
               </div>
             </aside>
 
-            <Link
-              id="go-to-checkout-btn"
-              to="/app/checkout"
-              className="block bg-ya-lime text-ya-black text-center font-black p-4 mt-6 text-lg uppercase tracking-wider hover:bg-white transition-colors"
-            >
-              Ir al checkout →
-            </Link>
+            {pricing.isMinOrderSatisfied ? (
+              <Link
+                id="go-to-checkout-btn"
+                to="/app/checkout"
+                className="block bg-ya-lime text-ya-black text-center font-black p-4 mt-6 text-lg uppercase tracking-wider hover:bg-white transition-colors"
+              >
+                Ir al checkout →
+              </Link>
+            ) : (
+              <div className="mt-6 space-y-2">
+                <button
+                  disabled
+                  className="w-full bg-ya-gray text-gray-500 cursor-not-allowed font-black p-4 text-center text-sm uppercase tracking-wider border-2 border-ya-gray"
+                >
+                  Pedido mínimo {euro(pricing.minOrderAmount)} (Faltan {euro(pricing.minOrderRemaining)})
+                </button>
+                <Link
+                  to="/app"
+                  className="block text-center text-xs font-black uppercase tracking-wider text-ya-lime hover:underline py-1"
+                >
+                  + Seguir comprando productos o packs
+                </Link>
+              </div>
+            )}
           </>
         )}
       </main>
@@ -111,12 +198,11 @@ export function CartPage() {
 }
 
 export function CheckoutPage() {
-  const { lines, subtotal, clearCart } = useCart();
+  const { lines, clearCart, pricing } = useCart();
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // Estados de checkout
-  const [deliveryFee, setDeliveryFee] = useState(2.9);
   const [payment, setPayment] = useState('Tarjeta');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -141,16 +227,7 @@ export function CheckoutPage() {
   // Notas para el repartidor
   const [courierNotes, setCourierNotes] = useState('');
 
-  // 1. Cargar tarifa de zona activa
-  useEffect(() => {
-    fetchActiveDeliveryZone().then((res) => {
-      if (res && res.fee) {
-        setDeliveryFee(res.fee);
-      }
-    });
-  }, []);
-
-  // 2. Cargar direcciones del usuario autenticado y pre-rellenar datos de contacto
+  // 1. Cargar direcciones del usuario autenticado y pre-rellenar datos de contacto
   useEffect(() => {
     if (!user) return;
 
@@ -183,7 +260,7 @@ export function CheckoutPage() {
         <main className="p-4 pb-28 max-w-2xl mx-auto">
           <EmptyState
             title="No hay productos en el carrito"
-            text="Añade productos antes de realizar el pedido."
+            text="Añade productos o packs antes de realizar el pedido."
           />
           <Link
             to="/app"
@@ -235,7 +312,7 @@ export function CheckoutPage() {
               Para crear tu pedido real, asignarte seguimiento en tiempo real y vincular tu dirección en Jerez, necesitas una cuenta en YA.
             </p>
             <p className="text-ya-lime font-bold text-xs uppercase tracking-wider mt-3">
-              ✓ Tus {lines.reduce((s, i) => s + i.quantity, 0)} productos están seguros en tu carrito y se conservarán al volver.
+              ✓ Tus {lines.reduce((s, i) => s + i.quantity, 0)} artículos están seguros en tu carrito y se conservarán al volver.
             </p>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
@@ -263,15 +340,21 @@ export function CheckoutPage() {
             </h3>
             <div className="flex justify-between text-sm text-gray-300">
               <span>Productos ({lines.reduce((s, i) => s + i.quantity, 0)})</span>
-              <span>{euro(subtotal)}</span>
+              <span>{euro(pricing.rawSubtotal)}</span>
             </div>
+            {pricing.totalSavings > 0 && (
+              <div className="flex justify-between text-sm text-ya-lime">
+                <span>Descuentos aplicados</span>
+                <span>-{euro(pricing.totalSavings)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm text-gray-300">
               <span>Entrega exprés en Jerez</span>
-              <span>{euro(deliveryFee)}</span>
+              <span>{pricing.isFreeShipping ? 'GRATIS' : euro(pricing.deliveryFee)}</span>
             </div>
             <div className="flex justify-between text-xl font-black pt-2 border-t border-ya-gray">
               <span>Total a pagar</span>
-              <span className="text-ya-lime">{euro(subtotal + deliveryFee)}</span>
+              <span className="text-ya-lime">{euro(pricing.total)}</span>
             </div>
           </section>
         </main>
@@ -291,6 +374,16 @@ export function CheckoutPage() {
     if (isSubmitting) return;
 
     setError(null);
+
+    // Validar pedido mínimo de forma preventiva
+    if (pricing.minOrderEnabled && !pricing.isMinOrderSatisfied) {
+      setError(
+        `No se alcanza el pedido mínimo de ${euro(pricing.minOrderAmount)}. Te faltan ${euro(
+          pricing.minOrderRemaining
+        )} para tramitar el pedido.`
+      );
+      return;
+    }
 
     let targetAddressId: string = '';
 
@@ -338,7 +431,13 @@ export function CheckoutPage() {
 
     const rpcResult = await createOrderViaRpc({
       addressId: targetAddressId,
-      lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+      lines: lines.map((l) => ({
+        productId: l.isPack ? (l.packId || l.productId) : l.productId,
+        quantity: l.quantity,
+        isPack: l.isPack,
+        packId: l.packId,
+        selections: l.packSelections,
+      })),
       notes: courierNotes.trim() || newAddress.notes || undefined,
       paymentMethod: payment,
     });
@@ -368,6 +467,13 @@ export function CheckoutPage() {
         <p className="text-gray-400 mt-1 font-bold text-sm">
           Confirmación de entrega y creación de pedido real en Jerez
         </p>
+
+        {/* Notificación de Envío Gratis o Pedido Mínimo */}
+        {pricing.freeShippingEnabled && pricing.isFreeShipping && (
+          <div className="mt-4 p-3 border-2 border-ya-lime bg-ya-lime/10 text-xs font-black uppercase tracking-wider text-ya-lime flex items-center gap-2">
+            <Check size={16} /> ¡Genial! Tu pedido califica para ENVÍO GRATIS a cualquier punto de Jerez.
+          </div>
+        )}
 
         <form onSubmit={handleSubmitOrder} className="mt-6 space-y-6">
           {/* SELECCIÓN O INTRODUCCIÓN DE DIRECCIÓN */}
@@ -586,7 +692,7 @@ export function CheckoutPage() {
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-3">
-              ⚡ Fase 2D: Pago de prueba. No se realizará ningún cargo bancario en tu cuenta.
+              ⚡ Fase 2D/3B: Pago de prueba seguro. No se realizará ningún cargo bancario en tu cuenta.
             </p>
           </fieldset>
 
@@ -603,42 +709,86 @@ export function CheckoutPage() {
             </div>
           )}
 
-          {/* DESGLOSE SEGURO */}
+          {/* DESGLOSE SEGURO DEL MOTOR COMERCIAL */}
           <div className="border-2 border-ya-gray p-4 bg-ya-black space-y-2 font-bold">
             <div className="flex justify-between text-sm text-gray-300">
-              <span>Subtotal productos ({lines.reduce((s, i) => s + i.quantity, 0)})</span>
-              <span>{euro(subtotal)}</span>
+              <span>Subtotal catálogo ({lines.reduce((s, i) => s + i.quantity, 0)} artículos)</span>
+              <span>{euro(pricing.rawSubtotal)}</span>
             </div>
+
+            {pricing.totalSavings > 0 && (
+              <div className="flex justify-between text-sm text-ya-lime">
+                <span>Descuentos aplicados</span>
+                <span>-{euro(pricing.totalSavings)}</span>
+              </div>
+            )}
+
+            {pricing.appliedPromotion && (
+              <div className="flex justify-between text-sm text-ya-lime bg-ya-gray/30 p-2 border border-ya-lime/30">
+                <span className="truncate pr-2">Promoción ({pricing.appliedPromotion.code})</span>
+                <span>-{euro(pricing.promotionDiscount)}</span>
+              </div>
+            )}
+
             <div className="flex justify-between text-sm text-gray-300">
               <span>Coste de entrega (Jerez)</span>
-              <span>{euro(deliveryFee)}</span>
+              <span>
+                {pricing.isFreeShipping ? (
+                  <span className="text-ya-lime uppercase">GRATIS</span>
+                ) : (
+                  euro(pricing.deliveryFee)
+                )}
+              </span>
             </div>
+
             <div className="flex justify-between text-xl font-black pt-2 border-t border-ya-gray">
-              <span>Total a pagar</span>
-              <span className="text-ya-lime">{euro(subtotal + deliveryFee)}</span>
+              <div>
+                <span className="text-white block">Total a pagar</span>
+                {pricing.totalSavings > 0 && (
+                  <span className="text-[11px] text-ya-lime font-bold">
+                    Ahorro total de {euro(pricing.totalSavings)}
+                  </span>
+                )}
+              </div>
+              <span className="text-ya-lime">{euro(pricing.total)}</span>
             </div>
           </div>
 
-          {/* BOTÓN CONFIRMAR PEDIDO */}
-          <button
-            id="confirm-order-btn"
-            type="submit"
-            disabled={isSubmitting}
-            className={`w-full font-black p-4 text-lg uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
-              isSubmitting
-                ? 'bg-ya-gray text-gray-400 cursor-not-allowed border-2 border-ya-gray'
-                : 'bg-ya-lime text-ya-black hover:bg-white'
-            }`}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 size={20} className="animate-spin" />
-                Creando pedido en Supabase...
-              </>
-            ) : (
-              `Confirmar pedido · ${euro(subtotal + deliveryFee)}`
-            )}
-          </button>
+          {/* BOTÓN CONFIRMAR PEDIDO O BLOQUEO POR PEDIDO MÍNIMO */}
+          {pricing.minOrderEnabled && !pricing.isMinOrderSatisfied ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled
+                className="w-full font-black p-4 text-sm uppercase tracking-wider bg-ya-gray text-gray-500 cursor-not-allowed border-2 border-ya-gray"
+              >
+                Pedido mínimo {euro(pricing.minOrderAmount)} (Faltan {euro(pricing.minOrderRemaining)})
+              </button>
+              <p className="text-center text-xs text-gray-400 font-bold">
+                Añade más productos o packs a tu carrito para alcanzar el pedido mínimo de entrega.
+              </p>
+            </div>
+          ) : (
+            <button
+              id="confirm-order-btn"
+              type="submit"
+              disabled={isSubmitting}
+              className={`w-full font-black p-4 text-lg uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
+                isSubmitting
+                  ? 'bg-ya-gray text-gray-400 cursor-not-allowed border-2 border-ya-gray'
+                  : 'bg-ya-lime text-ya-black hover:bg-white'
+              }`}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Creando pedido en Supabase...
+                </>
+              ) : (
+                `Confirmar pedido · ${euro(pricing.total)}`
+              )}
+            </button>
+          )}
         </form>
       </main>
     </>
@@ -829,30 +979,89 @@ export function OrderPage() {
 
           {/* Artículos reales guardados con precio histórico */}
           <section className="mt-6 border-2 border-ya-gray p-5">
-            <h2 className="font-black text-lg uppercase tracking-wider mb-3">Productos</h2>
+            <h2 className="font-black text-lg uppercase tracking-wider mb-3">Artículos del pedido</h2>
             <div className="divide-y-2 divide-ya-gray">
-              {dbOrder.order_items.map((item) => (
-                <div key={item.id} className="py-3 flex justify-between items-center text-sm font-bold">
-                  <div className="flex items-center gap-2">
-                    <span className="text-ya-lime font-black">{item.quantity}x</span>
-                    <span>{item.product_name}</span>
+              {dbOrder.order_items.map((item) => {
+                const isPack = Boolean(item.is_pack);
+                const selections = (item.pack_selections_snapshot as any[]) || [];
+                const discountAmt = Number(item.discount_amount || 0);
+
+                return (
+                  <div key={item.id} className="py-3 text-sm font-bold">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-start gap-2">
+                        <span className="text-ya-lime font-black shrink-0">{item.quantity}x</span>
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {isPack && (
+                              <span className="bg-ya-lime text-ya-black text-[9px] font-black uppercase px-1.5 py-0.5 tracking-wider">
+                                PACK
+                              </span>
+                            )}
+                            <span className="text-white">{item.product_name}</span>
+                          </div>
+
+                          {/* Selecciones de pack si existen */}
+                          {isPack && selections.length > 0 && (
+                            <div className="mt-1 space-y-0.5 pl-1">
+                              {selections.map((sel, sIdx) => (
+                                <p key={sIdx} className="text-xs text-gray-400 font-mono">
+                                  · {sel.group_name || sel.groupName}:{' '}
+                                  <span className="text-gray-200">{sel.product_name || sel.productName}</span>
+                                </p>
+                              ))}
+                            </div>
+                          )}
+
+                          {discountAmt > 0 && (
+                            <p className="text-[11px] text-ya-lime mt-0.5">
+                              Descuento unitario aplicado: -{euro(discountAmt)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-black shrink-0 text-white ml-3">
+                        {euro(Number(item.subtotal))}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-black">
-                    {euro(Number(item.subtotal))}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="border-t-2 border-ya-gray pt-4 mt-2 space-y-1 text-sm font-bold">
               <div className="flex justify-between text-gray-400">
-                <span>Subtotal</span>
-                <span>{euro(Number(dbOrder.subtotal))}</span>
+                <span>Subtotal catálogo</span>
+                <span>{euro(Number(dbOrder.subtotal) + Number(dbOrder.discount_total || 0) + Number(dbOrder.promotion_discount || 0))}</span>
               </div>
+
+              {Number(dbOrder.discount_total || 0) > 0 && (
+                <div className="flex justify-between text-ya-lime">
+                  <span>Descuentos automáticos</span>
+                  <span>-{euro(Number(dbOrder.discount_total))}</span>
+                </div>
+              )}
+
+              {Number(dbOrder.promotion_discount || 0) > 0 && (
+                <div className="flex justify-between text-ya-lime">
+                  <span>
+                    Promoción {dbOrder.promotion_code ? `(${dbOrder.promotion_code})` : ''}
+                  </span>
+                  <span>-{euro(Number(dbOrder.promotion_discount))}</span>
+                </div>
+              )}
+
               <div className="flex justify-between text-gray-400">
                 <span>Entrega exprés en Jerez</span>
-                <span>{euro(Number(dbOrder.delivery_fee))}</span>
+                <span>
+                  {Number(dbOrder.delivery_fee) === 0 ? (
+                    <span className="text-ya-lime uppercase">GRATIS</span>
+                  ) : (
+                    euro(Number(dbOrder.delivery_fee))
+                  )}
+                </span>
               </div>
+
               <div className="flex justify-between text-xl font-black text-white pt-2 border-t border-ya-gray">
                 <span>Total</span>
                 <span className="text-ya-lime">{euro(Number(dbOrder.total))}</span>

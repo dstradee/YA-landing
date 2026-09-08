@@ -124,7 +124,13 @@ const PAYMENT_MAP: Record<string, PaymentMethod> = {
 
 export type CreateOrderInput = {
   addressId: string;
-  lines: Array<{ productId: string; quantity: number }>;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    isPack?: boolean;
+    packId?: string;
+    selections?: any[];
+  }>;
   notes?: string;
   paymentMethod?: string;
 };
@@ -136,6 +142,9 @@ export type CreateOrderResult = {
   subtotal?: number;
   deliveryFee?: number;
   total?: number;
+  discountTotal?: number;
+  promotionDiscount?: number;
+  promotionCode?: string;
   error?: string;
 };
 
@@ -153,8 +162,11 @@ export async function createOrderViaRpc(input: CreateOrderInput): Promise<Create
     const rpcPayload = {
       p_address_id: input.addressId,
       p_items: input.lines.map((l) => ({
-        product_id: l.productId,
+        product_id: l.isPack ? (l.packId || l.productId) : l.productId,
         quantity: l.quantity,
+        is_pack: Boolean(l.isPack || l.packId),
+        pack_id: l.isPack ? (l.packId || l.productId) : undefined,
+        selections: l.selections || [],
       })),
       p_notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
       p_payment_method: paymentMethodType,
@@ -183,6 +195,9 @@ export async function createOrderViaRpc(input: CreateOrderInput): Promise<Create
       subtotal: Number(data.subtotal),
       deliveryFee: Number(data.delivery_fee),
       total: Number(data.total),
+      discountTotal: Number(data.discount_total || 0),
+      promotionDiscount: Number(data.promotion_discount || 0),
+      promotionCode: data.promotion_code || undefined,
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado de comunicación con la base de datos.';

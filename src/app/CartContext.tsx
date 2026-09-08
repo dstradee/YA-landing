@@ -1,17 +1,42 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { productById as fallbackProductById } from '../data/products';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode, useCallback } from 'react';
 import { useCatalog } from './CatalogContext';
-import type { CartLine, LocalOrder } from '../types/app';
+import type {
+  CartLine,
+  CartPackSelection,
+  LocalOrder,
+  DbCommercialSettings,
+  DbDiscount,
+  DbPromotion,
+  PackWithDetails,
+} from '../types/app';
+import {
+  calculateCartPricing,
+  DEFAULT_COMMERCIAL_SETTINGS,
+  type CartPricingSummary,
+} from '../lib/pricing';
+import { getCommercialSettings } from '../lib/commercialSettings';
+import { fetchActiveDiscounts } from '../lib/adminDiscounts';
+import { fetchActivePromotions } from '../lib/adminPromotions';
+import { fetchActivePacks } from '../lib/adminPacks';
 
 type CartApi = {
   lines: CartLine[];
   addToCart: (id: string, quantity?: number) => void;
-  removeFromCart: (id: string) => void;
-  increaseQuantity: (id: string) => void;
-  decreaseQuantity: (id: string) => void;
+  addPackToCart: (pack: PackWithDetails, selections?: CartPackSelection[], quantity?: number) => void;
+  removeFromCart: (lineIdOrProductId: string) => void;
+  increaseQuantity: (lineIdOrProductId: string) => void;
+  decreaseQuantity: (lineIdOrProductId: string) => void;
   clearCart: () => void;
   count: number;
   subtotal: number;
+  // Motor Comercial Phase 3B
+  pricing: CartPricingSummary;
+  commercialSettings: DbCommercialSettings;
+  activePacks: PackWithDetails[];
+  packs: PackWithDetails[];
+  activeDiscounts: DbDiscount[];
+  activePromotions: DbPromotion[];
+  refreshCommercialData: () => Promise<void>;
 };
 
 const CartContext = createContext<CartApi | undefined>(undefined);
@@ -46,7 +71,7 @@ const INITIAL_MOCK_ORDERS: LocalOrder[] = [
 ];
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { getProductById } = useCatalog();
+  const { products } = useCatalog();
   const [lines, setLines] = useState<CartLine[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') as CartLine[];
@@ -54,6 +79,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return [];
     }
   });
+
+  const [commercialSettings, setCommercialSettings] = useState<DbCommercialSettings>(
+    DEFAULT_COMMERCIAL_SETTINGS
+  );
+  const [activePacks, setActivePacks] = useState<PackWithDetails[]>([]);
+  const [activeDiscounts, setActiveDiscounts] = useState<DbDiscount[]>([]);
+  const [activePromotions, setActivePromotions] = useState<DbPromotion[]>([]);
+
+  const refreshCommercialData = useCallback(async () => {
+    try {
+      const [settings, packs, discounts, promotions] = await Promise.all([
+        getCommercialSettings(),
+        fetchActivePacks(),
+        fetchActiveDiscounts(),
+        fetchActivePromotions(),
+      ]);
+      setCommercialSettings(settings);
+      setActivePacks(packs);
+      setActiveDiscounts(discounts);
+      setActivePromotions(promotions);
+    } catch (err) {
+      console.warn('Error refreshing commercial data:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshCommercialData();
+  }, [refreshCommercialData]);
 
   useEffect(() => {
     try {
@@ -64,52 +117,149 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [lines]);
 
   const api = useMemo<CartApi>(() => {
+    // Añadir producto regular al carrito
     const addToCart = (id: string, quantity = 1) =>
       setLines((old) => {
-        const line = old.find((item) => item.productId === id);
-        return line
-          ? old.map((item) =>
-              item.productId === id ? { ...item, quantity: item.quantity + quantity } : item
-            )
-          : [...old, { productId: id, quantity }];
+        const existingIdx = old.findIndex(
+          (item) => !item.isPack && (item.productId === id || item.lineId === id)
+        );
+        if (existingIdx !== -1) {
+          const updated = [...old];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            quantity: updated[existingIdx].quantity + quantity,
+          };
+          return updated;
+        }
+        return [
+          ...old,
+          {
+            lineId: `prod-${id}`,
+            productId: id,
+            quantity,
+            isPack: false,
+          },
+        ];
       });
 
-    const removeFromCart = (id: string) =>
-      setLines((old) => old.filter((item) => item.productId !== id));
+    // Añadir Pack (cerrado o configurable) al carrito
+    const addPackToCart = (
+      pack: PackWithDetails,
+      selections: CartPackSelection[] = [],
+      quantity = 1
+    ) => {
+      setLines((old) => {
+        // Generar una clave determinista basada en el pack y las selecciones
+        const selKey = selections
+          .map((s) => `${s.groupId}:${s.productId}`)
+          .sort()
+          .join('|');
+        const lineId = `pack-${pack.id}-${selKey || 'fixed'}`;
 
-    const increaseQuantity = (id: string) => addToCart(id, 1);
+        const existingIdx = old.findIndex((item) => item.lineId === lineId);
+        if (existingIdx !== -1) {
+          const updated = [...old];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            quantity: updated[existingIdx].quantity + quantity,
+          };
+          return updated;
+        }
 
-    const decreaseQuantity = (id: string) =>
+        return [
+          ...old,
+          {
+            lineId,
+            productId: pack.slug || pack.id,
+            packId: pack.id,
+            isPack: true,
+            packName: pack.name,
+            packType: pack.pack_type,
+            packImage: pack.image || '📦',
+            unitPrice: pack.price,
+            packSelections: selections,
+            quantity,
+          },
+        ];
+      });
+    };
+
+    const removeFromCart = (lineIdOrProductId: string) =>
       setLines((old) =>
-        old.flatMap((item) =>
-          item.productId !== id
-            ? [item]
-            : item.quantity > 1
-            ? [{ ...item, quantity: item.quantity - 1 }]
-            : []
+        old.filter(
+          (item) =>
+            item.lineId !== lineIdOrProductId &&
+            item.productId !== lineIdOrProductId &&
+            item.packId !== lineIdOrProductId
         )
+      );
+
+    const increaseQuantity = (lineIdOrProductId: string) =>
+      setLines((old) =>
+        old.map((item) =>
+          item.lineId === lineIdOrProductId ||
+          item.productId === lineIdOrProductId ||
+          item.packId === lineIdOrProductId
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      );
+
+    const decreaseQuantity = (lineIdOrProductId: string) =>
+      setLines((old) =>
+        old.flatMap((item) => {
+          if (
+            item.lineId === lineIdOrProductId ||
+            item.productId === lineIdOrProductId ||
+            item.packId === lineIdOrProductId
+          ) {
+            return item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }] : [];
+          }
+          return [item];
+        })
       );
 
     const clearCart = () => setLines([]);
 
     const count = lines.reduce((sum, item) => sum + item.quantity, 0);
 
-    const subtotal = lines.reduce((sum, item) => {
-      const prod = getProductById(item.productId) || fallbackProductById(item.productId);
-      return sum + (prod?.price ?? 0) * item.quantity;
-    }, 0);
+    // Motor de cálculo comercial determinista (Phase 3B)
+    const pricing = calculateCartPricing({
+      cartLines: lines,
+      products,
+      packs: activePacks,
+      discounts: activeDiscounts,
+      promotions: activePromotions,
+      settings: commercialSettings,
+    });
 
     return {
       lines,
       addToCart,
+      addPackToCart,
       removeFromCart,
       increaseQuantity,
       decreaseQuantity,
       clearCart,
       count,
-      subtotal,
+      subtotal: pricing.subtotal,
+      pricing,
+      commercialSettings,
+      activePacks,
+      packs: activePacks,
+      activeDiscounts,
+      activePromotions,
+      refreshCommercialData,
     };
-  }, [lines, getProductById]);
+  }, [
+    lines,
+    products,
+    activePacks,
+    activeDiscounts,
+    activePromotions,
+    commercialSettings,
+    refreshCommercialData,
+  ]);
 
   return <CartContext.Provider value={api}>{children}</CartContext.Provider>;
 }

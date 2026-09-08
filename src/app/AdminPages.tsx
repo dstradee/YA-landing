@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, NavLink, Route, Routes } from 'react-router-dom';
+import { Link, Route, Routes } from 'react-router-dom';
 import {
   Plus,
   CheckCircle2,
@@ -7,7 +7,6 @@ import {
   RefreshCw,
   Edit2,
   Trash2,
-  ExternalLink,
   ShieldAlert,
 } from 'lucide-react';
 import {
@@ -24,6 +23,17 @@ import {
 } from '../lib/catalog';
 import { useAuth } from '../lib/auth';
 import { euro } from '../data/products';
+import { AdminLayout } from './admin/AdminLayout';
+import { AdminDashboardPage } from './admin/AdminDashboardPage';
+import { AdminOrdersPage } from './admin/AdminOrdersPage';
+import { AdminOrderDetailPage } from './admin/AdminOrderDetailPage';
+import { AdminCustomersPage } from './admin/AdminCustomersPage';
+import { AdminCustomerDetailPage } from './admin/AdminCustomerDetailPage';
+import { AdminSettingsPage } from './admin/AdminSettingsPage';
+import { AdminPacksPage } from './admin/AdminPacksPage';
+import { AdminDiscountsPage } from './admin/AdminDiscountsPage';
+import { AdminPromotionsPage } from './admin/AdminPromotionsPage';
+import { AdminCommercialPage } from './admin/AdminCommercialPage';
 
 // ==============================================================================
 // 1. COMPONENTE DE ACCESO / SEGURIDAD
@@ -58,105 +68,7 @@ function AdminAccessDenied({ reason }: { reason: string }) {
 }
 
 // ==============================================================================
-// 2. LAYOUT DEL PANEL DE ADMINISTRACIÓN (BAUHAUS MODERNO / BRUTALISMO LIMPIO)
-// ==============================================================================
-function AdminLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-ya-black text-white font-sans flex flex-col selection:bg-ya-lime selection:text-ya-black">
-      {/* Topbar */}
-      <header className="border-b-4 border-ya-gray bg-ya-black sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link to="/admin" className="flex items-center gap-2">
-              <span className="bg-ya-lime text-ya-black px-2.5 py-1 text-2xl font-black tracking-tighter">
-                YA
-              </span>
-              <span className="text-xs font-black tracking-widest uppercase text-gray-400 border-l-2 border-ya-gray pl-3">
-                ADMIN PANEL
-              </span>
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-1">
-              <NavLink
-                to="/admin/categorias"
-                className={({ isActive }) =>
-                  `px-4 py-2 text-xs font-black uppercase tracking-wider border-2 transition-colors ${
-                    isActive
-                      ? 'border-ya-lime bg-ya-lime text-ya-black'
-                      : 'border-transparent text-gray-300 hover:border-ya-gray hover:text-white'
-                  }`
-                }
-              >
-                Categorías
-              </NavLink>
-              <NavLink
-                to="/admin/productos"
-                className={({ isActive }) =>
-                  `px-4 py-2 text-xs font-black uppercase tracking-wider border-2 transition-colors ${
-                    isActive
-                      ? 'border-ya-lime bg-ya-lime text-ya-black'
-                      : 'border-transparent text-gray-300 hover:border-ya-gray hover:text-white'
-                  }`
-                }
-              >
-                Productos
-              </NavLink>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-gray-400">
-              <span className="w-2 h-2 rounded-full bg-ya-lime animate-pulse"></span>
-              <span className="bg-ya-gray px-2 py-0.5 text-[10px] font-black uppercase text-ya-lime border border-ya-lime/30">
-                ADMIN AUTORIZADO
-              </span>
-            </div>
-
-            <Link
-              to="/app"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-ya-lime hover:text-white transition-colors border-2 border-ya-gray hover:border-ya-lime px-3 py-1.5"
-            >
-              <span>Ver App</span>
-              <ExternalLink size={13} />
-            </Link>
-          </div>
-        </div>
-
-        {/* Mobile Navigation */}
-        <div className="flex md:hidden border-t-2 border-ya-gray px-4 py-2 gap-2 bg-ya-black">
-          <NavLink
-            to="/admin/categorias"
-            className={({ isActive }) =>
-              `flex-1 text-center py-2 text-xs font-black uppercase tracking-wider border-2 ${
-                isActive ? 'border-ya-lime bg-ya-lime text-ya-black' : 'border-ya-gray text-gray-300'
-              }`
-            }
-          >
-            Categorías
-          </NavLink>
-          <NavLink
-            to="/admin/productos"
-            className={({ isActive }) =>
-              `flex-1 text-center py-2 text-xs font-black uppercase tracking-wider border-2 ${
-                isActive ? 'border-ya-lime bg-ya-lime text-ya-black' : 'border-ya-gray text-gray-300'
-              }`
-            }
-          >
-            Productos
-          </NavLink>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">{children}</main>
-    </div>
-  );
-}
-
-// ==============================================================================
-// 3. GESTIÓN DE CATEGORÍAS (ADMIN)
+// 2. GESTIÓN DE CATEGORÍAS (ADMIN)
 // ==============================================================================
 export function AdminCategoriesPage() {
   const [categories, setCategories] = useState<AdminCategoryWithCount[]>([]);
@@ -1117,9 +1029,20 @@ export function AdminRoutes() {
   return (
     <AdminLayout>
       <Routes>
-        <Route path="/" element={<AdminCategoriesPage />} />
-        <Route path="/categorias" element={<AdminCategoriesPage />} />
+        <Route path="/" element={<AdminDashboardPage />} />
+        <Route path="/pedidos" element={<AdminOrdersPage />} />
+        <Route path="/pedidos/:id" element={<AdminOrderDetailPage />} />
+        <Route path="/clientes" element={<AdminCustomersPage />} />
+        <Route path="/clientes/:id" element={<AdminCustomerDetailPage />} />
         <Route path="/productos" element={<AdminProductsPage />} />
+        <Route path="/categorias" element={<AdminCategoriesPage />} />
+        <Route path="/packs" element={<AdminPacksPage />} />
+        <Route path="/descuentos" element={<AdminDiscountsPage />} />
+        <Route path="/promociones" element={<AdminPromotionsPage />} />
+        <Route path="/comercial" element={<AdminCommercialPage />} />
+        <Route path="/configuracion" element={<AdminSettingsPage />} />
+        {/* Fallback para cualquier ruta desconocida dentro de /admin */}
+        <Route path="*" element={<AdminDashboardPage />} />
       </Routes>
     </AdminLayout>
   );

@@ -6,9 +6,11 @@ import { AppHeader, CategoryCard, EmptyState, ProductCard, QuantitySelector } fr
 import { SearchBar } from './SearchBar';
 import { useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
+import { PackCard } from './PackCard';
 
 export function AppHome() {
   const { categories, products } = useCatalog();
+  const { packs } = useCart();
   const currentHour = new Date().getHours();
   const greeting =
     currentHour >= 21 || currentHour < 6
@@ -19,6 +21,7 @@ export function AppHome() {
 
   const featured = products.slice(0, 4);
   const popular = products.slice(4, 8);
+  const activePacks = packs.filter((p) => p.active);
 
   return (
     <>
@@ -86,6 +89,33 @@ export function AppHome() {
             ))}
           </div>
         </section>
+
+        {/* Sección de Packs Especiales YA */}
+        {activePacks.length > 0 && (
+          <section id="packs-showcase-section" className="mt-10">
+            <div className="flex justify-between items-baseline mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-ya-lime text-ya-black text-[10px] font-black uppercase px-2 py-0.5 tracking-wider">
+                    AHORRO & COMBINADOS
+                  </span>
+                </div>
+                <h2 className="font-black text-3xl uppercase tracking-tight mt-1">Packs YA</h2>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                  Combos cerrados y personalizables listos en minutos
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-ya-lime">
+                {activePacks.length} packs activos
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {activePacks.map((pack) => (
+                <PackCard key={pack.id} pack={pack} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Banner de llamada contextual */}
         <section className="mt-10 bg-ya-lime text-ya-black p-6 border-2 border-ya-lime">

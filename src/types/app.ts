@@ -20,9 +20,25 @@ export type Product = {
   internalInstructions: string;
 };
 
+export type CartPackSelection = {
+  groupId: string;
+  groupName: string;
+  productId: string;
+  productName: string;
+};
+
 export type CartLine = {
   productId: string;
   quantity: number;
+  // Extensiones Fase 3B
+  lineId?: string;
+  isPack?: boolean;
+  packId?: string;
+  packName?: string;
+  packType?: PackType;
+  packImage?: string;
+  unitPrice?: number;
+  packSelections?: CartPackSelection[];
 };
 
 export type Address = {
@@ -67,6 +83,7 @@ export type DbProfile = {
   id: string;
   full_name: string;
   phone: string | null;
+  email?: string | null;
   role: UserRole;
   created_at: string;
   updated_at: string;
@@ -135,6 +152,10 @@ export type DbOrder = {
   subtotal: number;
   delivery_fee: number;
   total: number;
+  discount_total?: number;
+  promotion_id?: string | null;
+  promotion_code?: string | null;
+  promotion_discount?: number;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
   notes: string | null;
@@ -151,6 +172,12 @@ export type DbOrderItem = {
   unit_price: number;
   quantity: number;
   subtotal: number;
+  is_pack?: boolean;
+  pack_id?: string | null;
+  discount_applied?: number;
+  discount_amount?: number;
+  pack_snapshot?: any;
+  pack_selections_snapshot?: any;
   created_at: string;
 };
 
@@ -185,16 +212,144 @@ export type DbSchedule = {
 };
 
 export type DiscountType = 'fixed' | 'percentage';
+export type DiscountScope = 'product' | 'category';
+
+export type DbDiscount = {
+  id: string;
+  name: string;
+  description: string | null;
+  scope: DiscountScope;
+  product_id: string | null;
+  category_id: string | null;
+  discount_type: DiscountType;
+  discount_value: number;
+  active: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // Campos enriquecidos para UI
+  product_name?: string;
+  category_name?: string;
+};
 
 export type DbPromotion = {
   id: string;
+  name?: string | null;
   code: string;
   description: string | null;
   discount_type: DiscountType;
   discount_value: number;
   minimum_order: number;
   active: boolean;
+  is_automatic?: boolean;
+  sort_order?: number;
   starts_at: string | null;
   expires_at: string | null;
   created_at: string;
+  updated_at?: string;
 };
+
+export type DbCommercialSettings = {
+  id: string;
+  min_order_enabled: boolean;
+  min_order_amount: number;
+  free_shipping_enabled: boolean;
+  free_shipping_threshold: number;
+  standard_delivery_fee: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+// --- TIPOS DE PACKS (FASE 3B) ---
+export type PackType = 'fixed' | 'configurable';
+
+export type DbPack = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  image: string | null;
+  pack_type: PackType;
+  price: number;
+  reference_price: number | null;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DbPackItem = {
+  id: string;
+  pack_id: string;
+  product_id: string;
+  quantity: number;
+  sort_order: number;
+  created_at: string;
+  product?: DbProduct | Product | null;
+};
+
+export type DbPackGroup = {
+  id: string;
+  pack_id: string;
+  name: string;
+  description: string | null;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+  created_at: string;
+  options?: DbPackGroupOption[];
+};
+
+export type DbPackGroupOption = {
+  id: string;
+  group_id: string;
+  product_id: string;
+  default_selected: boolean;
+  sort_order: number;
+  created_at: string;
+  product?: DbProduct | Product | null;
+};
+
+export type PackWithDetails = DbPack & {
+  items?: DbPackItem[];
+  groups?: (DbPackGroup & { options: DbPackGroupOption[] })[];
+  calculated_savings?: number;
+  is_available?: boolean;
+};
+
+// --- 3. TIPOS PARA PANEL ADMIN (PHASE 3A) ---
+
+export type AdminDashboardStats = {
+  totalOrders: number;
+  todayOrders: number;
+  pendingOrders: number;
+  preparingOrders: number;
+  deliveringOrders: number;
+  deliveredOrders: number;
+  totalRevenue: number;
+  todayRevenue: number;
+  totalCustomers: number;
+  activeProducts: number;
+  inactiveProducts: number;
+  activeCategories: number;
+};
+
+export type AdminOrderListItem = DbOrder & {
+  itemsCount: number;
+  customerName: string;
+  customerPhone: string | null;
+  customerEmail: string | null;
+};
+
+export type AdminOrderDetail = DbOrder & {
+  customer: DbProfile | null;
+  items: DbOrderItem[];
+};
+
+export type AdminCustomerListItem = DbProfile & {
+  ordersCount: number;
+  totalSpent: number;
+  lastOrderAt: string | null;
+};
+
