@@ -1,6 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
 import { CartProvider } from './CartContext';
-import { AccountPages } from './unused';
 import { AppHome, CategoryPage, ProductPage, SearchPage } from './BrowsePages';
 import { CartPage, CheckoutPage, OrderPage } from './CommercePages';
 import { LoginPage, OrdersPage, ProfilePage, RegisterPage } from './AccountPages';
