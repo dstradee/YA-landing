@@ -4,6 +4,7 @@ import { CatalogProvider } from './CatalogContext';
 import { CartProvider } from './CartContext';
 import { AppHome, CategoryPage, ProductPage, SearchPage } from './BrowsePages';
 import { CartPage, CheckoutPage, OrderPage } from './CommercePages';
+import { PayPalReturnPage } from './PayPalReturnPage';
 import { LoginPage, OrdersPage, ProfilePage, RegisterPage } from './AccountPages';
 import { BottomNav } from './components';
 
@@ -68,6 +69,22 @@ export function CustomerRoutes() {
         element={
           <AppFrame>
             <CheckoutPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/app/checkout/paypal-return"
+        element={
+          <AppFrame>
+            <PayPalReturnPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/app/checkout/paypal-cancel"
+        element={
+          <AppFrame>
+            <PayPalReturnPage />
           </AppFrame>
         }
       />

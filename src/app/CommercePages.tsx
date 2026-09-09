@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { euro } from '../data/products';
 import type { Address, DbAddress, LocalOrder, OrderStatus } from '../types/app';
 import { AppHeader, EmptyState, OrderTimeline } from './components';
@@ -25,7 +25,9 @@ import {
   LogIn,
   UserPlus,
   ShieldCheck,
+  CheckCircle2,
 } from 'lucide-react';
+import { PayPalPaymentSection } from '../components/PayPalPaymentSection';
 
 export function CartPage() {
   const { lines, clearCart, pricing } = useCart();
@@ -203,9 +205,14 @@ export function CheckoutPage() {
   const navigate = useNavigate();
 
   // Estados de checkout
-  const [payment, setPayment] = useState('Tarjeta');
+  const [payment, setPayment] = useState('PayPal');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<{
+    id: string;
+    number: string;
+    total: number;
+  } | null>(null);
 
   // Gestión de direcciones
   const [userAddresses, setUserAddresses] = useState<DbAddress[]>([]);
@@ -448,11 +455,67 @@ export function CheckoutPage() {
       return;
     }
 
-    // 3. Éxito: vaciar carrito SOLO tras confirmación en base de datos y redirigir
-    clearCart();
+    // 3. Pasar al paso de pago interactivo PayPal Sandbox con pedido reservado en DB
     setIsSubmitting(false);
-    navigate('/app/pedido/' + (rpcResult.orderNumber || rpcResult.orderId));
+    setPendingOrder({
+      id: rpcResult.orderId,
+      number: rpcResult.orderNumber || rpcResult.orderId,
+      total: pricing.total,
+    });
   };
+
+  if (pendingOrder) {
+    return (
+      <>
+        <AppHeader back />
+        <main id="checkout-payment-step" className="max-w-2xl mx-auto px-4 pt-6 pb-28 space-y-6">
+          <div className="flex items-baseline justify-between">
+            <h1 className="font-black text-4xl tracking-tight">Completar Pago</h1>
+            <span className="text-xs font-mono font-bold text-ya-lime border border-ya-lime/40 px-2 py-0.5 bg-ya-lime/10">
+              Paso 2 de 2 · Reserva Activa
+            </span>
+          </div>
+          <p className="text-gray-400 mt-1 font-bold text-sm">
+            Tu pedido está registrado en reserva. Paga ahora con PayPal Sandbox para iniciar la preparación inmediata en Jerez.
+          </p>
+
+          <PayPalPaymentSection
+            orderId={pendingOrder.id}
+            orderNumber={pendingOrder.number}
+            amount={pendingOrder.total}
+            selectedMethod={payment}
+            onMethodChange={(m) => setPayment(m)}
+            onPaymentSuccess={({ orderNumber, orderId }) => {
+              clearCart();
+              navigate(`/app/pedido/${orderNumber || orderId}?payment=success`);
+            }}
+            onPaymentError={(errMsg) => {
+              setError(errMsg);
+            }}
+            onPaymentCancel={() => {
+              // Notifica sin perder datos
+            }}
+          />
+
+          <div className="pt-4 border-t border-ya-gray flex justify-between items-center text-xs">
+            <button
+              type="button"
+              onClick={() => setPendingOrder(null)}
+              className="text-gray-400 hover:text-white underline font-bold"
+            >
+              ← Modificar dirección o notas
+            </button>
+            <Link
+              to={`/app/pedido/${pendingOrder.number || pendingOrder.id}`}
+              className="text-ya-lime hover:underline font-bold"
+            >
+              Ver ficha del pedido pendiente →
+            </Link>
+          </div>
+        </main>
+      </>
+    );
+  }
 
   return (
     <>
@@ -670,11 +733,11 @@ export function CheckoutPage() {
               <CreditCard size={20} /> Método de pago
             </legend>
             <div className="grid grid-cols-2 gap-2 mt-2">
-              {['Tarjeta', 'Apple Pay', 'Google Pay', 'Bizum'].map((method) => (
+              {['PayPal', 'Tarjeta'].map((method) => (
                 <label
                   key={method}
                   className={
-                    'border-2 p-4 font-black cursor-pointer text-center select-none transition-colors ' +
+                    'border-2 p-3 font-black cursor-pointer text-center select-none transition-colors text-xs uppercase ' +
                     (payment === method
                       ? 'border-ya-lime bg-ya-lime text-ya-black'
                       : 'border-ya-gray bg-ya-gray text-white hover:border-gray-500')
@@ -692,7 +755,7 @@ export function CheckoutPage() {
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-3">
-              ⚡ Fase 2D/3B: Pago de prueba seguro. No se realizará ningún cargo bancario en tu cuenta.
+              ⚡ Fase 3C: Pasarela PayPal Sandbox v2. Pagos procesados de forma segura mediante PayPal y Tarjeta.
             </p>
           </fieldset>
 
@@ -785,7 +848,7 @@ export function CheckoutPage() {
                   Creando pedido en Supabase...
                 </>
               ) : (
-                `Confirmar pedido · ${euro(pricing.total)}`
+                `Continuar al pago online · ${euro(pricing.total)}`
               )}
             </button>
           )}
@@ -797,6 +860,8 @@ export function CheckoutPage() {
 
 export function OrderPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const isPaymentSuccessNotice = searchParams.get('payment') === 'success';
   const { getProductById } = useCatalog();
 
   // Estados de carga de pedido
@@ -804,6 +869,7 @@ export function OrderPage() {
   const [dbOrder, setDbOrder] = useState<OrderWithDetails | null>(null);
   const [localOrder, setLocalOrder] = useState<LocalOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showOrderPayment, setShowOrderPayment] = useState(false);
 
   // 1. Cargar el pedido: primero buscar en Supabase, si no fallback a mock local
   useEffect(() => {
@@ -922,7 +988,9 @@ export function OrderPage() {
           </div>
 
           <h1 className="font-black text-4xl tracking-tight mt-2">
-            {dbOrder.status === 'delivering'
+            {dbOrder.status === 'payment_pending' || dbOrder.payment_status === 'pending'
+              ? 'Pendiente de pago'
+              : dbOrder.status === 'delivering'
               ? 'Ya estoy repartiendo'
               : dbOrder.status === 'delivered'
               ? 'Pedido entregado'
@@ -935,10 +1003,102 @@ export function OrderPage() {
               : 'Pedido recibido'}
           </h1>
           <p className="text-gray-400 mt-1 font-bold text-sm">
-            {dbOrder.status === 'delivered'
+            {dbOrder.status === 'payment_pending' || dbOrder.payment_status === 'pending'
+              ? 'Tu pedido está registrado en el sistema. Para que el equipo comience a prepararlo, por favor completa el pago online.'
+              : dbOrder.status === 'delivered'
               ? '¡Que lo disfrutes! Gracias por pedir con YA en Jerez.'
-              : 'Tu pedido está registrado en el sistema. Puedes consultar el estado en directo.'}
+              : 'Tu pedido está confirmado y registrado. Puedes consultar el estado en directo.'}
           </p>
+
+          {/* Banner de Estado Pendiente de Pago con Opción Inmediata de Pago/Reintento */}
+          {(dbOrder.status === 'payment_pending' || dbOrder.payment_status === 'pending') && (
+            <div className="border-2 border-amber-400 bg-amber-950/40 p-4 flex flex-col gap-3 mt-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle size={24} className="text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-black text-sm uppercase text-amber-300 tracking-wide">
+                    ⚠️ PENDIENTE DE PAGO — NO EN PREPARACIÓN
+                  </h3>
+                  <p className="text-xs text-gray-200 mt-1 leading-relaxed">
+                    Este pedido no entrará en preparación ni se asignará a un repartidor hasta que el pago quede completado y verificado en la pasarela.
+                  </p>
+                </div>
+              </div>
+              {!showOrderPayment ? (
+                <button
+                  type="button"
+                  id="pay-pending-order-now-btn"
+                  onClick={() => setShowOrderPayment(true)}
+                  className="w-full py-3.5 px-4 bg-ya-lime text-ya-black font-black uppercase text-xs tracking-wider hover:bg-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <CreditCard size={16} /> Completar / Reintentar pago con PayPal o Tarjeta ({euro(Number(dbOrder.total))})
+                </button>
+              ) : (
+                <div className="mt-2 bg-ya-black p-4 border border-amber-400/40">
+                  <PayPalPaymentSection
+                    orderId={dbOrder.id}
+                    orderNumber={orderNumber}
+                    amount={Number(dbOrder.total)}
+                    selectedMethod={dbOrder.payment_method}
+                    onMethodChange={(m) => {
+                      setDbOrder((prev) => (prev ? { ...prev, payment_method: m as any } : prev));
+                    }}
+                    onPaymentSuccess={({ captureId }) => {
+                      setDbOrder((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              status: 'received',
+                              payment_status: 'paid',
+                              payment_capture_id: captureId,
+                              payment_provider: 'paypal',
+                              paid_at: new Date().toISOString(),
+                            }
+                          : prev
+                      );
+                      setShowOrderPayment(false);
+                    }}
+                    onPaymentError={(err) => {
+                      console.warn('Error en pago en ficha:', err);
+                    }}
+                    onPaymentCancel={() => {
+                      setShowOrderPayment(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Banner de Confirmación de Pago si viene de checkout */}
+          {isPaymentSuccessNotice && dbOrder.payment_status === 'paid' && (
+            <div className="border-2 border-ya-lime bg-ya-lime/10 p-4 flex items-start gap-3 mt-4">
+              <CheckCircle2 size={24} className="text-ya-lime shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-black text-sm uppercase text-ya-lime tracking-wide">
+                  ¡Pago verificado con éxito vía PayPal Sandbox!
+                </h3>
+                <p className="text-xs text-gray-200 mt-1">
+                  La transacción ha sido capturada por la pasarela e inscrita en base de datos. Los repartidores de YA preparan tu pedido.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Banner si el usuario canceló en la pasarela PayPal */}
+          {searchParams.get('payment') === 'cancelled' && (
+            <div className="border-2 border-amber-400 bg-amber-950/40 p-4 flex items-start gap-3 mt-4">
+              <AlertCircle size={24} className="text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-black text-sm uppercase text-amber-300 tracking-wide">
+                  Pago cancelado en PayPal
+                </h3>
+                <p className="text-xs text-gray-200 mt-1">
+                  Has cancelado la operación en PayPal Sandbox. Tu pedido sigue guardado como pendiente para que puedas completarlo cuando lo desees.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Timeline de estado real */}
           <section className="mt-8 bg-ya-gray border-2 border-ya-gray p-6">
@@ -951,7 +1111,7 @@ export function OrderPage() {
           {/* Dirección y Pago Real */}
           <section className="mt-6 bg-ya-gray/30 border-2 border-ya-gray p-5 space-y-3">
             <h2 className="font-black text-lg text-white uppercase tracking-wider">
-              Datos de entrega
+              Datos de entrega y cobro
             </h2>
             <div className="text-sm space-y-1">
               <p className="font-black text-white">{addressSnapshot.name}</p>
@@ -971,9 +1131,99 @@ export function OrderPage() {
                 </p>
               )}
             </div>
-            <div className="pt-2 border-t border-ya-gray text-xs text-gray-400 font-bold flex justify-between">
-              <span>Método de pago:</span>
-              <span className="text-white uppercase font-black">{dbOrder.payment_method}</span>
+
+            {/* Ficha detallada de pago */}
+            <div className="pt-3 border-t border-ya-gray space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 font-bold">Método seleccionado:</span>
+                <span className="text-white uppercase font-black">{dbOrder.payment_method}</span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs font-bold text-gray-400">Estado del pago:</span>
+                <span
+                  className={`text-[11px] font-black uppercase px-2.5 py-1 tracking-wider border ${
+                    dbOrder.payment_status === 'paid'
+                      ? 'border-ya-lime bg-ya-lime/20 text-ya-lime'
+                      : dbOrder.payment_status === 'failed' || dbOrder.payment_status === 'cancelled'
+                      ? 'border-rose-500 bg-rose-950/40 text-rose-300'
+                      : 'border-amber-400 bg-amber-950/40 text-amber-300 animate-pulse'
+                  }`}
+                >
+                  {dbOrder.payment_status === 'paid'
+                    ? 'PAGO CONFIRMADO (SANDBOX)'
+                    : dbOrder.payment_status === 'failed'
+                    ? 'PAGO FALLIDO'
+                    : dbOrder.payment_status === 'cancelled'
+                    ? 'PAGO CANCELADO'
+                    : 'PENDIENTE DE PAGO'}
+                </span>
+              </div>
+
+              {dbOrder.payment_status === 'paid' ? (
+                <div className="text-[11px] font-mono text-gray-400 space-y-1 pt-2 bg-ya-black/50 p-3 border border-ya-gray">
+                  <div className="flex justify-between">
+                    <span>Pasarela:</span>
+                    <span className="text-gray-200 font-bold uppercase">{dbOrder.payment_provider || 'paypal sandbox'}</span>
+                  </div>
+                  {(dbOrder.payment_capture_id || dbOrder.payment_reference) && (
+                    <div className="flex justify-between">
+                      <span>Ref. Captura:</span>
+                      <span className="text-ya-lime font-bold">{dbOrder.payment_capture_id || dbOrder.payment_reference}</span>
+                    </div>
+                  )}
+                  {dbOrder.paid_at && (
+                    <div className="flex justify-between">
+                      <span>Fecha cobro:</span>
+                      <span className="text-gray-300">{new Date(dbOrder.paid_at).toLocaleString('es-ES')}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="pt-2">
+                  {!showOrderPayment ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowOrderPayment(true)}
+                      className="w-full py-3 px-4 bg-ya-lime text-ya-black font-black uppercase text-xs tracking-wider hover:bg-white transition-colors flex items-center justify-center gap-2"
+                    >
+                      <CreditCard size={16} /> Completar pago online ({euro(dbOrder.total)})
+                    </button>
+                  ) : (
+                    <div className="pt-2">
+                      <PayPalPaymentSection
+                        orderId={dbOrder.id}
+                        orderNumber={orderNumber}
+                        amount={dbOrder.total}
+                        selectedMethod={dbOrder.payment_method}
+                        onMethodChange={(m) => {
+                          setDbOrder((prev) => (prev ? { ...prev, payment_method: m as any } : prev));
+                        }}
+                        onPaymentSuccess={({ captureId }) => {
+                          setDbOrder((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  payment_status: 'paid',
+                                  payment_capture_id: captureId,
+                                  payment_provider: 'paypal',
+                                  paid_at: new Date().toISOString(),
+                                }
+                              : prev
+                          );
+                          setShowOrderPayment(false);
+                        }}
+                        onPaymentError={(err) => {
+                          console.warn('Error en pago en ficha:', err);
+                        }}
+                        onPaymentCancel={() => {
+                          setShowOrderPayment(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </section>
 

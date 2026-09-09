@@ -115,11 +115,10 @@ export async function fetchActiveDeliveryZone(): Promise<{ fee: number; zone: Db
 // ==============================================================================
 
 const PAYMENT_MAP: Record<string, PaymentMethod> = {
+  PayPal: 'paypal',
+  paypal: 'paypal',
   Tarjeta: 'card',
-  'Apple Pay': 'apple_pay',
-  'Google Pay': 'google_pay',
-  Bizum: 'bizum',
-  Efectivo: 'cash',
+  card: 'card',
 };
 
 export type CreateOrderInput = {

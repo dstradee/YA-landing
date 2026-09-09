@@ -15,6 +15,10 @@ import type { AdminOrderListItem, OrderStatus } from '../../types/app';
 import { euro } from '../../data/products';
 
 const statusBadges: Record<OrderStatus, { label: string; className: string }> = {
+  payment_pending: {
+    label: '⚠️ PENDIENTE DE PAGO — NO PREPARAR',
+    className: 'border-amber-500 text-amber-400 bg-amber-500/10 font-black animate-pulse',
+  },
   received: { label: 'Recibido', className: 'border-yellow-400 text-yellow-400 bg-yellow-400/10' },
   preparing: { label: 'En preparación', className: 'border-blue-400 text-blue-400 bg-blue-400/10' },
   shopping: { label: 'Comprando', className: 'border-blue-400 text-blue-400 bg-blue-400/10' },
@@ -28,6 +32,7 @@ const statusBadges: Record<OrderStatus, { label: string; className: string }> = 
 
 const filterTabs = [
   { key: 'all', label: 'Todos' },
+  { key: 'payment_pending', label: '⚠️ Pendientes de pago' },
   { key: 'received', label: 'Recibidos' },
   { key: 'preparing', label: 'En preparación' },
   { key: 'sourcing', label: 'Comprando' },
@@ -297,16 +302,41 @@ export function AdminOrdersPage() {
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="inline-block px-2 py-0.5 text-[10px] uppercase font-bold border border-ya-gray bg-ya-gray/30 text-gray-300">
-                            {ord.payment_method.replace('_', ' ')}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-block px-2 py-0.5 text-[10px] uppercase font-bold border border-ya-gray bg-ya-gray/30 text-gray-300 w-fit">
+                              {ord.payment_method.replace('_', ' ')}
+                            </span>
+                            <span
+                              className={`text-[9px] font-black uppercase px-1.5 py-0.5 border w-fit ${
+                                ord.payment_status === 'paid'
+                                  ? 'border-ya-lime text-ya-lime bg-ya-lime/10'
+                                  : ord.payment_status === 'failed' || ord.payment_status === 'cancelled'
+                                  ? 'border-rose-500 text-rose-400 bg-rose-950/20'
+                                  : 'border-amber-400 text-amber-400 bg-amber-950/20'
+                              }`}
+                            >
+                              {ord.payment_status === 'paid'
+                                ? '● Pagado'
+                                : ord.payment_status === 'failed'
+                                ? '● Fallido'
+                                : ord.payment_status === 'cancelled'
+                                ? '● Cancelado'
+                                : '○ Pendiente'}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
-                          <span
-                            className={`inline-block px-2.5 py-1 text-[10px] font-black uppercase border-2 ${badge.className}`}
-                          >
-                            {badge.label}
-                          </span>
+                          {ord.status === 'payment_pending' || (ord.payment_status === 'pending' && ord.status !== 'cancelled') ? (
+                            <span className="inline-block px-2.5 py-1 text-[10px] font-black uppercase border-2 border-amber-500 text-amber-400 bg-amber-500/10 animate-pulse">
+                              ⚠️ PENDIENTE DE PAGO — NO PREPARAR
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-block px-2.5 py-1 text-[10px] font-black uppercase border-2 ${badge.className}`}
+                            >
+                              {badge.label}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <span className="text-sm font-black text-white">{euro(ord.total)}</span>

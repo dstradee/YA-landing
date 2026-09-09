@@ -18,6 +18,7 @@ import { euro } from '../../data/products';
 import type { OrderStatus } from '../../types/app';
 
 const statusBadges: Record<OrderStatus, { label: string; className: string }> = {
+  payment_pending: { label: '⚠️ Pago Pendiente', className: 'border-amber-500 text-amber-400 bg-amber-500/10' },
   received: { label: 'Recibido', className: 'border-yellow-400 text-yellow-400 bg-yellow-400/10' },
   preparing: { label: 'En preparación', className: 'border-blue-400 text-blue-400 bg-blue-400/10' },
   shopping: { label: 'Comprando', className: 'border-blue-400 text-blue-400 bg-blue-400/10' },

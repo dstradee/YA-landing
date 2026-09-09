@@ -19,9 +19,14 @@ import type { AdminOrderDetail, OrderStatus } from '../../types/app';
 import { euro } from '../../data/products';
 
 const statusBadges: Record<OrderStatus, { label: string; description: string; className: string }> = {
+  payment_pending: {
+    label: '⚠️ PENDIENTE DE PAGO — NO PREPARAR',
+    description: 'Pedido registrado en checkout pero el pago está pendiente. PROHIBIDO pasar a preparación o asignación.',
+    className: 'border-amber-500 text-amber-400 bg-amber-500/10 font-black animate-pulse',
+  },
   received: {
     label: 'Recibido',
-    description: 'Pedido registrado en Supabase, pendiente de comenzar compra/preparación.',
+    description: 'Pedido pagado y confirmado en Supabase, listo para comenzar compra/preparación.',
     className: 'border-yellow-400 text-yellow-400 bg-yellow-400/10',
   },
   preparing: {
@@ -68,7 +73,8 @@ const statusBadges: Record<OrderStatus, { label: string; description: string; cl
 
 // Estados permitidos por el modelo oficial de Postgres
 const availableStatuses: { value: OrderStatus; label: string }[] = [
-  { value: 'received', label: '1. Recibido' },
+  { value: 'payment_pending', label: '0. ⚠️ Pendiente de pago (No preparar)' },
+  { value: 'received', label: '1. Recibido (Pagado)' },
   { value: 'preparing', label: '2. En preparación' },
   { value: 'sourcing', label: '3. Comprando en Jerez' },
   { value: 'prepared', label: '4. Preparado' },
@@ -107,8 +113,18 @@ export function AdminOrderDetailPage() {
     loadOrder();
   }, [loadOrder]);
 
+  const isUnpaid = order?.status === 'payment_pending' || (order?.payment_status === 'pending' && order?.status !== 'cancelled');
+
   const handleUpdateStatus = async () => {
     if (!order || selectedStatus === order.status) return;
+
+    if (isUnpaid && selectedStatus !== 'cancelled') {
+      setActionFeedback({
+        type: 'error',
+        message: '⚠️ BLOQUEO OPERATIVO: Un pedido pendiente de pago no puede pasar a preparación, compra ni reparto. Solo puede recibir confirmación de pasarela o ser cancelado.',
+      });
+      return;
+    }
 
     setUpdating(true);
     setActionFeedback(null);
@@ -216,6 +232,23 @@ export function AdminOrderDetailPage() {
         </div>
       </div>
 
+      {/* Warning Banner for Unpaid / Payment Pending Orders */}
+      {isUnpaid && (
+        <div className="border-4 border-amber-500 bg-amber-950/60 p-5 font-mono text-amber-300 flex items-start gap-4">
+          <AlertTriangle size={32} className="text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h3 className="font-black text-base uppercase tracking-wider text-amber-300">
+              ⚠️ ATENCIÓN OPERATIVA: PEDIDO PENDIENTE DE PAGO — NO PREPARAR
+            </h3>
+            <p className="text-xs text-gray-200 leading-relaxed font-sans">
+              El cliente aún no ha completado el pago online vía PayPal Sandbox (o está pendiente de confirmación).
+              Este pedido <strong>NO debe entrar en preparación ni asignarse a ningún repartidor</strong>.
+              Los controles de avance a preparación, compra y reparto permanecen <strong>bloqueados</strong> para salvaguardar la operativa.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Order Header */}
       <div className="border-4 border-ya-gray bg-ya-black p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -224,11 +257,17 @@ export function AdminOrderDetailPage() {
               <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-white font-mono">
                 {order.order_number}
               </h1>
-              <span
-                className={`px-3 py-1 text-xs font-black uppercase border-2 font-mono ${currentBadge.className}`}
-              >
-                {currentBadge.label}
-              </span>
+              {isUnpaid ? (
+                <span className="px-3 py-1 text-xs font-black uppercase border-2 font-mono border-amber-500 text-amber-400 bg-amber-500/10 animate-pulse">
+                  ⚠️ PENDIENTE DE PAGO — NO PREPARAR
+                </span>
+              ) : (
+                <span
+                  className={`px-3 py-1 text-xs font-black uppercase border-2 font-mono ${currentBadge.className}`}
+                >
+                  {currentBadge.label}
+                </span>
+              )}
             </div>
             <p className="text-xs font-mono text-gray-400 capitalize mt-1 flex items-center gap-1.5">
               <Clock size={13} />
@@ -244,9 +283,16 @@ export function AdminOrderDetailPage() {
 
         {/* Change Status Control Panel */}
         <div className="border-t-2 border-ya-gray pt-4 mt-2">
-          <div className="text-xs font-black uppercase tracking-wider text-ya-lime font-mono mb-2 flex items-center gap-2">
-            <span>Control de Estado Operativo</span>
-            <span className="text-[10px] text-gray-400 lowercase font-normal">(Supabase Realtime)</span>
+          <div className="text-xs font-black uppercase tracking-wider text-ya-lime font-mono mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span>Control de Estado Operativo</span>
+              <span className="text-[10px] text-gray-400 lowercase font-normal">(Supabase Realtime)</span>
+            </div>
+            {isUnpaid && (
+              <span className="text-amber-400 text-[11px] font-mono font-black uppercase">
+                🔒 Operaciones bloqueadas por falta de pago
+              </span>
+            )}
           </div>
 
           {actionFeedback && (
@@ -272,16 +318,19 @@ export function AdminOrderDetailPage() {
               onChange={(e) => setSelectedStatus(e.target.value as OrderStatus)}
               className="flex-1 bg-ya-gray border-2 border-ya-gray text-white px-4 py-3 font-mono text-xs uppercase font-bold focus:outline-none focus:border-ya-lime"
             >
-              {availableStatuses.map((st) => (
-                <option key={st.value} value={st.value}>
-                  {st.label}
-                </option>
-              ))}
+              {availableStatuses.map((st) => {
+                const isOpDisabled = isUnpaid && st.value !== 'cancelled' && st.value !== 'payment_pending';
+                return (
+                  <option key={st.value} value={st.value} disabled={isOpDisabled}>
+                    {st.label} {isOpDisabled ? '(Bloqueado - Sin Pago)' : ''}
+                  </option>
+                );
+              })}
             </select>
 
             <button
               type="button"
-              disabled={updating || selectedStatus === order.status}
+              disabled={updating || selectedStatus === order.status || (isUnpaid && selectedStatus !== 'cancelled')}
               onClick={handleUpdateStatus}
               className="px-6 py-3 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-xs hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0"
             >
@@ -296,7 +345,9 @@ export function AdminOrderDetailPage() {
             </button>
           </div>
           <p className="text-[11px] font-mono text-gray-400 mt-2">
-            {statusBadges[selectedStatus]?.description}
+            {isUnpaid && selectedStatus !== 'cancelled'
+              ? '⚠️ Para proteger el reparto, los pedidos sin pago no pueden transicionar a preparación o reparto.'
+              : statusBadges[selectedStatus]?.description}
           </p>
         </div>
       </div>
@@ -464,29 +515,140 @@ export function AdminOrderDetailPage() {
             )}
           </div>
 
-          {/* Payment Method Card */}
-          <div className="border-4 border-ya-gray bg-ya-black p-6">
-            <h2 className="text-base font-black uppercase tracking-wider text-white mb-4 border-b-2 border-ya-gray pb-3 flex items-center gap-2">
-              <CreditCard size={18} className="text-ya-lime" />
-              <span>Método de Pago</span>
+          {/* Payment Method & Gateway Card (Phase 3C) */}
+          <div className="border-4 border-ya-gray bg-ya-black p-6 space-y-4">
+            <h2 className="text-base font-black uppercase tracking-wider text-white border-b-2 border-ya-gray pb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <CreditCard size={18} className="text-ya-lime" />
+                <span>Cobro & Pasarela</span>
+              </span>
+              <span className="text-[10px] font-mono font-bold text-ya-lime bg-ya-lime/10 px-2 py-0.5 border border-ya-lime/30">
+                PAYPAL SANDBOX
+              </span>
             </h2>
 
-            <div className="space-y-2 text-xs font-mono">
+            <div className="space-y-3 text-xs font-mono">
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">Método:</span>
+                <span className="text-gray-400">Método cliente:</span>
                 <span className="font-bold text-white uppercase px-2 py-0.5 border border-ya-gray bg-ya-gray/30">
                   {order.payment_method.replace('_', ' ')}
                 </span>
               </div>
+
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">Estado de pago:</span>
-                <span className="font-bold text-ya-lime uppercase">
-                  {order.payment_status}
+                <span className="text-gray-400">Estado del cobro:</span>
+                <span
+                  className={`font-black uppercase px-2.5 py-0.5 border text-[11px] ${
+                    order.payment_status === 'paid'
+                      ? 'border-ya-lime text-ya-lime bg-ya-lime/10'
+                      : order.payment_status === 'failed' || order.payment_status === 'cancelled'
+                      ? 'border-rose-500 text-rose-300 bg-rose-950/30'
+                      : 'border-amber-400 text-amber-300 bg-amber-950/30 animate-pulse'
+                  }`}
+                >
+                  {order.payment_status === 'paid'
+                    ? '● PAGADO'
+                    : order.payment_status === 'failed'
+                    ? '● FALLIDO'
+                    : order.payment_status === 'cancelled'
+                    ? '● CANCELADO'
+                    : '○ PENDIENTE'}
                 </span>
               </div>
-              <p className="text-[10px] text-gray-400 pt-1">
-                Transacción de prueba (Phase 2D). Pagos reales con Stripe programados para fases posteriores.
-              </p>
+
+              <div className="border-t border-ya-gray pt-2 space-y-1.5 text-[11px] text-gray-400">
+                <div className="flex justify-between">
+                  <span>Proveedor:</span>
+                  <span className="text-white uppercase font-bold">
+                    {order.payment_provider || 'paypal sandbox'}
+                  </span>
+                </div>
+
+                {/* Referencias de pasarela (desde payments o snapshot) */}
+                {Boolean(order.payment_order_id || order.payments?.[0]?.provider_order_id) && (
+                  <div className="flex justify-between">
+                    <span>PayPal Order ID:</span>
+                    <span
+                      className="text-ya-lime truncate max-w-[170px]"
+                      title={(order.payment_order_id || order.payments?.[0]?.provider_order_id) ?? undefined}
+                    >
+                      {order.payment_order_id || order.payments?.[0]?.provider_order_id}
+                    </span>
+                  </div>
+                )}
+
+                {Boolean(order.payment_capture_id || order.payments?.[0]?.provider_capture_id) && (
+                  <div className="flex justify-between">
+                    <span>PayPal Capture ID:</span>
+                    <span
+                      className="text-ya-lime truncate max-w-[170px]"
+                      title={(order.payment_capture_id || order.payments?.[0]?.provider_capture_id) ?? undefined}
+                    >
+                      {order.payment_capture_id || order.payments?.[0]?.provider_capture_id}
+                    </span>
+                  </div>
+                )}
+
+                {order.payment_reference && (
+                  <div className="flex justify-between">
+                    <span>Ref. YA:</span>
+                    <span className="text-white font-bold">{order.payment_reference}</span>
+                  </div>
+                )}
+
+                {order.paid_at && (
+                  <div className="flex justify-between">
+                    <span>Fecha cobro:</span>
+                    <span className="text-gray-200">
+                      {new Date(order.paid_at).toLocaleString('es-ES')}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Registro de transacciones si existen */}
+              {order.payments && order.payments.length > 0 && (
+                <div className="border-t border-ya-gray pt-2 space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">
+                    Historial de Transacciones ({order.payments.length})
+                  </span>
+                  <div className="space-y-1.5">
+                    {order.payments.map((p: any) => (
+                      <div
+                        key={p.id}
+                        className="p-2 border border-ya-gray bg-ya-gray/20 text-[10px] space-y-0.5"
+                      >
+                        <div className="flex justify-between font-bold">
+                          <span className="text-white">{p.provider?.toUpperCase()} · {euro(p.amount)}</span>
+                          <span
+                            className={
+                              p.status === 'completed'
+                                ? 'text-ya-lime'
+                                : p.status === 'failed'
+                                ? 'text-rose-400'
+                                : 'text-amber-400'
+                            }
+                          >
+                            {p.status}
+                          </span>
+                        </div>
+                        {p.provider_capture_id && (
+                          <div className="text-gray-400 truncate">Cap: {p.provider_capture_id}</div>
+                        )}
+                        <div className="text-gray-500 text-[9px]">
+                          {new Date(p.created_at).toLocaleString('es-ES')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {order.payment_status !== 'paid' && (
+                <div className="border border-amber-500/40 bg-amber-950/20 p-2.5 text-[10px] text-amber-200 leading-tight">
+                  ⚠️ <strong>Aviso Operativo:</strong> El pedido está pendiente de cobro en PayPal Sandbox. No despachar a repartidores hasta que figure como PAGADO.
+                </div>
+              )}
             </div>
           </div>
         </div>

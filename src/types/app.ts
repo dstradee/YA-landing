@@ -53,6 +53,7 @@ export type Address = {
 };
 
 export type OrderStatus =
+  | 'payment_pending'
   | 'received'
   | 'preparing'
   | 'shopping'
@@ -138,8 +139,8 @@ export type DbAddress = {
   updated_at: string;
 };
 
-export type PaymentMethod = 'card' | 'apple_pay' | 'google_pay' | 'bizum' | 'cash';
-export type PaymentStatus = 'pending' | 'authorized' | 'paid' | 'failed' | 'refunded';
+export type PaymentMethod = 'card' | 'apple_pay' | 'google_pay' | 'bizum' | 'cash' | 'paypal';
+export type PaymentStatus = 'pending' | 'authorized' | 'paid' | 'failed' | 'cancelled' | 'refunded';
 
 export type DbOrder = {
   id: string;
@@ -158,8 +159,32 @@ export type DbOrder = {
   promotion_discount?: number;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
+  payment_provider?: string | null;
+  payment_order_id?: string | null;
+  payment_capture_id?: string | null;
+  payment_reference?: string | null;
+  paid_at?: string | null;
+  refunded_at?: string | null;
+  payment_metadata?: any;
   notes: string | null;
   delivery_address_snapshot?: Address | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DbPayment = {
+  id: string;
+  order_id: string;
+  user_id: string | null;
+  provider: string;
+  provider_order_id: string;
+  provider_capture_id: string | null;
+  payment_method: string;
+  status: PaymentStatus;
+  amount: number;
+  currency: string;
+  raw_payload?: any;
+  error_detail?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -345,6 +370,7 @@ export type AdminOrderListItem = DbOrder & {
 export type AdminOrderDetail = DbOrder & {
   customer: DbProfile | null;
   items: DbOrderItem[];
+  payments?: DbPayment[];
 };
 
 export type AdminCustomerListItem = DbProfile & {

@@ -169,6 +169,13 @@ export async function adminFetchOrderById(
       }
     }
 
+    // Obtener transacciones registradas en la tabla payments
+    const { data: paymentsData } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('order_id', order.id)
+      .order('created_at', { ascending: false });
+
     const detail: AdminOrderDetail = {
       ...order,
       subtotal: Number(order.subtotal) || 0,
@@ -176,6 +183,7 @@ export async function adminFetchOrderById(
       total: Number(order.total) || 0,
       customer,
       items: (itemsData || []) as DbOrderItem[],
+      payments: (paymentsData || []) as any[],
     };
 
     return { order: detail, error: null };

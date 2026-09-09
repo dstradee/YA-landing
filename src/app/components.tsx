@@ -232,6 +232,7 @@ export function CategoryCard({ slug }: { slug: string }) {
 }
 
 const statusText: Record<OrderStatus, string> = {
+  payment_pending: 'Pendiente de pago online',
   received: 'Pedido recibido',
   preparing: 'Preparando pedido',
   shopping: 'Comprando pedido',
@@ -244,8 +245,9 @@ const statusText: Record<OrderStatus, string> = {
 };
 
 const statusDescriptions: Record<OrderStatus, string> = {
-  received: 'Hemos recibido tu orden en Jerez de la Frontera.',
-  preparing: 'Asignando repartidor y preparando la ruta.',
+  payment_pending: 'Esperando confirmación del pago en PayPal Sandbox para iniciar la preparación.',
+  received: 'Pago confirmado. Hemos recibido tu orden en Jerez de la Frontera.',
+  preparing: 'Asignando repartidor y preparando los artículos.',
   shopping: 'Adquiriendo los artículos seleccionados.',
   sourcing: 'Adquiriendo los artículos en comercio de Jerez.',
   ready: 'Bolsa lista con bebidas frías y precintada.',
@@ -256,6 +258,7 @@ const statusDescriptions: Record<OrderStatus, string> = {
 };
 
 const statuses: OrderStatus[] = [
+  'payment_pending',
   'received',
   'preparing',
   'shopping',
