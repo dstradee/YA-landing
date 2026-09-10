@@ -146,7 +146,12 @@ export function CourierOrderDetailPage() {
           <span>Volver</span>
         </Link>
 
-        <div className="text-right">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {order.is_test && (
+            <span className="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500">
+              🧪 PRUEBA
+            </span>
+          )}
           <span className="font-mono font-black text-xl text-ya-lime">
             {order.order_number}
           </span>

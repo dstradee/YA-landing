@@ -274,12 +274,19 @@ export function AdminOrdersPage() {
                     return (
                       <tr key={ord.id} className="hover:bg-ya-gray/20 transition-colors">
                         <td className="py-3 px-4">
-                          <Link
-                            to={`/admin/pedidos/${ord.id}`}
-                            className="font-black text-white hover:text-ya-lime text-sm tracking-tight flex items-center gap-1.5"
-                          >
-                            <span>{ord.order_number}</span>
-                          </Link>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Link
+                              to={`/admin/pedidos/${ord.id}`}
+                              className="font-black text-white hover:text-ya-lime text-sm tracking-tight flex items-center gap-1.5"
+                            >
+                              <span>{ord.order_number}</span>
+                            </Link>
+                            {ord.is_test && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500">
+                                🧪 PRUEBA
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-gray-400 font-sans">
                             {ord.itemsCount} {ord.itemsCount === 1 ? 'artículo' : 'artículos'}
                           </span>
@@ -386,13 +393,20 @@ export function AdminOrdersPage() {
                   key={ord.id}
                   className="border-2 border-ya-gray bg-ya-black p-4 space-y-3 hover:border-ya-lime transition-colors"
                 >
-                  <div className="flex items-center justify-between">
-                    <Link
-                      to={`/admin/pedidos/${ord.id}`}
-                      className="font-black text-white hover:text-ya-lime text-base tracking-tight font-mono"
-                    >
-                      {ord.order_number}
-                    </Link>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Link
+                        to={`/admin/pedidos/${ord.id}`}
+                        className="font-black text-white hover:text-ya-lime text-base tracking-tight font-mono"
+                      >
+                        {ord.order_number}
+                      </Link>
+                      {ord.is_test && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500">
+                          🧪 PRUEBA
+                        </span>
+                      )}
+                    </div>
                     <span
                       className={`px-2 py-0.5 text-[10px] font-black uppercase border-2 font-mono ${badge.className}`}
                     >

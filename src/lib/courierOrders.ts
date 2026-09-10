@@ -527,7 +527,125 @@ export async function courierUpdateOrderStatus(params: {
 }
 
 /**
- * Suscripción en tiempo real a los pedidos de un repartidor
+ * Obtiene los pedidos disponibles (status = 'received', payment_status = 'paid', courier_id IS NULL)
+ * Solo para repartidores autenticados activos y disponibles.
+ */
+export async function courierFetchAvailableOrders(): Promise<{
+  orders: CourierOrderListItem[];
+  error: string | null;
+}> {
+  if (!isSupabaseConfigured) {
+    return { orders: [], error: null };
+  }
+
+  try {
+    // 1. Intentar RPC segura de PostgreSQL primero
+    const { data: rpcData, error: rpcError } = await supabase.rpc('courier_get_available_orders');
+
+    if (!rpcError && Array.isArray(rpcData)) {
+      const orders: CourierOrderListItem[] = rpcData.map((raw: any) => {
+        const snapshot = raw.delivery_address_snapshot as Address | null;
+        return {
+          ...raw,
+          itemsCount: Number(raw.items_count || 0),
+          customerName: snapshot?.name || 'Cliente YA',
+          customerPhone: snapshot?.phone || null,
+          deliveryAddress: snapshot || null,
+        };
+      });
+      return { orders, error: null };
+    }
+
+    // 2. Fallback con consulta directa
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .is('courier_id', null)
+      .eq('status', 'received')
+      .eq('payment_status', 'paid')
+      .order('created_at', { ascending: true });
+
+    if (ordersError) {
+      return { orders: [], error: ordersError.message };
+    }
+
+    const orders = (ordersData || []) as DbOrder[];
+    if (orders.length === 0) {
+      return { orders: [], error: null };
+    }
+
+    const orderIds = orders.map((o) => o.id);
+
+    // Items count
+    const { data: itemsData } = await supabase
+      .from('order_items')
+      .select('order_id, quantity')
+      .in('order_id', orderIds);
+
+    const itemsCountMap = new Map<string, number>();
+    if (itemsData) {
+      for (const item of itemsData) {
+        const cur = itemsCountMap.get(item.order_id) || 0;
+        itemsCountMap.set(item.order_id, cur + (item.quantity || 1));
+      }
+    }
+
+    const result: CourierOrderListItem[] = orders.map((order) => {
+      const snapshot = order.delivery_address_snapshot as Address | null;
+      return {
+        ...order,
+        itemsCount: itemsCountMap.get(order.id) || 0,
+        customerName: snapshot?.name || 'Cliente YA',
+        customerPhone: snapshot?.phone || null,
+        deliveryAddress: snapshot || null,
+      };
+    });
+
+    return { orders: result, error: null };
+  } catch (err: unknown) {
+    return {
+      orders: [],
+      error: err instanceof Error ? err.message : 'Error al consultar pedidos disponibles.',
+    };
+  }
+}
+
+/**
+ * Acepta de forma atómica un pedido disponible para el repartidor autenticado.
+ * Utiliza SELECT ... FOR UPDATE en PostgreSQL para evitar doble asignación concurrente.
+ */
+export async function courierAcceptOrder(
+  orderId: string
+): Promise<{ success: boolean; error: string | null }> {
+  if (!isSupabaseConfigured || !orderId) {
+    return { success: false, error: 'Identificador de pedido no proporcionado.' };
+  }
+
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('courier_accept_order', {
+      p_order_id: orderId,
+    });
+
+    if (rpcError) {
+      return { success: false, error: rpcError.message };
+    }
+
+    if (rpcData && rpcData.success) {
+      return { success: true, error: null };
+    }
+
+    return { success: false, error: 'No se pudo aceptar el pedido.' };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Error inesperado al aceptar el pedido.',
+    };
+  }
+}
+
+/**
+ * Suscripción en tiempo real a los pedidos para el panel del repartidor.
+ * Escucha cambios en la tabla 'orders' para refrescar pedidos disponibles y asignados.
  */
 export function courierSubscribeToOrders(
   courierId: string,
@@ -539,14 +657,13 @@ export function courierSubscribeToOrders(
 
   try {
     const channel = supabase
-      .channel(`courier-orders-${courierId}`)
+      .channel(`courier-feed-${courierId}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'orders',
-          filter: `courier_id=eq.${courierId}`,
         },
         () => {
           onChange();

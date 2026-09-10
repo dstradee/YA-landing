@@ -12,6 +12,7 @@ import {
   courierFetchCurrentProfile,
   courierFetchOrders,
   courierUpdateOrderStatus,
+  courierSubscribeToOrders,
 } from '../../lib/courierOrders';
 import type { CourierOrderListItem, DbCourier, OrderStatus } from '../../types/app';
 
@@ -47,6 +48,15 @@ export function CourierOrdersPage() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  // Suscripción en tiempo real
+  useEffect(() => {
+    if (!courier?.id) return;
+    const unsub = courierSubscribeToOrders(courier.id, () => {
+      loadOrders(true);
+    });
+    return () => unsub();
+  }, [courier?.id, loadOrders]);
 
   const handleOrderAction = async (
     orderId: string,
@@ -246,10 +256,15 @@ export function CourierOrdersPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-black font-mono text-sm text-ya-lime">
                         {order.order_number}
                       </span>
+                      {order.is_test && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500">
+                          🧪 PRUEBA
+                        </span>
+                      )}
                       {getStatusBadge(order.status)}
                     </div>
                     <div className="text-[11px] text-gray-400 font-mono mt-0.5">

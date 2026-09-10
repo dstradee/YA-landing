@@ -18,7 +18,7 @@ export async function adminFetchDashboardStats(): Promise<{
     // 1. Obtener pedidos con datos necesarios para las métricas
     const { data: ordersData, error: ordersError } = await supabase
       .from('orders')
-      .select('id, order_number, user_id, address_id, delivery_zone_id, courier_id, status, subtotal, delivery_fee, total, payment_method, payment_status, notes, delivery_address_snapshot, created_at, updated_at')
+      .select('id, order_number, user_id, address_id, delivery_zone_id, courier_id, status, subtotal, delivery_fee, total, payment_method, payment_status, is_test, notes, delivery_address_snapshot, created_at, updated_at')
       .order('created_at', { ascending: false });
 
     if (ordersError) {
@@ -145,6 +145,7 @@ export async function adminFetchDashboardStats(): Promise<{
         total: Number(order.total) || 0,
         payment_method: order.payment_method,
         payment_status: order.payment_status,
+        is_test: !!order.is_test,
         notes: order.notes,
         delivery_address_snapshot: order.delivery_address_snapshot,
         created_at: order.created_at,

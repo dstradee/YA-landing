@@ -11,6 +11,7 @@ import {
   fetchUserAddresses,
   createUserAddress,
   createOrderViaRpc,
+  createAdminTestOrderViaRpc,
   fetchOrderByIdOrNumber,
   subscribeToOrderStatus,
   type OrderWithDetails,
@@ -202,10 +203,11 @@ export function CartPage() {
 
 export function CheckoutPage() {
   const { lines, clearCart, pricing } = useCart();
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, profile, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // Estados de checkout
+  const [checkoutMode, setCheckoutMode] = useState<'paypal' | 'test_free'>('paypal');
   const [payment, setPayment] = useState('PayPal');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -383,8 +385,8 @@ export function CheckoutPage() {
 
     setError(null);
 
-    // Validar pedido mínimo de forma preventiva
-    if (pricing.minOrderEnabled && !pricing.isMinOrderSatisfied) {
+    // Validar pedido mínimo de forma preventiva (exento en pedidos de prueba para administradores)
+    if (checkoutMode !== 'test_free' && pricing.minOrderEnabled && !pricing.isMinOrderSatisfied) {
       setError(
         `No se alcanza el pedido mínimo de ${euro(pricing.minOrderAmount)}. Te faltan ${euro(
           pricing.minOrderRemaining
@@ -434,7 +436,36 @@ export function CheckoutPage() {
       targetAddressId = resAddress.address.id;
     }
 
-    // 2. Crear pedido real en Supabase de forma atómica y segura mediante la RPC
+    // 2A. RUTA ALTERNATIVA: PEDIDO DE PRUEBA GRATIS PARA ADMINISTRADORES
+    // Verifica en backend/RPC que auth.uid() sea admin, crea el pedido con 0 €, pago 'paid' y sin pasar por PayPal
+    if (isAdmin && checkoutMode === 'test_free') {
+      setIsSubmitting(true);
+
+      const rpcResult = await createAdminTestOrderViaRpc({
+        addressId: targetAddressId,
+        lines: lines.map((l) => ({
+          productId: l.isPack ? (l.packId || l.productId) : l.productId,
+          quantity: l.quantity,
+          isPack: l.isPack,
+          packId: l.packId,
+          selections: l.packSelections,
+        })),
+        notes: courierNotes.trim() || newAddress.notes || undefined,
+      });
+
+      if (!rpcResult.success || !rpcResult.orderId) {
+        setIsSubmitting(false);
+        setError(rpcResult.error || 'No se pudo procesar el pedido de prueba de administrador.');
+        return;
+      }
+
+      clearCart();
+      setIsSubmitting(false);
+      navigate(`/app/pedido/${rpcResult.orderNumber || rpcResult.orderId}?test_order=true`);
+      return;
+    }
+
+    // 2B. RUTA ESTÁNDAR: Crear pedido con reserva en Supabase y abrir pasarela PayPal
     setIsSubmitting(true);
 
     const rpcResult = await createOrderViaRpc({
@@ -728,37 +759,110 @@ export function CheckoutPage() {
             </p>
           </fieldset>
 
-          {/* MÉTODO DE PAGO */}
-          <fieldset className="border-2 border-ya-gray p-4 bg-ya-gray/30">
-            <legend className="font-black text-xl px-2 text-ya-lime flex items-center gap-2">
-              <CreditCard size={20} /> Método de pago
-            </legend>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {['PayPal', 'Tarjeta'].map((method) => (
-                <label
-                  key={method}
-                  className={
-                    'border-2 p-3 font-black cursor-pointer text-center select-none transition-colors text-xs uppercase ' +
-                    (payment === method
+          {/* SELECTOR EXCLUSIVO PARA ADMINISTRADORES */}
+          {isAdmin && (
+            <div className="border-2 border-purple-500 bg-purple-950/30 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-purple-300">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
+                  <span>Opciones de Administrador</span>
+                </div>
+                <span className="text-[10px] font-mono text-purple-300 border border-purple-500/50 px-1.5 py-0.5 bg-purple-500/20 font-black uppercase">
+                  ROL ADMIN DETECTADO
+                </span>
+              </div>
+              <p className="text-xs text-purple-200/90 font-medium">
+                Como administrador de YA, puedes elegir entre realizar un pago real con PayPal o crear un pedido de prueba 100% operativo y gratuito:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCheckoutMode('paypal')}
+                  className={`p-3 text-left border-2 font-black text-xs uppercase tracking-wider transition-colors flex items-center justify-between ${
+                    checkoutMode === 'paypal'
                       ? 'border-ya-lime bg-ya-lime text-ya-black'
-                      : 'border-ya-gray bg-ya-gray text-white hover:border-gray-500')
-                  }
+                      : 'border-ya-gray bg-ya-black text-gray-300 hover:border-gray-500'
+                  }`}
                 >
-                  <input
-                    className="sr-only"
-                    type="radio"
-                    name="payment-method"
-                    checked={payment === method}
-                    onChange={() => setPayment(method)}
-                  />
-                  {method}
-                </label>
-              ))}
+                  <div>
+                    <div className="font-black text-xs">Pagar con PayPal</div>
+                    <div className="text-[10px] font-mono font-normal opacity-80 mt-0.5">
+                      Flujo real · Sandbox ({euro(pricing.total)})
+                    </div>
+                  </div>
+                  {checkoutMode === 'paypal' && <Check size={16} />}
+                </button>
+
+                <button
+                  type="button"
+                  id="admin-test-order-option-btn"
+                  onClick={() => setCheckoutMode('test_free')}
+                  className={`p-3 text-left border-2 font-black text-xs uppercase tracking-wider transition-colors flex items-center justify-between ${
+                    checkoutMode === 'test_free'
+                      ? 'border-purple-400 bg-purple-500 text-white shadow-lg'
+                      : 'border-purple-500/50 bg-purple-950/20 text-purple-200 hover:border-purple-400'
+                  }`}
+                >
+                  <div>
+                    <div className="font-black text-xs">Pedido de prueba · Gratis</div>
+                    <div className="text-[10px] font-mono font-normal opacity-90 mt-0.5">
+                      Sin PayPal · 0 € · Operativo
+                    </div>
+                  </div>
+                  {checkoutMode === 'test_free' && <Check size={16} />}
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-gray-400 mt-3">
-              ⚡ Fase 3C: Pasarela PayPal Sandbox v2. Pagos procesados de forma segura mediante PayPal y Tarjeta.
-            </p>
-          </fieldset>
+          )}
+
+          {/* MÉTODO DE PAGO */}
+          {checkoutMode === 'test_free' ? (
+            <div className="border-2 border-purple-500/60 p-4 bg-purple-950/20 space-y-2">
+              <div className="font-black text-sm uppercase text-purple-300 flex items-center gap-2">
+                <CreditCard size={18} className="text-purple-400" /> Método de pago seleccionado
+              </div>
+              <div className="p-3 border border-purple-500/40 bg-purple-950/40 text-xs font-mono text-purple-200">
+                <div className="font-black text-white text-sm uppercase flex items-center justify-between">
+                  <span>Pedido de prueba · Gratis</span>
+                  <span className="text-ya-lime font-black">0,00 €</span>
+                </div>
+                <p className="mt-1 text-purple-300/80 font-sans">
+                  Este pedido se creará en Supabase con total 0 €, marcado como <strong>Pagado</strong> sin pasar por PayPal, y entrará directamente al flujo normal de YA para probar preparación, reparto y entrega.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <fieldset className="border-2 border-ya-gray p-4 bg-ya-gray/30">
+              <legend className="font-black text-xl px-2 text-ya-lime flex items-center gap-2">
+                <CreditCard size={20} /> Método de pago
+              </legend>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {['PayPal', 'Tarjeta'].map((method) => (
+                  <label
+                    key={method}
+                    className={
+                      'border-2 p-3 font-black cursor-pointer text-center select-none transition-colors text-xs uppercase ' +
+                      (payment === method
+                        ? 'border-ya-lime bg-ya-lime text-ya-black'
+                        : 'border-ya-gray bg-ya-gray text-white hover:border-gray-500')
+                    }
+                  >
+                    <input
+                      className="sr-only"
+                      type="radio"
+                      name="payment-method"
+                      checked={payment === method}
+                      onChange={() => setPayment(method)}
+                    />
+                    {method}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                ⚡ Fase 3C: Pasarela PayPal Sandbox v2. Pagos procesados de forma segura mediante PayPal y Tarjeta.
+              </p>
+            </fieldset>
+          )}
 
           {error && (
             <div
@@ -774,52 +878,98 @@ export function CheckoutPage() {
           )}
 
           {/* DESGLOSE SEGURO DEL MOTOR COMERCIAL */}
-          <div className="border-2 border-ya-gray p-4 bg-ya-black space-y-2 font-bold">
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Subtotal catálogo ({lines.reduce((s, i) => s + i.quantity, 0)} artículos)</span>
-              <span>{euro(pricing.rawSubtotal)}</span>
-            </div>
-
-            {pricing.totalSavings > 0 && (
-              <div className="flex justify-between text-sm text-ya-lime">
-                <span>Descuentos aplicados</span>
-                <span>-{euro(pricing.totalSavings)}</span>
+          {checkoutMode === 'test_free' ? (
+            <div className="border-2 border-purple-500/60 p-4 bg-ya-black space-y-2 font-bold font-mono">
+              <div className="flex justify-between text-sm text-gray-300">
+                <span>Subtotal catálogo ({lines.reduce((s, i) => s + i.quantity, 0)} artículos)</span>
+                <span>{euro(pricing.rawSubtotal)}</span>
               </div>
-            )}
-
-            {pricing.appliedPromotion && (
-              <div className="flex justify-between text-sm text-ya-lime bg-ya-gray/30 p-2 border border-ya-lime/30">
-                <span className="truncate pr-2">Promoción ({pricing.appliedPromotion.code})</span>
-                <span>-{euro(pricing.promotionDiscount)}</span>
+              <div className="flex justify-between text-sm text-purple-400">
+                <span>Bonificación Pedido de Prueba Admin</span>
+                <span>-{euro(pricing.rawSubtotal + (pricing.isFreeShipping ? 0 : pricing.deliveryFee))}</span>
               </div>
-            )}
-
-            <div className="flex justify-between text-sm text-gray-300">
-              <span>Coste de entrega (Jerez)</span>
-              <span>
-                {pricing.isFreeShipping ? (
-                  <span className="text-ya-lime uppercase">GRATIS</span>
-                ) : (
-                  euro(pricing.deliveryFee)
-                )}
-              </span>
-            </div>
-
-            <div className="flex justify-between text-xl font-black pt-2 border-t border-ya-gray">
-              <div>
-                <span className="text-white block">Total a pagar</span>
-                {pricing.totalSavings > 0 && (
-                  <span className="text-[11px] text-ya-lime font-bold">
-                    Ahorro total de {euro(pricing.totalSavings)}
+              <div className="flex justify-between text-sm text-gray-300">
+                <span>Coste de entrega (Jerez)</span>
+                <span className="text-ya-lime uppercase">GRATIS</span>
+              </div>
+              <div className="flex justify-between text-xl font-black pt-2 border-t border-purple-500/40">
+                <div>
+                  <span className="text-white block font-sans">Total a pagar</span>
+                  <span className="text-[11px] text-purple-300 font-normal block font-sans">
+                    Pedido de prueba exento de cobro
                   </span>
-                )}
+                </div>
+                <span className="text-ya-lime text-2xl font-black">0,00 €</span>
               </div>
-              <span className="text-ya-lime">{euro(pricing.total)}</span>
             </div>
-          </div>
+          ) : (
+            <div className="border-2 border-ya-gray p-4 bg-ya-black space-y-2 font-bold">
+              <div className="flex justify-between text-sm text-gray-300">
+                <span>Subtotal catálogo ({lines.reduce((s, i) => s + i.quantity, 0)} artículos)</span>
+                <span>{euro(pricing.rawSubtotal)}</span>
+              </div>
+
+              {pricing.totalSavings > 0 && (
+                <div className="flex justify-between text-sm text-ya-lime">
+                  <span>Descuentos aplicados</span>
+                  <span>-{euro(pricing.totalSavings)}</span>
+                </div>
+              )}
+
+              {pricing.appliedPromotion && (
+                <div className="flex justify-between text-sm text-ya-lime bg-ya-gray/30 p-2 border border-ya-lime/30">
+                  <span className="truncate pr-2">Promoción ({pricing.appliedPromotion.code})</span>
+                  <span>-{euro(pricing.promotionDiscount)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-sm text-gray-300">
+                <span>Coste de entrega (Jerez)</span>
+                <span>
+                  {pricing.isFreeShipping ? (
+                    <span className="text-ya-lime uppercase">GRATIS</span>
+                  ) : (
+                    euro(pricing.deliveryFee)
+                  )}
+                </span>
+              </div>
+
+              <div className="flex justify-between text-xl font-black pt-2 border-t border-ya-gray">
+                <div>
+                  <span className="text-white block">Total a pagar</span>
+                  {pricing.totalSavings > 0 && (
+                    <span className="text-[11px] text-ya-lime font-bold">
+                      Ahorro total de {euro(pricing.totalSavings)}
+                    </span>
+                  )}
+                </div>
+                <span className="text-ya-lime">{euro(pricing.total)}</span>
+              </div>
+            </div>
+          )}
 
           {/* BOTÓN CONFIRMAR PEDIDO O BLOQUEO POR PEDIDO MÍNIMO */}
-          {pricing.minOrderEnabled && !pricing.isMinOrderSatisfied ? (
+          {checkoutMode === 'test_free' ? (
+            <button
+              id="confirm-test-order-btn"
+              type="submit"
+              disabled={isSubmitting}
+              className={`w-full font-black p-4 text-base uppercase tracking-wider transition-colors flex items-center justify-center gap-2 ${
+                isSubmitting
+                  ? 'bg-ya-gray text-gray-400 cursor-not-allowed border-2 border-ya-gray'
+                  : 'bg-purple-600 text-white hover:bg-purple-500 shadow-lg'
+              }`}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Creando pedido de prueba en Supabase...
+                </>
+              ) : (
+                <span>Crear pedido de prueba · Gratis (0 €)</span>
+              )}
+            </button>
+          ) : pricing.minOrderEnabled && !pricing.isMinOrderSatisfied ? (
             <div className="space-y-2">
               <button
                 type="button"
@@ -1018,13 +1168,18 @@ export function OrderPage() {
         <AppHeader back />
         <main id="order-detail-page" className="max-w-2xl mx-auto px-4 pt-6 pb-28">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-black text-ya-lime uppercase tracking-widest text-xs">
                 PEDIDO: {orderNumber}
               </span>
               <span className="bg-ya-lime/20 text-ya-lime text-[10px] font-black uppercase px-2 py-0.5 border border-ya-lime/30">
                 REAL SUPABASE
               </span>
+              {dbOrder.is_test && (
+                <span className="bg-purple-500/20 text-purple-300 text-[10px] font-black uppercase px-2 py-0.5 border border-purple-500/50">
+                  🧪 PRUEBA ADMIN
+                </span>
+              )}
             </div>
             <span className="text-xs text-gray-400 font-bold">{dateStr}</span>
           </div>
@@ -1051,6 +1206,21 @@ export function OrderPage() {
               ? '¡Que lo disfrutes! Gracias por pedir con YA en Jerez.'
               : 'Tu pedido está confirmado y registrado. Puedes consultar el estado en directo.'}
           </p>
+
+          {/* Banner de Pedido de Prueba para Administradores */}
+          {dbOrder.is_test && (
+            <div className="border-2 border-purple-500 bg-purple-950/40 p-3 mt-4 text-xs font-mono text-purple-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
+                <span className="font-black uppercase tracking-wider text-purple-300">
+                  🧪 Pedido de Prueba · Gratis (Modo Admin)
+                </span>
+              </div>
+              <span className="text-[11px] text-purple-300/90 font-normal">
+                Total cobrado: 0,00 € · Pago registrado · Operativo en Jerez
+              </span>
+            </div>
+          )}
 
           {/* Banner de Estado Pendiente de Pago con Opción Inmediata de Pago/Reintento */}
           {(dbOrder.status === 'payment_pending' || dbOrder.payment_status === 'pending') && (
@@ -1217,14 +1387,18 @@ export function OrderPage() {
                 <span className="text-xs font-bold text-gray-400">Estado del pago:</span>
                 <span
                   className={`text-[11px] font-black uppercase px-2.5 py-1 tracking-wider border ${
-                    dbOrder.payment_status === 'paid'
+                    dbOrder.is_test
+                      ? 'border-purple-500 bg-purple-950/40 text-purple-300'
+                      : dbOrder.payment_status === 'paid'
                       ? 'border-ya-lime bg-ya-lime/20 text-ya-lime'
                       : dbOrder.payment_status === 'failed' || dbOrder.payment_status === 'cancelled'
                       ? 'border-rose-500 bg-rose-950/40 text-rose-300'
                       : 'border-amber-400 bg-amber-950/40 text-amber-300 animate-pulse'
                   }`}
                 >
-                  {dbOrder.payment_status === 'paid'
+                  {dbOrder.is_test
+                    ? 'PEDIDO DE PRUEBA · GRATIS (ADMIN)'
+                    : dbOrder.payment_status === 'paid'
                     ? 'PAGO CONFIRMADO (SANDBOX)'
                     : dbOrder.payment_status === 'failed'
                     ? 'PAGO FALLIDO'
@@ -1238,7 +1412,9 @@ export function OrderPage() {
                 <div className="text-[11px] font-mono text-gray-400 space-y-1 pt-2 bg-ya-black/50 p-3 border border-ya-gray">
                   <div className="flex justify-between">
                     <span>Pasarela:</span>
-                    <span className="text-gray-200 font-bold uppercase">{dbOrder.payment_provider || 'paypal sandbox'}</span>
+                    <span className="text-gray-200 font-bold uppercase">
+                      {dbOrder.is_test ? 'PRUEBA INTERNA (ADMIN)' : (dbOrder.payment_provider || 'paypal sandbox')}
+                    </span>
                   </div>
                   {(dbOrder.payment_capture_id || dbOrder.payment_reference) && (
                     <div className="flex justify-between">
@@ -1372,6 +1548,13 @@ export function OrderPage() {
                     Promoción {dbOrder.promotion_code ? `(${dbOrder.promotion_code})` : ''}
                   </span>
                   <span>-{euro(Number(dbOrder.promotion_discount))}</span>
+                </div>
+              )}
+
+              {dbOrder.is_test && (
+                <div className="flex justify-between text-purple-400 font-mono text-xs">
+                  <span>Bonificación Pedido de Prueba Admin</span>
+                  <span>-{euro(Number(dbOrder.subtotal))}</span>
                 </div>
               )}
 

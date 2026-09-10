@@ -15,6 +15,8 @@ import {
   courierFetchCurrentProfile,
   courierFetchDaySummary,
   courierFetchOrders,
+  courierFetchAvailableOrders,
+  courierAcceptOrder,
   courierUpdateOrderStatus,
   courierSubscribeToOrders,
 } from '../../lib/courierOrders';
@@ -27,7 +29,6 @@ import type {
 } from '../../types/app';
 
 export function CourierDashboardPage() {
-
   const [courier, setCourier] = useState<DbCourier | null>(null);
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [summary, setSummary] = useState<CourierDaySummary>({
@@ -37,10 +38,13 @@ export function CourierDashboardPage() {
     totalDelivered: 0,
   });
   const [activeOrders, setActiveOrders] = useState<CourierOrderListItem[]>([]);
+  const [availableOrders, setAvailableOrders] = useState<CourierOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -52,13 +56,17 @@ export function CourierDashboardPage() {
       setCourier(profileRes.courier);
       setProfile(profileRes.profile);
 
-      const [summaryRes, ordersRes] = await Promise.all([
+      const isAvailable = profileRes.courier.active && profileRes.courier.available;
+
+      const [summaryRes, ordersRes, availableRes] = await Promise.all([
         courierFetchDaySummary(profileRes.courier.id),
         courierFetchOrders({ courierId: profileRes.courier.id, filter: 'active' }),
+        isAvailable ? courierFetchAvailableOrders() : Promise.resolve({ orders: [], error: null }),
       ]);
 
       setSummary(summaryRes.summary);
       setActiveOrders(ordersRes.orders);
+      setAvailableOrders(availableRes.orders || []);
     }
 
     setLoading(false);
@@ -78,6 +86,31 @@ export function CourierDashboardPage() {
     return () => unsub();
   }, [courier?.id, loadData]);
 
+  // Aceptar pedido disponible (atómico en backend)
+  const handleAcceptOrder = async (orderId: string) => {
+    if (!courier) return;
+    if (!courier.active || !courier.available) {
+      setActionError('Debes estar en guardia (disponible) para poder aceptar pedidos.');
+      return;
+    }
+
+    setAcceptingOrderId(orderId);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const res = await courierAcceptOrder(orderId);
+
+    if (res.error) {
+      setActionError(res.error);
+    } else {
+      setActionSuccess('¡Pedido aceptado con éxito! Se ha asignado a tus pedidos activos.');
+      setTimeout(() => setActionSuccess(null), 4000);
+      await loadData(true);
+    }
+
+    setAcceptingOrderId(null);
+  };
+
   const handleOrderAction = async (
     orderId: string,
     action: 'accept' | 'delivering' | 'delivered'
@@ -93,6 +126,7 @@ export function CourierDashboardPage() {
 
     setProcessingOrderId(orderId);
     setActionError(null);
+    setActionSuccess(null);
 
     const res = await courierUpdateOrderStatus({
       orderId,
@@ -205,6 +239,16 @@ export function CourierDashboardPage() {
         </div>
       )}
 
+      {/* Alerta de éxito de acción */}
+      {actionSuccess && (
+        <div className="bg-green-950/70 border-2 border-green-500 p-4 text-green-200 flex items-start gap-3">
+          <CheckCircle2 size={20} className="shrink-0 mt-0.5 text-green-400" />
+          <div className="text-xs leading-relaxed font-bold">
+            {actionSuccess}
+          </div>
+        </div>
+      )}
+
       {/* RESUMEN DEL DÍA */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -263,12 +307,166 @@ export function CourierDashboardPage() {
         </div>
       </section>
 
-      {/* PEDIDOS ACTIVOS */}
+      {/* 1. SECCIÓN: PEDIDOS DISPONIBLES */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
+            <h2 className="text-base font-black uppercase tracking-tight flex items-center gap-2">
+              <Package className="text-ya-lime" size={18} />
+              <span>Pedidos Disponibles</span>
+            </h2>
+            {courier?.available && (
+              <span className="px-2 py-0.5 bg-ya-lime text-ya-black text-xs font-black">
+                {availableOrders.length}
+              </span>
+            )}
+          </div>
+
+          {courier?.available && (
+            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gray-400">
+              <span className="w-2 h-2 rounded-full bg-ya-lime animate-pulse" />
+              <span>En directo</span>
+            </div>
+          )}
+        </div>
+
+        {!courier?.available ? (
+          <div className="border-2 border-ya-gray bg-ya-gray/20 p-5 text-center">
+            <p className="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
+              Estás en modo <strong className="text-white">NO DISPONIBLE</strong>. Ponte disponible
+              en la barra superior para ver y aceptar pedidos en tiempo real.
+            </p>
+          </div>
+        ) : loading ? (
+          <div className="py-8 border-2 border-ya-gray bg-ya-gray/20 text-center">
+            <div className="w-6 h-6 border-2 border-ya-lime border-t-transparent animate-spin mx-auto mb-2" />
+            <p className="text-xs font-black uppercase tracking-wider text-gray-400">
+              Buscando pedidos disponibles...
+            </p>
+          </div>
+        ) : availableOrders.length === 0 ? (
+          <div className="border-2 border-ya-gray bg-ya-gray/10 p-6 text-center">
+            <div className="w-10 h-10 bg-ya-gray/50 flex items-center justify-center mx-auto mb-2 text-gray-400">
+              <Clock size={20} />
+            </div>
+            <h3 className="font-black uppercase tracking-tight text-sm text-gray-300">
+              No hay pedidos disponibles en este momento
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-1 max-w-sm mx-auto">
+              Los nuevos pedidos pagados sin asignar aparecerán aquí automáticamente en tiempo real.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {availableOrders.map((order) => {
+              const isAccepting = acceptingOrderId === order.id;
+              const addressText = order.deliveryAddress
+                ? `${order.deliveryAddress.street || ''} ${order.deliveryAddress.number || ''}${
+                    order.deliveryAddress.floor ? `, ${order.deliveryAddress.floor}` : ''
+                  }${order.deliveryAddress.city ? `, ${order.deliveryAddress.city}` : ''}`
+                : order.delivery_address_snapshot?.street
+                ? `${order.delivery_address_snapshot.street} ${order.delivery_address_snapshot.number || ''}`
+                : 'Dirección a confirmar con cliente';
+
+              return (
+                <div
+                  key={order.id}
+                  className="border-2 border-ya-lime/50 bg-ya-gray/30 hover:border-ya-lime transition-all p-4 space-y-3 shadow-[0_0_15px_rgba(182,255,0,0.05)]"
+                >
+                  {/* Encabezado del pedido disponible */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black font-mono text-base text-ya-lime">
+                          {order.order_number}
+                        </span>
+                        <span className="px-2 py-0.5 bg-ya-lime text-ya-black text-[10px] font-black uppercase tracking-wider">
+                          Disponible
+                        </span>
+                        {order.is_test && (
+                          <span className="px-2 py-0.5 bg-purple-950 border border-purple-500 text-purple-300 text-[10px] font-black uppercase tracking-wider">
+                            Prueba
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-gray-400 mt-1 flex items-center gap-1.5">
+                        <Clock size={12} className="text-gray-500" />
+                        <span>
+                          Recibido {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-lg font-mono font-black text-white">
+                        {Number(order.total || 0).toFixed(2)} €
+                      </span>
+                      <div className="text-[10px] font-black uppercase tracking-wider text-green-400">
+                        Pago Confirmado
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Destino y datos de entrega */}
+                  <div className="bg-ya-gray/40 border border-ya-gray p-3 space-y-1.5 text-xs">
+                    <div className="flex items-start gap-2 text-gray-200">
+                      <MapPin size={15} className="shrink-0 text-ya-lime mt-0.5" />
+                      <div className="font-bold leading-snug">
+                        {addressText}
+                      </div>
+                    </div>
+                    {order.customerName && (
+                      <div className="text-[11px] text-gray-400 pl-6">
+                        Cliente: <span className="text-gray-300 font-bold">{order.customerName}</span>
+                      </div>
+                    )}
+                    {order.notes && (
+                      <div className="text-[11px] text-yellow-300/90 pl-6 italic">
+                        Nota: "{order.notes}"
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pie: Número de artículos y Botón Aceptar Pedido */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-ya-gray/60">
+                    <div className="flex items-center gap-2 text-xs text-gray-300 font-bold">
+                      <Package size={14} className="text-ya-lime" />
+                      <span>
+                        {order.itemsCount} {order.itemsCount === 1 ? 'artículo' : 'artículos'}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleAcceptOrder(order.id)}
+                      disabled={isAccepting}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-ya-lime text-ya-black text-xs font-black uppercase tracking-wider hover:bg-white transition-all shadow-[0_0_12px_rgba(182,255,0,0.25)] active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isAccepting ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-ya-black border-t-transparent animate-spin" />
+                          <span>Aceptando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={15} />
+                          <span>Aceptar Pedido</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* 2. SECCIÓN: PEDIDOS ASIGNADOS ACTIVOS */}
+      <section className="space-y-3 pt-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <h2 className="text-base font-black uppercase tracking-tight">
-              Pedidos Asignados Activos
+              Mis Pedidos (Asignados Activos)
             </h2>
             <span className="px-2 py-0.5 bg-ya-gray text-ya-lime text-xs font-black">
               {activeOrders.length}

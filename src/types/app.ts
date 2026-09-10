@@ -139,7 +139,7 @@ export type DbAddress = {
   updated_at: string;
 };
 
-export type PaymentMethod = 'card' | 'apple_pay' | 'google_pay' | 'bizum' | 'cash' | 'paypal';
+export type PaymentMethod = 'card' | 'apple_pay' | 'google_pay' | 'bizum' | 'cash' | 'paypal' | 'test_order';
 export type PaymentStatus = 'pending' | 'authorized' | 'paid' | 'failed' | 'cancelled' | 'refunded';
 
 export type DbOrder = {
@@ -166,6 +166,7 @@ export type DbOrder = {
   paid_at?: string | null;
   refunded_at?: string | null;
   payment_metadata?: any;
+  is_test?: boolean;
   notes: string | null;
   delivery_address_snapshot?: Address | null;
   delivered_at?: string | null;

@@ -208,6 +208,81 @@ export async function createOrderViaRpc(input: CreateOrderInput): Promise<Create
 }
 
 // ==============================================================================
+// 3B. CREACIÓN DE PEDIDO DE PRUEBA GRATIS PARA ADMINISTRADORES (RPC create_admin_test_order)
+// Autorizado estrictamente en DB para usuarios con rol 'admin'.
+// Genera el pedido con total 0 €, sin pasarela PayPal y marcado como pagado.
+// ==============================================================================
+
+export type CreateAdminTestOrderInput = {
+  addressId?: string | null;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    isPack?: boolean;
+    packId?: string;
+    selections?: any[];
+  }>;
+  notes?: string;
+};
+
+export async function createAdminTestOrderViaRpc(
+  input: CreateAdminTestOrderInput
+): Promise<CreateOrderResult> {
+  if (!isSupabaseConfigured) {
+    return {
+      success: false,
+      error: 'Supabase no está configurado. Conéctate a una instancia activa de Supabase.',
+    };
+  }
+
+  try {
+    const rpcPayload = {
+      p_address_id: input.addressId || null,
+      p_items: input.lines.map((l) => ({
+        product_id: l.isPack ? (l.packId || l.productId) : l.productId,
+        quantity: l.quantity,
+        is_pack: Boolean(l.isPack || l.packId),
+        pack_id: l.isPack ? (l.packId || l.productId) : undefined,
+        pack_selections: l.selections || [],
+      })),
+      p_notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
+    };
+
+    const { data, error } = await supabase.rpc('create_admin_test_order', rpcPayload);
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || 'No se pudo crear el pedido de prueba.',
+      };
+    }
+
+    if (!data || !data.success) {
+      return {
+        success: false,
+        error: data?.error || 'Respuesta no satisfactoria al crear pedido de prueba.',
+      };
+    }
+
+    return {
+      success: true,
+      orderId: data.order_id,
+      orderNumber: data.order_number,
+      subtotal: Number(data.subtotal || 0),
+      deliveryFee: 0,
+      total: 0,
+      discountTotal: Number(data.subtotal || 0),
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado al conectar para crear pedido de prueba.';
+    return {
+      success: false,
+      error: msg,
+    };
+  }
+}
+
+// ==============================================================================
 // 4. CONSULTA DE PEDIDO INDIVIDUAL (orders + order_items)
 // ==============================================================================
 

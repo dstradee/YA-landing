@@ -232,6 +232,23 @@ export function AdminOrderDetailPage() {
         </div>
       </div>
 
+      {/* Test Order Notice for Admins */}
+      {order.is_test && (
+        <div className="border-4 border-purple-500 bg-purple-950/40 p-5 flex items-start gap-4">
+          <div className="p-2.5 bg-purple-500 text-white font-black text-lg shrink-0">
+            🧪
+          </div>
+          <div className="space-y-1">
+            <h3 className="font-black text-base uppercase tracking-wider text-purple-300 font-mono">
+              PEDIDO DE PRUEBA DE ADMINISTRADOR · GRATIS (0 €)
+            </h3>
+            <p className="text-xs text-purple-200/90 leading-relaxed font-sans">
+              Este pedido fue generado sin pasar por PayPal utilizando privilegios de administrador. Su importe cobrado es <strong>0,00 €</strong> y su estado de pago está <strong>completado/pagado</strong> para validar todo el flujo operativo de YA (preparación, asignación a repartidor y entrega en Jerez).
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Warning Banner for Unpaid / Payment Pending Orders */}
       {isUnpaid && (
         <div className="border-4 border-amber-500 bg-amber-950/60 p-5 font-mono text-amber-300 flex items-start gap-4">
@@ -253,10 +270,15 @@ export function AdminOrderDetailPage() {
       <div className="border-4 border-ya-gray bg-ya-black p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight text-white font-mono">
                 {order.order_number}
               </h1>
+              {order.is_test && (
+                <span className="px-3 py-1 text-xs font-black uppercase border-2 font-mono border-purple-500 text-purple-300 bg-purple-500/20">
+                  🧪 PRUEBA ADMIN (0 €)
+                </span>
+              )}
               {isUnpaid ? (
                 <span className="px-3 py-1 text-xs font-black uppercase border-2 font-mono border-amber-500 text-amber-400 bg-amber-500/10 animate-pulse">
                   ⚠️ PENDIENTE DE PAGO — NO PREPARAR
@@ -519,11 +541,17 @@ export function AdminOrderDetailPage() {
           <div className="border-4 border-ya-gray bg-ya-black p-6 space-y-4">
             <h2 className="text-base font-black uppercase tracking-wider text-white border-b-2 border-ya-gray pb-3 flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <CreditCard size={18} className="text-ya-lime" />
+                <CreditCard size={18} className={order.is_test ? 'text-purple-400' : 'text-ya-lime'} />
                 <span>Cobro & Pasarela</span>
               </span>
-              <span className="text-[10px] font-mono font-bold text-ya-lime bg-ya-lime/10 px-2 py-0.5 border border-ya-lime/30">
-                PAYPAL SANDBOX
+              <span
+                className={`text-[10px] font-mono font-bold px-2 py-0.5 border ${
+                  order.is_test
+                    ? 'text-purple-300 bg-purple-500/20 border-purple-500/50'
+                    : 'text-ya-lime bg-ya-lime/10 border-ya-lime/30'
+                }`}
+              >
+                {order.is_test ? 'PRUEBA ADMIN (0 €)' : 'PAYPAL SANDBOX'}
               </span>
             </h2>
 
@@ -557,10 +585,16 @@ export function AdminOrderDetailPage() {
               </div>
 
               <div className="border-t border-ya-gray pt-2 space-y-1.5 text-[11px] text-gray-400">
+                {order.is_test && (
+                  <div className="flex justify-between text-purple-300">
+                    <span>Modo operativo:</span>
+                    <span className="font-bold uppercase">🧪 PRUEBA INTERNA ADMIN</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Proveedor:</span>
                   <span className="text-white uppercase font-bold">
-                    {order.payment_provider || 'paypal sandbox'}
+                    {order.is_test ? 'PRUEBA INTERNA (ADMIN)' : (order.payment_provider || 'paypal sandbox')}
                   </span>
                 </div>
 
