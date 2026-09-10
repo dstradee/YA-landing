@@ -29,6 +29,8 @@ import { AdminOrdersPage } from './admin/AdminOrdersPage';
 import { AdminOrderDetailPage } from './admin/AdminOrderDetailPage';
 import { AdminCustomersPage } from './admin/AdminCustomersPage';
 import { AdminCustomerDetailPage } from './admin/AdminCustomerDetailPage';
+import { AdminCouriersPage } from './admin/AdminCouriersPage';
+import { AdminCourierDetailPage } from './admin/AdminCourierDetailPage';
 import { AdminSettingsPage } from './admin/AdminSettingsPage';
 import { AdminPacksPage } from './admin/AdminPacksPage';
 import { AdminDiscountsPage } from './admin/AdminDiscountsPage';
@@ -1034,6 +1036,8 @@ export function AdminRoutes() {
         <Route path="/pedidos/:id" element={<AdminOrderDetailPage />} />
         <Route path="/clientes" element={<AdminCustomersPage />} />
         <Route path="/clientes/:id" element={<AdminCustomerDetailPage />} />
+        <Route path="/repartidores" element={<AdminCouriersPage />} />
+        <Route path="/repartidores/:id" element={<AdminCourierDetailPage />} />
         <Route path="/productos" element={<AdminProductsPage />} />
         <Route path="/categorias" element={<AdminCategoriesPage />} />
         <Route path="/packs" element={<AdminPacksPage />} />

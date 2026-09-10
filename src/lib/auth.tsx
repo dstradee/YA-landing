@@ -8,6 +8,7 @@ export interface AuthContextType {
   profile: DbProfile | null;
   role: UserRole | null;
   isAdmin: boolean;
+  isCourier: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (
@@ -359,6 +360,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     role,
     isAdmin: role === 'admin',
+    isCourier: role === 'courier' || role === 'admin',
     loading,
     signIn,
     signUp,

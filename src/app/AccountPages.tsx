@@ -20,6 +20,7 @@ import {
   Loader2,
   ShieldCheck,
   RefreshCw,
+  Truck,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { fetchUserOrders, type OrderWithDetails } from '../lib/orders';
@@ -521,6 +522,18 @@ export function ProfilePage() {
 
         {/* Secciones y accesos */}
         <div className="mt-6 border-2 border-ya-gray divide-y-2 divide-ya-gray bg-ya-gray/30">
+          {(role === 'courier' || isAdmin) && (
+            <Link
+              to="/repartidor"
+              className="p-4 font-black flex items-center justify-between bg-ya-lime text-ya-black hover:bg-white transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Truck size={18} /> Panel del Repartidor (Rider)
+              </span>
+              <span className="text-xs font-black uppercase tracking-wider">Entrar →</span>
+            </Link>
+          )}
+
           <Link
             to="/app/pedidos"
             className="p-4 font-black flex items-center justify-between hover:bg-ya-gray transition-colors text-white"

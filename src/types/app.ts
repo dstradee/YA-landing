@@ -168,6 +168,8 @@ export type DbOrder = {
   payment_metadata?: any;
   notes: string | null;
   delivery_address_snapshot?: Address | null;
+  delivered_at?: string | null;
+  courier_accepted_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -211,8 +213,30 @@ export type DbCourier = {
   profile_id: string;
   vehicle_type: string | null;
   active: boolean;
+  available: boolean;
+  commission_percent: number;
+  fixed_fee: number;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type AdminCourierListItem = DbCourier & {
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  user_role: UserRole;
+  orders_count?: number;
+};
+
+export type AdminCourierDetail = {
+  courier: DbCourier;
+  profile: DbProfile;
+  summary: {
+    totalDeliveries: number;
+    totalEarnings: number;
+    rating: number | null;
+  };
 };
 
 export type DbDeliveryZone = {
@@ -378,4 +402,28 @@ export type AdminCustomerListItem = DbProfile & {
   totalSpent: number;
   lastOrderAt: string | null;
 };
+
+// --- FASE 4B: TIPOS DEL PANEL DEL REPARTIDOR ---
+
+export type CourierOrderListItem = DbOrder & {
+  itemsCount: number;
+  customerName: string;
+  customerPhone: string | null;
+  deliveryAddress: Address | null;
+};
+
+export type CourierOrderDetail = DbOrder & {
+  customerName: string;
+  customerPhone: string | null;
+  deliveryAddress: Address | null;
+  items: DbOrderItem[];
+};
+
+export type CourierDaySummary = {
+  assignedPending: number;
+  inProgress: number;
+  deliveredToday: number;
+  totalDelivered: number;
+};
+
 

@@ -12,7 +12,6 @@ import {
   X,
   Sparkles,
   Truck,
-  Tag,
   Percent,
   MapPin,
   BarChart3,
@@ -35,6 +34,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/admin/pedidos', label: 'Pedidos', icon: ShoppingBag, end: false },
     { to: '/admin/clientes', label: 'Clientes', icon: Users, end: false },
+    { to: '/admin/repartidores', label: 'Repartidores', icon: Truck, end: false },
     { to: '/admin/productos', label: 'Productos', icon: Package, end: false },
     { to: '/admin/categorias', label: 'Categorías', icon: Layers, end: false },
     { to: '/admin/packs', label: 'Packs YA', icon: Box, end: false },
@@ -47,7 +47,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const upcomingModules = [
     { label: 'Envíos', icon: Truck },
     { label: 'Zonas', icon: MapPin },
-    { label: 'Repartidores', icon: Tag },
     { label: 'Estadísticas', icon: BarChart3 },
   ];
 
