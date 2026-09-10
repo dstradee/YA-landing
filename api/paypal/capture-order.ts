@@ -3,12 +3,12 @@
 // Captura los fondos de una orden autorizada en PayPal y actualiza el pedido en Supabase
 // ==============================================================================
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '../_lib/types.ts';
 import {
   capturePayPalOrderOnGateway,
   getSupabaseServerClient,
   verifyUserOwnsOrder,
-} from '../../src/lib/paypalServer';
+} from '../_lib/paypalServer.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -16,7 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { orderId, paypalOrderId, paymentMethod } = req.body || {};
+    const { orderId, paymentMethod } = req.body || {};
+    let paypalOrderId = req.body?.paypalOrderId;
 
     if (!orderId || !paypalOrderId) {
       return res.status(400).json({

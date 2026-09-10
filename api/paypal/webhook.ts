@@ -4,13 +4,13 @@
 // URL configurada: https://ya-landing-nine.vercel.app/api/paypal/webhook
 // ==============================================================================
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '../_lib/types.ts';
 import {
   verifyPayPalWebhookSignature,
   confirmOrderInDatabase,
   failOrderInDatabase,
   getSupabaseServerClient,
-} from '../../src/lib/paypalServer';
+} from '../_lib/paypalServer.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

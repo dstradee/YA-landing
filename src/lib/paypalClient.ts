@@ -1,5 +1,5 @@
 // ==============================================================================
-// YA DELIVERY - CLIENTE DE PAGOS PAYPAL SANDBOX (PHASE 3C.1)
+// YA DELIVERY - CLIENTE DE PAGOS PAYPAL (PHASE 3C.3: SANDBOX + LIVE)
 // Archivo: src/lib/paypalClient.ts
 // ==============================================================================
 
@@ -17,6 +17,7 @@ export type PayPalConfig = {
     bizum: boolean;
   };
   bizumNotice: string;
+  error?: string;
 };
 
 export type DevicePaymentSupport = {
@@ -34,19 +35,35 @@ export type DevicePaymentSupport = {
 export async function fetchPayPalConfig(): Promise<PayPalConfig> {
   try {
     const res = await fetch('/api/paypal/config');
-    if (res.ok) {
-      return (await res.json()) as PayPalConfig;
+    const contentType = res.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      if (res.ok) {
+        return data as PayPalConfig;
+      } else {
+        console.error('Error devuelto por /api/paypal/config:', data);
+      }
+    } else {
+      const errorText = await res.text();
+      console.error(`Respuesta no-JSON de /api/paypal/config (${res.status}):`, errorText.slice(0, 300));
     }
   } catch (e) {
     console.warn('Error al consultar configuración de PayPal desde backend:', e);
   }
 
-  // Fallback seguro sin depender de variables locales VITE_
+  // En producción, no forzar sandbox si el backend tuvo un problema momentáneo
+  const isProductionHost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'ya-delivery.es' ||
+      window.location.hostname === 'www.ya-delivery.es' ||
+      window.location.hostname.includes('vercel.app'));
+
   return {
     clientId: '',
-    environment: 'sandbox',
+    environment: isProductionHost ? 'live' : 'sandbox',
     currency: 'EUR',
-    isSandbox: true,
+    isSandbox: !isProductionHost,
     hasRealCredentials: false,
     enabledMethods: {
       paypal: true,
@@ -56,7 +73,7 @@ export async function fetchPayPalConfig(): Promise<PayPalConfig> {
       bizum: false,
     },
     bizumNotice:
-      'Bizum no es una pasarela procesada por PayPal. En esta fase Sandbox de YA Delivery, los pagos se procesan de forma segura e inmediata con PayPal o Tarjeta.',
+      'Bizum no es una pasarela procesada por PayPal. Los pagos se procesan de forma segura e inmediata con PayPal o Tarjeta.',
   };
 }
 
@@ -135,7 +152,16 @@ export async function requestCreatePayPalOrder(params: {
     }),
   });
 
-  const data = await res.json();
+  const responseText = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      `El servidor de pagos devolvió una respuesta inesperada (${res.status}): ${responseText.slice(0, 180)}`
+    );
+  }
+
   if (!res.ok) {
     throw new Error(data.error || 'Error al iniciar la pasarela de PayPal');
   }
@@ -183,7 +209,16 @@ export async function requestCapturePayPalOrder(params: {
     }),
   });
 
-  const data = await res.json();
+  const responseText = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      `El servidor de pagos devolvió una respuesta inesperada (${res.status}): ${responseText.slice(0, 180)}`
+    );
+  }
+
   if (!res.ok) {
     let errorMsg = data.error || data.message || 'No se pudo capturar el pago en PayPal.';
     if (Array.isArray(data.details) && data.details.length > 0) {

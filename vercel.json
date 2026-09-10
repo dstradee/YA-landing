@@ -1,7 +1,12 @@
 {
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "api/**"
+    }
+  },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

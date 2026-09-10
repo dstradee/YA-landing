@@ -3,12 +3,12 @@
 // Crea una orden en PayPal v2 vinculada a un pedido verificado de Supabase
 // ==============================================================================
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '../_lib/types.ts';
 import {
   createPayPalOrderOnGateway,
   getSupabaseServerClient,
   verifyUserOwnsOrder,
-} from '../../src/lib/paypalServer';
+} from '../_lib/paypalServer.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
