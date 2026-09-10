@@ -11,6 +11,8 @@ import {
   confirmOrderInDatabase,
   verifyPayPalWebhookSignature,
   isPayPalSandbox,
+  PAYPAL_MODE,
+  getPayPalCredentials,
 } from './paypalServer';
 
 function parseJsonBody(req: IncomingMessage): Promise<any> {
@@ -50,20 +52,14 @@ export async function handlePayPalDevRequest(
   try {
     // 1. /api/paypal/config
     if (url === '/api/paypal/config' && req.method === 'GET') {
-      const clientId =
-        process.env.PAYPAL_CLIENT_ID ||
-        process.env.VITE_PAYPAL_CLIENT_ID ||
-        'test-sandbox-client-id';
-      const environment = process.env.PAYPAL_ENVIRONMENT || 'sandbox';
-      const hasRealCredentials = Boolean(
-        process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET
-      );
+      const { clientId, clientSecret } = getPayPalCredentials();
+      const hasRealCredentials = Boolean(clientId && clientSecret);
 
       return sendJson(res, 200, {
-        clientId,
-        environment,
+        clientId: clientId || process.env.VITE_PAYPAL_CLIENT_ID || '',
+        environment: PAYPAL_MODE,
         currency: 'EUR',
-        isSandbox: environment === 'sandbox',
+        isSandbox: isPayPalSandbox,
         hasRealCredentials,
         enabledMethods: {
           paypal: true,
@@ -73,7 +69,7 @@ export async function handlePayPalDevRequest(
           bizum: false,
         },
         bizumNotice:
-          'Bizum no es una pasarela procesada por PayPal. En esta fase Sandbox de YA Delivery, los pagos se procesan de forma segura e inmediata con PayPal o Tarjeta.',
+          'Bizum no es una pasarela procesada por PayPal. Los pagos se procesan de forma segura e inmediata con PayPal o Tarjeta.',
       });
     }
 

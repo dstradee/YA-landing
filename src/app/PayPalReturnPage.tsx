@@ -210,7 +210,7 @@ export function PayPalReturnPage() {
               Pago Cancelado en PayPal
             </h1>
             <p className="text-xs text-gray-300 leading-relaxed max-w-md mx-auto">
-              Has cancelado el proceso en la ventana de PayPal Sandbox. Tu pedido sigue guardado en nuestro sistema en reserva y pendiente de pago.
+              Has cancelado el proceso en la ventana de PayPal. Tu pedido sigue guardado en nuestro sistema en reserva y pendiente de pago.
             </p>
 
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">

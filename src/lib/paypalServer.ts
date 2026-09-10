@@ -1,27 +1,103 @@
 // ==============================================================================
-// YA DELIVERY - SERVICIO SERVER-SIDE PAYPAL SANDBOX (PHASE 3C.1)
+// YA DELIVERY - SERVICIO SERVER-SIDE PAYPAL SANDBOX & LIVE / PRODUCCIÓN (PHASE 3C.3)
 // Archivo: src/lib/paypalServer.ts
 // ==============================================================================
 
 import { createClient } from '@supabase/supabase-js';
 
-// Determinación del entorno Sandbox vs Producción
-const PAYPAL_MODE = (
+// Determinación del entorno Sandbox vs Live / Producción
+const rawMode = (
   process.env.PAYPAL_MODE ||
   process.env.PAYPAL_ENVIRONMENT ||
   'sandbox'
-).toLowerCase();
+).trim().toLowerCase();
 
-export const isPayPalSandbox = PAYPAL_MODE === 'sandbox';
+export const isPayPalSandbox = rawMode !== 'live' && rawMode !== 'production';
+export const PAYPAL_MODE = isPayPalSandbox ? 'sandbox' : 'live';
 
 export const PAYPAL_BASE_URL = isPayPalSandbox
   ? 'https://api-m.sandbox.paypal.com'
   : 'https://api-m.paypal.com';
 
-// Credenciales server-side (NUNCA expuestas al cliente ni prefijadas con VITE_)
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || '';
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || '';
-const PAYPAL_WEBHOOK_ID = process.env.PAYPAL_WEBHOOK_ID || '';
+/**
+ * Resuelve las credenciales server-side correspondientes al entorno activo
+ * Prioriza variables específicas del entorno y admite las genéricas.
+ * NUNCA se exponen al cliente ni se envían al frontend.
+ */
+export function getPayPalCredentials() {
+  const clientId =
+    (isPayPalSandbox
+      ? process.env.PAYPAL_SANDBOX_CLIENT_ID
+      : process.env.PAYPAL_LIVE_CLIENT_ID) ||
+    process.env.PAYPAL_CLIENT_ID ||
+    '';
+
+  const clientSecret =
+    (isPayPalSandbox
+      ? process.env.PAYPAL_SANDBOX_CLIENT_SECRET
+      : process.env.PAYPAL_LIVE_CLIENT_SECRET) ||
+    process.env.PAYPAL_CLIENT_SECRET ||
+    '';
+
+  const webhookId =
+    (isPayPalSandbox
+      ? process.env.PAYPAL_SANDBOX_WEBHOOK_ID
+      : process.env.PAYPAL_LIVE_WEBHOOK_ID) ||
+    process.env.PAYPAL_WEBHOOK_ID ||
+    '';
+
+  return { clientId, clientSecret, webhookId };
+}
+
+/**
+ * Resuelve la URL base canónica de la aplicación YA Delivery
+ * sin dependencias accidentales de localhost en entornos productivos
+ */
+export function getBaseAppUrl(): string {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/+$/, '');
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.replace(/\/+$/, '')}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/\/+$/, '')}`;
+  }
+  return 'https://ya-delivery.es';
+}
+
+/**
+ * Sanea y valida las URLs de retorno y cancelación para evitar open redirects
+ */
+export function sanitizeReturnUrl(url: string | undefined, defaultPath: string): string {
+  const baseUrl = getBaseAppUrl();
+  if (!url) {
+    return `${baseUrl}${defaultPath}`;
+  }
+  try {
+    const parsed = new URL(url);
+    if (!isPayPalSandbox) {
+      const allowedHosts = [
+        'ya-delivery.es',
+        'www.ya-delivery.es',
+        new URL(baseUrl).host,
+      ];
+      if (process.env.VERCEL_URL) {
+        try {
+          allowedHosts.push(new URL(`https://${process.env.VERCEL_URL}`).host);
+        } catch {
+          // ignore
+        }
+      }
+      if (!allowedHosts.includes(parsed.host)) {
+        return `${baseUrl}${defaultPath}`;
+      }
+    }
+    return url;
+  } catch {
+    return `${baseUrl}${defaultPath}`;
+  }
+}
 
 // Supabase server client:
 // Prioridad: SUPABASE_SECRET_KEY -> SUPABASE_SERVICE_ROLE_KEY -> ERROR EXPLÍCITO
@@ -84,25 +160,32 @@ export async function verifyUserOwnsOrder(
   return { authorized: true, userId: data.user.id };
 }
 
-// Cache de token OAuth PayPal
-let cachedToken: { token: string; expiresAt: number } | null = null;
+// Cache de token OAuth PayPal por entorno
+let cachedToken: { mode: string; clientId: string; token: string; expiresAt: number } | null = null;
 
 /**
  * Obtiene el access_token de PayPal mediante OAuth2 Client Credentials
  */
 export async function getPayPalAccessToken(): Promise<string> {
-  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+  const { clientId, clientSecret } = getPayPalCredentials();
+
+  if (!clientId || !clientSecret) {
     throw new Error(
-      'Faltan PAYPAL_CLIENT_ID o PAYPAL_CLIENT_SECRET en las variables de entorno del servidor.'
+      `Faltan credenciales de PayPal (${isPayPalSandbox ? 'PAYPAL_CLIENT_ID / PAYPAL_SANDBOX_CLIENT_ID' : 'PAYPAL_CLIENT_ID / PAYPAL_LIVE_CLIENT_ID'}) en las variables de entorno del servidor.`
     );
   }
 
   const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now + 60000) {
+  if (
+    cachedToken &&
+    cachedToken.mode === PAYPAL_MODE &&
+    cachedToken.clientId === clientId &&
+    cachedToken.expiresAt > now + 60000
+  ) {
     return cachedToken.token;
   }
 
-  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   const res = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
     method: 'POST',
@@ -115,11 +198,13 @@ export async function getPayPalAccessToken(): Promise<string> {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Error al autenticar con PayPal (${res.status}): ${errText}`);
+    throw new Error(`Error al autenticar con PayPal ${PAYPAL_MODE} (${res.status}): ${errText}`);
   }
 
   const data = (await res.json()) as { access_token: string; expires_in: number };
   cachedToken = {
+    mode: PAYPAL_MODE,
+    clientId,
     token: data.access_token,
     expiresAt: now + data.expires_in * 1000,
   };
@@ -229,17 +314,18 @@ export async function createPayPalOrderOnGateway(
 ): Promise<CreatePayPalOrderResponse> {
   const currency = params.currency || 'EUR';
   const formattedAmount = Number(params.amount).toFixed(2);
+  const { clientId, clientSecret } = getPayPalCredentials();
 
-  // Protección de producción: en producción NUNCA se permiten simulaciones
+  // Protección de producción: en Live/Producción NUNCA se permiten simulaciones ni bypass
   if (!isPayPalSandbox) {
-    if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    if (!clientId || !clientSecret) {
       throw new Error(
-        'Configuración de pasarela incompleta: Faltan credenciales oficiales de PayPal en entorno de producción.'
+        'Configuración de pasarela incompleta: Faltan credenciales oficiales de PayPal Live (PAYPAL_CLIENT_ID / PAYPAL_LIVE_CLIENT_ID) en entorno de producción.'
       );
     }
   } else {
     // MODO TEST SIMULADO (EXCLUSIVAMENTE EN SANDBOX si aún no se han inyectado credenciales)
-    if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    if (!clientId || !clientSecret) {
       const simulatedId = `SANDBOX_ORDER_${Date.now()}_${params.orderNumber.replace(/[^a-zA-Z0-9]/g, '')}`;
       return {
         success: true,
@@ -252,15 +338,17 @@ export async function createPayPalOrderOnGateway(
     }
   }
 
-  // MODO SANDBOX REAL CON CREDENCIALES OFICIALES DE PAYPAL
+  // MODO SANDBOX O LIVE OFICIAL CON CREDENCIALES DE PAYPAL
   const accessToken = await getPayPalAccessToken();
 
-  const returnUrl =
-    params.returnUrl ||
-    `https://ya-delivery.es/app/checkout/paypal-return?orderId=${encodeURIComponent(params.orderId)}`;
-  const cancelUrl =
-    params.cancelUrl ||
-    `https://ya-delivery.es/app/checkout/paypal-cancel?orderId=${encodeURIComponent(params.orderId)}`;
+  const returnUrl = sanitizeReturnUrl(
+    params.returnUrl,
+    `/app/checkout/paypal-return?orderId=${encodeURIComponent(params.orderId)}`
+  );
+  const cancelUrl = sanitizeReturnUrl(
+    params.cancelUrl,
+    `/app/checkout/paypal-cancel?orderId=${encodeURIComponent(params.orderId)}`
+  );
 
   const payload = {
     intent: 'CAPTURE',
@@ -269,7 +357,7 @@ export async function createPayPalOrderOnGateway(
         reference_id: params.orderId,
         custom_id: params.orderId,
         invoice_id: params.orderNumber,
-        description: `YA Delivery Jerez - Pedido ${params.orderNumber}`,
+        description: `YA Delivery Jerez - Pedido ${params.orderNumber}${isPayPalSandbox ? ' [SANDBOX]' : ''}`,
         amount: {
           currency_code: currency,
           value: formattedAmount,
@@ -348,6 +436,7 @@ export async function capturePayPalOrderOnGateway(
   params: CapturePayPalOrderParams
 ): Promise<CapturePayPalOrderResponse> {
   const isSimulatedId = params.paypalOrderId.startsWith('SANDBOX_ORDER_');
+  const { clientId, clientSecret } = getPayPalCredentials();
 
   // SEGURIDAD DE PRODUCCIÓN: Bloqueo estricto de cualquier identificador o bypass simulado
   if (!isPayPalSandbox) {
@@ -356,15 +445,15 @@ export async function capturePayPalOrderOnGateway(
         'Operación no permitida: Los identificadores simulados están estrictamente bloqueados fuera de Sandbox.'
       );
     }
-    if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    if (!clientId || !clientSecret) {
       throw new Error(
-        'Configuración de pasarela incompleta: Faltan credenciales de PayPal en servidor de producción.'
+        'Configuración de pasarela incompleta: Faltan credenciales oficiales de PayPal Live en el servidor de producción.'
       );
     }
   }
 
   // MODO TEST SIMULADO DE SEGURIDAD (SOLO EN MODO SANDBOX)
-  if (isPayPalSandbox && (isSimulatedId || !PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET)) {
+  if (isPayPalSandbox && (isSimulatedId || !clientId || !clientSecret)) {
     const simulatedCaptureId = `SANDBOX_CAP_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     // Confirmar en Supabase mediante RPC o update
@@ -735,8 +824,10 @@ export async function verifyPayPalWebhookSignature(params: {
   transmissionTime: string;
   webhookEvent: any;
 }): Promise<boolean> {
-  if (!PAYPAL_WEBHOOK_ID) {
-    console.error('PAYPAL_WEBHOOK_ID no está configurado en el entorno del servidor.');
+  const { webhookId } = getPayPalCredentials();
+
+  if (!webhookId) {
+    console.error(`PAYPAL_WEBHOOK_ID no está configurado en el entorno del servidor (${PAYPAL_MODE}).`);
     return false;
   }
 
@@ -761,7 +852,7 @@ export async function verifyPayPalWebhookSignature(params: {
       transmission_id: params.transmissionId,
       transmission_sig: params.transmissionSig,
       transmission_time: params.transmissionTime,
-      webhook_id: PAYPAL_WEBHOOK_ID,
+      webhook_id: webhookId,
       webhook_event: params.webhookEvent,
     };
 

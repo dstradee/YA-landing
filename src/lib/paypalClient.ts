@@ -5,7 +5,7 @@
 
 export type PayPalConfig = {
   clientId: string;
-  environment: 'sandbox' | 'production';
+  environment: 'sandbox' | 'live' | 'production';
   currency: string;
   isSandbox: boolean;
   hasRealCredentials: boolean;

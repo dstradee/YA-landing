@@ -155,7 +155,11 @@ export function PayPalPaymentSection({
       }
 
       if (createRes.approveUrl) {
-        setStatusText('Redirigiendo a PayPal Sandbox para autorizar el pago...');
+        setStatusText(
+          config?.isSandbox
+            ? 'Redirigiendo a PayPal Sandbox para autorizar el pago...'
+            : 'Redirigiendo a PayPal para autorizar el pago...'
+        );
         // Redirigir al cliente a la URL HATEOAS rel="approve" de PayPal
         window.location.href = createRes.approveUrl;
         return;
@@ -174,25 +178,41 @@ export function PayPalPaymentSection({
 
   return (
     <div id="paypal-payment-section" className="space-y-4">
-      {/* Banner de Entorno de Pruebas Sandbox */}
-      <div className="border-2 border-ya-lime/40 bg-ya-gray/40 p-3.5 flex items-start gap-3 text-xs">
-        <div className="p-1 bg-ya-lime text-ya-black font-black uppercase text-[10px] tracking-wider shrink-0 mt-0.5">
-          SANDBOX
-        </div>
-        <div className="space-y-1">
-          <p className="font-black text-white uppercase tracking-wide">
-            Entorno de Pruebas · PayPal Sandbox v2
-          </p>
-          <p className="text-gray-300 text-[11px] leading-relaxed">
-            Fase 3C.1 activa. Pagos procesados a través de PayPal Sandbox. En esta fase se admiten exclusivamente pagos seguros mediante <strong>PayPal</strong> y <strong>Tarjeta</strong>.
-          </p>
-          {paypalOrderId && (
-            <p className="text-ya-lime text-[10px] font-mono">
-              Orden PayPal activa: {paypalOrderId}
+      {/* Banner de Entorno (Sandbox vs Producción Live) */}
+      {config?.isSandbox ? (
+        <div className="border-2 border-ya-lime/40 bg-ya-gray/40 p-3.5 flex items-start gap-3 text-xs">
+          <div className="p-1 bg-ya-lime text-ya-black font-black uppercase text-[10px] tracking-wider shrink-0 mt-0.5">
+            SANDBOX
+          </div>
+          <div className="space-y-1">
+            <p className="font-black text-white uppercase tracking-wide">
+              Entorno de Pruebas · PayPal Sandbox v2
             </p>
-          )}
+            <p className="text-gray-300 text-[11px] leading-relaxed">
+              Pagos de prueba procesados a través de PayPal Sandbox. Se admiten pagos mediante <strong>PayPal</strong> y <strong>Tarjeta</strong>.
+            </p>
+            {paypalOrderId && (
+              <p className="text-ya-lime text-[10px] font-mono">
+                Orden PayPal activa: {paypalOrderId}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="border border-emerald-500/30 bg-ya-gray/40 p-3.5 flex items-start gap-3 text-xs">
+          <div className="p-1 bg-emerald-500 text-black font-black uppercase text-[10px] tracking-wider shrink-0 mt-0.5">
+            SEGURO
+          </div>
+          <div className="space-y-1">
+            <p className="font-black text-white uppercase tracking-wide">
+              Pasarela Oficial · PayPal & Tarjetas
+            </p>
+            <p className="text-gray-300 text-[11px] leading-relaxed">
+              Transacción 100% encriptada y protegida procesada directamente por PayPal.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Resumen del pedido a pagar */}
       <div className="border-2 border-ya-gray bg-ya-black p-4 flex items-center justify-between">
