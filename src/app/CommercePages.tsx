@@ -28,6 +28,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { PayPalPaymentSection } from '../components/PayPalPaymentSection';
+import { requestCapturePayPalOrder } from '../lib/paypalClient';
 
 export function CartPage() {
   const { lines, clearCart, pricing } = useCart();
@@ -870,6 +871,47 @@ export function OrderPage() {
   const [localOrder, setLocalOrder] = useState<LocalOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showOrderPayment, setShowOrderPayment] = useState(false);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Función para verificar y reconciliar cobros completados en PayPal
+  const handleVerifyExistingPayment = async () => {
+    if (!dbOrder) return;
+    setIsVerifyingPayment(true);
+    setVerifyMsg(null);
+    try {
+      const res = await requestCapturePayPalOrder({
+        orderId: dbOrder.id,
+      });
+      if (res.success || res.status === 'paid' || res.alreadyPaid) {
+        setDbOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'received',
+                payment_status: 'paid',
+              }
+            : prev
+        );
+        setVerifyMsg({
+          type: 'success',
+          text: `¡Pago verificado y confirmado exitosamente! Transacción: ${res.captureId || 'Completada'}`,
+        });
+      } else {
+        setVerifyMsg({
+          type: 'error',
+          text: res.error || 'No se pudo verificar la transacción en PayPal todavía.',
+        });
+      }
+    } catch (err: any) {
+      setVerifyMsg({
+        type: 'error',
+        text: err?.message || 'Error al conectar con la pasarela de PayPal.',
+      });
+    } finally {
+      setIsVerifyingPayment(false);
+    }
+  };
 
   // 1. Cargar el pedido: primero buscar en Supabase, si no fallback a mock local
   useEffect(() => {
@@ -1024,15 +1066,47 @@ export function OrderPage() {
                   </p>
                 </div>
               </div>
-              {!showOrderPayment ? (
-                <button
-                  type="button"
-                  id="pay-pending-order-now-btn"
-                  onClick={() => setShowOrderPayment(true)}
-                  className="w-full py-3.5 px-4 bg-ya-lime text-ya-black font-black uppercase text-xs tracking-wider hover:bg-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              {verifyMsg && (
+                <div
+                  className={`p-3 text-xs border font-medium ${
+                    verifyMsg.type === 'success'
+                      ? 'border-ya-lime bg-ya-lime/10 text-ya-lime'
+                      : 'border-red-500 bg-red-950/40 text-red-300'
+                  }`}
                 >
-                  <CreditCard size={16} /> Completar / Reintentar pago con PayPal o Tarjeta ({euro(Number(dbOrder.total))})
-                </button>
+                  {verifyMsg.text}
+                </div>
+              )}
+
+              {!showOrderPayment ? (
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    id="verify-pending-order-now-btn"
+                    disabled={isVerifyingPayment}
+                    onClick={handleVerifyExistingPayment}
+                    className="w-full py-3 px-4 bg-emerald-500 text-black font-black uppercase text-xs tracking-wider hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isVerifyingPayment ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> Verificando transacción en PayPal...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={16} /> Ya pagué en PayPal · Verificar y activar pedido
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    id="pay-pending-order-now-btn"
+                    onClick={() => setShowOrderPayment(true)}
+                    className="w-full py-3.5 px-4 bg-ya-lime text-ya-black font-black uppercase text-xs tracking-wider hover:bg-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CreditCard size={16} /> Pagar ahora con PayPal o Tarjeta ({euro(Number(dbOrder.total))})
+                  </button>
+                </div>
               ) : (
                 <div className="mt-2 bg-ya-black p-4 border border-amber-400/40">
                   <PayPalPaymentSection
@@ -1076,10 +1150,10 @@ export function OrderPage() {
               <CheckCircle2 size={24} className="text-ya-lime shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-black text-sm uppercase text-ya-lime tracking-wide">
-                  ¡Pago verificado con éxito vía PayPal Sandbox!
+                  ¡Pago verificado con éxito vía PayPal!
                 </h3>
                 <p className="text-xs text-gray-200 mt-1">
-                  La transacción ha sido capturada por la pasarela e inscrita en base de datos. Los repartidores de YA preparan tu pedido.
+                  La transacción ha sido confirmada por la pasarela e inscrita en el registro de pagos. Tu pedido ya está recibido y entra en preparación.
                 </p>
               </div>
             </div>

@@ -398,6 +398,11 @@ export async function capturePayPalOrderOnGateway(params: {
 
   const token = await getPayPalAccessToken();
 
+  let captureId = '';
+  let capturedAmount = params.expectedAmount;
+  let finalStatus = 'COMPLETED';
+  let payerInfo: any = null;
+
   const res = await fetch(`${baseUrl}/v2/checkout/orders/${params.paypalOrderId}/capture`, {
     method: 'POST',
     headers: {
@@ -409,15 +414,45 @@ export async function capturePayPalOrderOnGateway(params: {
 
   const data = await res.json();
 
-  if (!res.ok) {
-    throw new PayPalGatewayError(res.status, data);
+  if (res.ok) {
+    const captureObj = data.purchase_units?.[0]?.payments?.captures?.[0];
+    captureId = captureObj?.id || data.id;
+    capturedAmount = Number(captureObj?.amount?.value || params.expectedAmount);
+    finalStatus = data.status || 'COMPLETED';
+    payerInfo = data.payer;
+  } else {
+    // Si la captura directa devuelve error (por ejemplo, ORDER_ALREADY_CAPTURED porque ya se cobró):
+    console.warn(`[PayPal Capture] POST capture devolvió ${res.status}:`, JSON.stringify(data));
+
+    // Consultar el estado real de la orden en PayPal Orders v2 API para reconciliar
+    const orderCheckRes = await fetch(`${baseUrl}/v2/checkout/orders/${params.paypalOrderId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (orderCheckRes.ok) {
+      const orderCheckData = await orderCheckRes.json();
+      console.log(`[PayPal Check] Estado actual de orden ${params.paypalOrderId} en PayPal:`, orderCheckData.status);
+
+      if (orderCheckData.status === 'COMPLETED') {
+        // La transacción ya fue cobrada y completada en PayPal
+        const captureObj = orderCheckData.purchase_units?.[0]?.payments?.captures?.[0];
+        captureId = captureObj?.id || params.paypalOrderId;
+        capturedAmount = Number(captureObj?.amount?.value || params.expectedAmount);
+        finalStatus = 'COMPLETED';
+        payerInfo = orderCheckData.payer;
+      } else {
+        throw new PayPalGatewayError(res.status, data);
+      }
+    } else {
+      throw new PayPalGatewayError(res.status, data);
+    }
   }
 
-  const captureObj = data.purchase_units?.[0]?.payments?.captures?.[0];
-  const captureId = captureObj?.id || data.id;
-  const capturedAmount = Number(captureObj?.amount?.value || params.expectedAmount);
-
-  // Anti-tampering
+  // Anti-tampering estricto de importe
   if (Math.abs(capturedAmount - params.expectedAmount) > 0.01) {
     await failOrderInDatabase({
       orderId: params.orderId,
@@ -428,16 +463,16 @@ export async function capturePayPalOrderOnGateway(params: {
     throw new Error(`Discrepancia de importe en la pasarela.`);
   }
 
-  await confirmOrderInDatabase({
+  const confirmRes = await confirmOrderInDatabase({
     orderId: params.orderId,
     providerOrderId: params.paypalOrderId,
     captureId,
     amount: capturedAmount,
     method: params.paymentMethod || 'paypal',
     metadata: {
-      paypal_status: data.status,
+      paypal_status: finalStatus,
       capture_id: captureId,
-      payer: data.payer,
+      payer: payerInfo,
     },
   });
 
@@ -446,13 +481,17 @@ export async function capturePayPalOrderOnGateway(params: {
     captureId,
     paypalOrderId: params.paypalOrderId,
     orderId: params.orderId,
-    status: data.status,
+    orderNumber: confirmRes.orderNumber,
+    status: finalStatus,
+    alreadyPaid: confirmRes.alreadyPaid || false,
     simulated: false,
   };
 }
 
 /**
- * Confirma el pedido en Supabase
+ * Confirma el pedido en Supabase utilizando EXCLUSIVAMENTE columnas reales existentes
+ * Tabla orders: status = 'received', payment_status = 'paid', updated_at
+ * Tabla payments: provider = 'paypal', provider_order_id, provider_capture_id, status = 'paid'
  */
 export async function confirmOrderInDatabase(params: {
   orderId: string;
@@ -461,68 +500,137 @@ export async function confirmOrderInDatabase(params: {
   amount: number;
   method: string;
   metadata?: any;
-}) {
+}): Promise<{
+  success: boolean;
+  orderId: string;
+  orderNumber?: string;
+  status: string;
+  paymentStatus: string;
+  captureId: string;
+  alreadyPaid?: boolean;
+}> {
   const supabase = getSupabaseServerClient();
 
-  const { data: order, error: orderErr } = await supabase
+  // 1. Obtener pedido actual por UUID o por order_number (ej. YA-1013)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.orderId);
+  let orderQuery = supabase
     .from('orders')
-    .select('id, user_id, order_number, total, payment_status')
-    .eq('id', params.orderId)
-    .single();
+    .select('id, user_id, order_number, total, status, payment_status');
+
+  if (isUuid) {
+    orderQuery = orderQuery.eq('id', params.orderId);
+  } else {
+    orderQuery = orderQuery.eq('order_number', params.orderId);
+  }
+
+  const { data: order, error: orderErr } = await orderQuery.maybeSingle();
 
   if (orderErr || !order) {
-    throw new Error(`Pedido no encontrado para confirmar: ${orderErr?.message}`);
+    throw new Error(`Pedido no encontrado para confirmar: ${orderErr?.message || params.orderId}`);
   }
 
-  if (order.payment_status === 'paid') {
-    return { alreadyPaid: true, orderId: order.id };
+  if (order.payment_status === 'paid' && order.status === 'received') {
+    return {
+      success: true,
+      alreadyPaid: true,
+      orderId: order.id,
+      orderNumber: order.order_number,
+      status: 'received',
+      paymentStatus: 'paid',
+      captureId: params.captureId,
+    };
   }
 
-  // 1. Registrar el pago en public.payments
-  await supabase.from('payments').insert({
-    order_id: order.id,
-    user_id: order.user_id,
-    provider: 'paypal',
-    provider_order_id: params.providerOrderId,
-    provider_payment_id: params.captureId,
-    payment_method: params.method,
-    status: 'completed',
-    amount: params.amount,
-    currency: 'EUR',
-    raw_payload: params.metadata || {},
-  });
+  const nowIso = new Date().toISOString();
 
-  // 2. Transicionar pedido a received y paid
-  const now = new Date().toISOString();
-  await supabase
+  // 2. Registrar o actualizar en public.payments usando columnas REALES
+  // provider = 'paypal', provider_order_id, provider_capture_id, status = 'paid'
+  const { data: existingPayment } = await supabase
+    .from('payments')
+    .select('id')
+    .eq('order_id', order.id)
+    .eq('provider_order_id', params.providerOrderId)
+    .maybeSingle();
+
+  if (existingPayment?.id) {
+    const { error: payUpdateErr } = await supabase
+      .from('payments')
+      .update({
+        provider_capture_id: params.captureId,
+        status: 'paid',
+        payment_method: params.method || 'paypal',
+        amount: params.amount,
+        raw_payload: params.metadata || {},
+        updated_at: nowIso,
+      })
+      .eq('id', existingPayment.id);
+
+    if (payUpdateErr) {
+      console.error('[confirmOrderInDatabase] Error actualizando payments:', payUpdateErr);
+    }
+  } else {
+    const { error: payInsertErr } = await supabase.from('payments').insert({
+      order_id: order.id,
+      user_id: order.user_id,
+      provider: 'paypal',
+      provider_order_id: params.providerOrderId,
+      provider_capture_id: params.captureId,
+      payment_method: params.method || 'paypal',
+      status: 'paid',
+      amount: params.amount,
+      currency: 'EUR',
+      raw_payload: params.metadata || {},
+      updated_at: nowIso,
+    });
+
+    if (payInsertErr) {
+      console.error('[confirmOrderInDatabase] Error insertando en payments:', payInsertErr);
+    }
+  }
+
+  // 3. Transicionar pedido en public.orders usando ÚNICAMENTE columnas reales
+  // status: 'received'
+  // payment_status: 'paid'
+  // updated_at: nowIso
+  const { error: orderUpdateErr } = await supabase
     .from('orders')
     .update({
-      payment_status: 'paid',
       status: 'received',
-      paid_at: now,
-      payment_provider: 'paypal',
-      payment_method: params.method,
+      payment_status: 'paid',
+      updated_at: nowIso,
     })
     .eq('id', order.id);
 
-  // 3. Registrar evento en historial
+  if (orderUpdateErr) {
+    console.error('[confirmOrderInDatabase] Error actualizando orders:', orderUpdateErr);
+    throw new Error(`Error en base de datos al actualizar pedido: ${orderUpdateErr.message}`);
+  }
+
+  // 4. Registro opcional de auditoría en order_status_history
   try {
     await supabase.from('order_status_history').insert({
       order_id: order.id,
-      from_status: 'payment_pending',
+      from_status: order.status || 'payment_pending',
       to_status: 'received',
       actor_type: 'system',
       note: `Pago verificado vía PayPal. Captura: ${params.captureId}`,
     });
   } catch {
-    // Si la tabla no existe o falla, no bloquear el flujo principal
+    // Si la tabla no existe o falla por RLS, no impedir la confirmación
   }
 
-  return { success: true, orderId: order.id };
+  return {
+    success: true,
+    orderId: order.id,
+    orderNumber: order.order_number,
+    status: 'received',
+    paymentStatus: 'paid',
+    captureId: params.captureId,
+  };
 }
 
 /**
- * Marca el pedido como fallido o cancelado
+ * Marca el pedido como fallido o cancelado usando columnas reales
  */
 export async function failOrderInDatabase(params: {
   orderId: string;
@@ -531,13 +639,14 @@ export async function failOrderInDatabase(params: {
   status: 'failed' | 'cancelled';
 }) {
   const supabase = getSupabaseServerClient();
+  const nowIso = new Date().toISOString();
 
   await supabase
     .from('orders')
     .update({
       payment_status: params.status === 'cancelled' ? 'pending' : 'failed',
       status: params.status === 'cancelled' ? 'payment_pending' : 'cancelled',
-      cancellation_reason: params.reason,
+      updated_at: nowIso,
     })
     .eq('id', params.orderId);
 
@@ -546,8 +655,9 @@ export async function failOrderInDatabase(params: {
       order_id: params.orderId,
       provider: 'paypal',
       provider_order_id: params.providerOrderId,
-      status: params.status,
-      error_message: params.reason,
+      status: params.status === 'cancelled' ? 'pending' : 'failed',
+      error_detail: params.reason,
+      updated_at: nowIso,
     });
   }
 }

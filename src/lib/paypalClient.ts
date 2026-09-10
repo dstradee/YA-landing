@@ -174,7 +174,7 @@ export async function requestCreatePayPalOrder(params: {
  */
 export async function requestCapturePayPalOrder(params: {
   orderId: string;
-  paypalOrderId: string;
+  paypalOrderId?: string;
   paymentMethod?: string;
   amount?: number;
   token?: string;

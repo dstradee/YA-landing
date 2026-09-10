@@ -146,12 +146,12 @@ export async function handlePayPalDevRequest(
     // 3. /api/paypal/capture-order
     if (url === '/api/paypal/capture-order' && req.method === 'POST') {
       const body = await parseJsonBody(req);
-      const { orderId, paymentMethod } = body;
+      let { orderId, paymentMethod } = body;
       let paypalOrderId = body.paypalOrderId;
 
-      if (!orderId) {
+      if (!orderId && !paypalOrderId) {
         return sendJson(res, 400, {
-          error: 'Falta el parámetro requerido orderId.',
+          error: 'Falta el parámetro requerido orderId o paypalOrderId.',
         });
       }
 
@@ -159,11 +159,33 @@ export async function handlePayPalDevRequest(
       let expectedAmount = Number(body.amount || 10.0);
 
       if (supabase) {
-        const { data: order, error: orderErr } = await supabase
+        const isUuid = orderId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+        let orderQuery = supabase
           .from('orders')
-          .select('id, total, status, payment_status, order_number, user_id')
-          .eq('id', orderId)
-          .maybeSingle();
+          .select('id, total, status, payment_status, order_number, user_id');
+
+        let { data: order, error: orderErr } = await (isUuid
+          ? orderQuery.eq('id', orderId)
+          : orderId ? orderQuery.eq('order_number', orderId) : orderQuery.eq('id', '00000000-0000-0000-0000-000000000000')
+        ).maybeSingle();
+
+        if (!order && paypalOrderId) {
+          const { data: payRec } = await supabase
+            .from('payments')
+            .select('order_id')
+            .eq('provider_order_id', paypalOrderId)
+            .eq('provider', 'paypal')
+            .maybeSingle();
+
+          if (payRec?.order_id) {
+            const { data: foundByPay } = await supabase
+              .from('orders')
+              .select('id, total, status, payment_status, order_number, user_id')
+              .eq('id', payRec.order_id)
+              .maybeSingle();
+            order = foundByPay;
+          }
+        }
 
         if (orderErr) {
           return sendJson(res, 500, { error: orderErr.message });
@@ -172,28 +194,25 @@ export async function handlePayPalDevRequest(
           return sendJson(res, 404, { error: 'El pedido no existe en YA.' });
         }
 
-        if (order.payment_status === 'paid') {
+        orderId = order.id;
+
+        if (order.payment_status === 'paid' && order.status === 'received') {
           return sendJson(res, 200, {
             success: true,
             orderId: order.id,
             orderNumber: order.order_number,
-            status: 'paid',
+            status: 'received',
+            paymentStatus: 'paid',
             alreadyPaid: true,
             message: 'El pedido ya estaba confirmado como pagado.',
-          });
-        }
-
-        if (order.status !== 'payment_pending' || order.payment_status !== 'pending') {
-          return sendJson(res, 400, {
-            error: `El pedido no está pendiente de pago (estado: ${order.status}, pago: ${order.payment_status}).`,
           });
         }
 
         // Relación PayPal: comprobar que la orden coincide si ya fue registrada en payments
         const { data: existingPayment } = await supabase
           .from('payments')
-          .select('provider_order_id')
-          .eq('order_id', orderId)
+          .select('id, provider_order_id, provider_capture_id, status')
+          .eq('order_id', order.id)
           .eq('provider', 'paypal')
           .order('created_at', { ascending: false })
           .limit(1)
@@ -201,6 +220,27 @@ export async function handlePayPalDevRequest(
 
         if (!paypalOrderId && existingPayment?.provider_order_id) {
           paypalOrderId = existingPayment.provider_order_id;
+        }
+
+        if (existingPayment?.status === 'paid' && existingPayment?.provider_capture_id) {
+          await supabase
+            .from('orders')
+            .update({
+              status: 'received',
+              payment_status: 'paid',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', order.id);
+
+          return sendJson(res, 200, {
+            success: true,
+            orderId: order.id,
+            orderNumber: order.order_number,
+            status: 'received',
+            paymentStatus: 'paid',
+            captureId: existingPayment.provider_capture_id,
+            alreadyPaid: true,
+          });
         }
 
         if (existingPayment?.provider_order_id && paypalOrderId && existingPayment.provider_order_id !== paypalOrderId) {
