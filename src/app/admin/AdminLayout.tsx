@@ -17,6 +17,7 @@ import {
   BarChart3,
   Box,
   Sliders,
+  Award,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { AdminErrorBoundary } from './AdminErrorBoundary';
@@ -35,6 +36,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     { to: '/admin/pedidos', label: 'Pedidos', icon: ShoppingBag, end: false },
     { to: '/admin/clientes', label: 'Clientes', icon: Users, end: false },
     { to: '/admin/repartidores', label: 'Repartidores', icon: Truck, end: false },
+    { to: '/admin/incentivos', label: 'Incentivos', icon: Award, end: false },
     { to: '/admin/productos', label: 'Productos', icon: Package, end: false },
     { to: '/admin/categorias', label: 'Categorías', icon: Layers, end: false },
     { to: '/admin/packs', label: 'Packs YA', icon: Box, end: false },

@@ -12,6 +12,8 @@ import {
   ChevronRight,
   DollarSign,
   TrendingUp,
+  Award,
+  Gift,
 } from 'lucide-react';
 import {
   courierFetchCurrentProfile,
@@ -23,12 +25,14 @@ import {
   courierSubscribeToOrders,
   courierFetchEarningsSummary,
 } from '../../lib/courierOrders';
+import { courierFetchIncentivesOverview } from '../../lib/courierIncentives';
 import type {
   DbCourier,
   DbProfile,
   CourierOrderListItem,
   CourierDaySummary,
   CourierEarningsSummary,
+  CourierIncentivesOverview,
   OrderStatus,
 } from '../../types/app';
 
@@ -42,11 +46,12 @@ export function CourierDashboardPage() {
     totalDelivered: 0,
   });
   const [earningsSummary, setEarningsSummary] = useState<CourierEarningsSummary>({
-    today: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
-    thisWeek: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
-    thisMonth: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
-    allTime: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    today: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
+    thisWeek: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
+    thisMonth: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
+    allTime: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
   });
+  const [incentivesData, setIncentivesData] = useState<CourierIncentivesOverview | null>(null);
   const [activeOrders, setActiveOrders] = useState<CourierOrderListItem[]>([]);
   const [availableOrders, setAvailableOrders] = useState<CourierOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,17 +73,19 @@ export function CourierDashboardPage() {
 
       const isAvailable = profileRes.courier.active && profileRes.courier.available;
 
-      const [summaryRes, ordersRes, availableRes, earningsRes] = await Promise.all([
+      const [summaryRes, ordersRes, availableRes, earningsRes, incRes] = await Promise.all([
         courierFetchDaySummary(profileRes.courier.id),
         courierFetchOrders({ courierId: profileRes.courier.id, filter: 'active' }),
         isAvailable ? courierFetchAvailableOrders() : Promise.resolve({ orders: [], error: null }),
         courierFetchEarningsSummary(profileRes.courier.id),
+        courierFetchIncentivesOverview(),
       ]);
 
       setSummary(summaryRes.summary);
       setActiveOrders(ordersRes.orders);
       setAvailableOrders(availableRes.orders || []);
       setEarningsSummary(earningsRes.summary);
+      setIncentivesData(incRes.data);
     }
 
     setLoading(false);
@@ -303,44 +310,49 @@ export function CourierDashboardPage() {
             <div className="text-[10px] text-gray-400 font-bold uppercase mt-1">Completadas hoy</div>
           </div>
 
-          {/* Tarjeta 4: Ganancias Hoy (Fase 4D Real) */}
+          {/* Tarjeta 4: Ganancias Hoy (Fase 4D + 4E) */}
           <div className="bg-ya-gray/30 border-2 border-ya-gray p-3.5 relative overflow-hidden">
             <div className="flex items-center justify-between text-gray-400 mb-1">
               <span className="text-[10px] font-black uppercase tracking-wider">Ganancias Hoy</span>
               <DollarSign size={16} className="text-ya-lime" />
             </div>
-            <div className="text-2xl sm:text-3xl font-black text-ya-lime">
-              {earningsSummary.today.earnings.toFixed(2)} €
+            <div className="text-2xl sm:text-3xl font-black text-ya-lime font-mono">
+              {((earningsSummary.today.totalPayout ?? earningsSummary.today.earnings) || 0).toFixed(2)} €
             </div>
-            <div className="text-[10px] text-gray-400 font-bold uppercase mt-1">
-              {earningsSummary.today.deliveredCount} entregas hoy
+            <div className="text-[10px] text-gray-400 font-bold uppercase mt-1 flex items-center justify-between">
+              <span>{earningsSummary.today.deliveredCount} entregas</span>
+              {(earningsSummary.today.bonusEarnings ?? 0) > 0 && (
+                <span className="text-emerald-400 font-mono font-black">
+                  +{earningsSummary.today.bonusEarnings?.toFixed(2)}€ bonus
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* FASE 4D: Bloque de Resumen Financiero "Mis Ganancias" */}
+        {/* FASE 4D + 4E: Bloque de Resumen Financiero con separación clara de pedidos y bonus */}
         <div className="bg-ya-black border-2 border-ya-gray p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <TrendingUp size={16} className="text-ya-lime" />
               <h2 className="text-xs font-black uppercase tracking-widest text-white">
-                Mis Ganancias · Resumen
+                Mis Ganancias · Resumen Financiero
               </h2>
             </div>
             <Link
               to="/repartidor/entregados"
               className="text-[11px] font-black uppercase tracking-wider text-ya-lime hover:underline flex items-center gap-1"
             >
-              <span>Ver desglose completo</span>
+              <span>Ver pedidos entregados</span>
               <ChevronRight size={13} />
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
               <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Esta Semana</div>
-              <div className="text-lg font-black text-white mt-0.5">
-                {earningsSummary.thisWeek.earnings.toFixed(2)} €
+              <div className="text-base sm:text-lg font-black text-white mt-0.5 font-mono">
+                {((earningsSummary.thisWeek.totalPayout ?? earningsSummary.thisWeek.earnings) || 0).toFixed(2)} €
               </div>
               <div className="text-[10px] text-gray-400 font-mono mt-0.5">
                 {earningsSummary.thisWeek.deliveredCount} entregas
@@ -349,8 +361,8 @@ export function CourierDashboardPage() {
 
             <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
               <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Este Mes</div>
-              <div className="text-lg font-black text-white mt-0.5">
-                {earningsSummary.thisMonth.earnings.toFixed(2)} €
+              <div className="text-base sm:text-lg font-black text-white mt-0.5 font-mono">
+                {((earningsSummary.thisMonth.totalPayout ?? earningsSummary.thisMonth.earnings) || 0).toFixed(2)} €
               </div>
               <div className="text-[10px] text-gray-400 font-mono mt-0.5">
                 {earningsSummary.thisMonth.deliveredCount} entregas
@@ -358,9 +370,9 @@ export function CourierDashboardPage() {
             </div>
 
             <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
-              <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Total Histórico</div>
-              <div className="text-lg font-black text-white mt-0.5">
-                {earningsSummary.allTime.earnings.toFixed(2)} €
+              <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Por Pedidos</div>
+              <div className="text-base sm:text-lg font-black text-white mt-0.5 font-mono">
+                {(earningsSummary.allTime.earnings || 0).toFixed(2)} €
               </div>
               <div className="text-[10px] text-gray-400 font-mono mt-0.5">
                 {earningsSummary.allTime.deliveredCount} entregas
@@ -368,16 +380,108 @@ export function CourierDashboardPage() {
             </div>
 
             <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
-              <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Media / Entrega</div>
-              <div className="text-lg font-black text-ya-lime mt-0.5">
-                {earningsSummary.allTime.avgPerDelivery.toFixed(2)} €
+              <div className="text-[10px] text-emerald-400 font-black uppercase tracking-wider flex items-center justify-between">
+                <span>Bonus (4E)</span>
+                <Gift size={11} />
+              </div>
+              <div className="text-base sm:text-lg font-black text-emerald-400 mt-0.5 font-mono">
+                +{(earningsSummary.allTime.bonusEarnings || 0).toFixed(2)} €
               </div>
               <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                por pedido entregado
+                {incentivesData?.summary.total_count || 0} conseguidos
+              </div>
+            </div>
+
+            <div className="bg-ya-lime/10 border-2 border-ya-lime/60 p-2.5 col-span-2 sm:col-span-1">
+              <div className="text-[10px] text-ya-lime font-black uppercase tracking-wider">Total Saldo</div>
+              <div className="text-base sm:text-lg font-black text-ya-lime mt-0.5 font-mono">
+                {((earningsSummary.allTime.totalPayout ?? (earningsSummary.allTime.earnings + (earningsSummary.allTime.bonusEarnings || 0))) || 0).toFixed(2)} €
+              </div>
+              <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                Remuneración total
               </div>
             </div>
           </div>
         </div>
+
+        {/* FASE 4E: Widget Resumen de Incentivos y Objetivos Activos */}
+        {incentivesData && incentivesData.incentives.length > 0 && (
+          <div className="bg-ya-gray/20 border-2 border-ya-gray p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Award size={16} className="text-ya-lime" />
+                <h2 className="text-xs font-black uppercase tracking-widest text-white">
+                  Incentivos Activos · Progreso de Repartos
+                </h2>
+              </div>
+              <Link
+                to="/repartidor/incentivos"
+                className="text-[11px] font-black uppercase tracking-wider text-ya-lime hover:underline flex items-center gap-1"
+              >
+                <span>Ver todos los incentivos</span>
+                <ChevronRight size={13} />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {incentivesData.incentives.slice(0, 2).map((inc) => (
+                <div
+                  key={inc.id}
+                  className={`p-3 border-2 flex flex-col justify-between space-y-2.5 ${
+                    inc.is_achieved
+                      ? 'bg-emerald-950/20 border-emerald-700/80'
+                      : 'bg-ya-black border-ya-gray'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-black uppercase text-white tracking-wide">
+                        {inc.name}
+                      </div>
+                      <div className="text-[11px] text-gray-400">
+                        Meta: <strong className="text-white">{inc.target_deliveries} entregas</strong>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-black font-mono text-ya-lime">
+                        +{inc.bonus_amount.toFixed(2)} €
+                      </div>
+                      <span
+                        className={`text-[9px] font-mono uppercase px-1.5 py-0.2 border ${
+                          inc.is_achieved
+                            ? 'bg-emerald-950 text-emerald-300 border-emerald-600 font-bold'
+                            : 'bg-ya-gray text-gray-400 border-gray-700'
+                        }`}
+                      >
+                        {inc.is_achieved ? '✓ Conseguido' : `${inc.progress_percent}%`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Barra de progreso */}
+                  <div className="space-y-1">
+                    <div className="h-2 w-full bg-gray-800 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          inc.is_achieved ? 'bg-emerald-500' : 'bg-ya-lime'
+                        }`}
+                        style={{ width: `${Math.min(100, inc.progress_percent)}%` }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-gray-400 flex items-center justify-between">
+                      <span>{inc.current_deliveries} / {inc.target_deliveries} entregas</span>
+                      {inc.is_achieved ? (
+                        <span className="text-emerald-400 font-bold">¡Bonus desbloqueado!</span>
+                      ) : (
+                        <span>Faltan {inc.remaining_deliveries}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 1. SECCIÓN: PEDIDOS DISPONIBLES */}

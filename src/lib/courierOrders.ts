@@ -801,21 +801,29 @@ export async function courierFetchEarningsSummary(courierId: string): Promise<{
         summary: {
           today: {
             earnings: Number(today.earnings || 0),
+            bonusEarnings: Number(today.bonus_earnings || 0),
+            totalPayout: Number(today.total_payout ?? (Number(today.earnings || 0) + Number(today.bonus_earnings || 0))),
             deliveredCount: Number(today.count || 0),
             avgPerDelivery: Number(today.avg || 0),
           },
           thisWeek: {
             earnings: Number(thisWeek.earnings || 0),
+            bonusEarnings: Number(thisWeek.bonus_earnings || 0),
+            totalPayout: Number(thisWeek.total_payout ?? (Number(thisWeek.earnings || 0) + Number(thisWeek.bonus_earnings || 0))),
             deliveredCount: Number(thisWeek.count || 0),
             avgPerDelivery: Number(thisWeek.avg || 0),
           },
           thisMonth: {
             earnings: Number(thisMonth.earnings || 0),
+            bonusEarnings: Number(thisMonth.bonus_earnings || 0),
+            totalPayout: Number(thisMonth.total_payout ?? (Number(thisMonth.earnings || 0) + Number(thisMonth.bonus_earnings || 0))),
             deliveredCount: Number(thisMonth.count || 0),
             avgPerDelivery: Number(thisMonth.avg || 0),
           },
           allTime: {
             earnings: Number(allTime.earnings || 0),
+            bonusEarnings: Number(allTime.bonus_earnings || 0),
+            totalPayout: Number(allTime.total_payout ?? (Number(allTime.earnings || 0) + Number(allTime.bonus_earnings || 0))),
             deliveredCount: Number(allTime.count || 0),
             avgPerDelivery: Number(allTime.avg || 0),
           },
@@ -835,6 +843,40 @@ export async function courierFetchEarningsSummary(courierId: string): Promise<{
 
     if (ordersError) {
       return { summary: fallbackSummary, orders: [], error: ordersError.message };
+    }
+
+    // Consultar también recompensas de incentivos de forma resiliente
+    let todayBonus = 0;
+    let weekBonus = 0;
+    let monthBonus = 0;
+    let allTimeBonus = 0;
+
+    try {
+      const { data: rewardsData } = await supabase
+        .from('courier_incentive_rewards')
+        .select('bonus_amount, achieved_at, status')
+        .eq('courier_id', courierId);
+
+      if (rewardsData) {
+        const nowTime = new Date();
+        const tStart = new Date(nowTime.getFullYear(), nowTime.getMonth(), nowTime.getDate());
+        const dOW = (nowTime.getDay() + 6) % 7;
+        const wStart = new Date(nowTime.getFullYear(), nowTime.getMonth(), nowTime.getDate() - dOW);
+        const mStart = new Date(nowTime.getFullYear(), nowTime.getMonth(), 1);
+
+        for (const r of rewardsData) {
+          if (r.status !== 'cancelled') {
+            const b = Number(r.bonus_amount || 0);
+            const aDate = new Date(r.achieved_at);
+            if (aDate >= tStart) todayBonus += b;
+            if (aDate >= wStart) weekBonus += b;
+            if (aDate >= mStart) monthBonus += b;
+            allTimeBonus += b;
+          }
+        }
+      }
+    } catch {
+      // Si la tabla no está creada aún en supabase, se ignora silenciosamente
     }
 
     const orders = (ordersData || []) as DbOrder[];
@@ -905,21 +947,29 @@ export async function courierFetchEarningsSummary(courierId: string): Promise<{
       summary: {
         today: {
           earnings: round(todayEarnings),
+          bonusEarnings: round(todayBonus),
+          totalPayout: round(todayEarnings + todayBonus),
           deliveredCount: todayCount,
           avgPerDelivery: todayCount > 0 ? round(todayEarnings / todayCount) : 0,
         },
         thisWeek: {
           earnings: round(weekEarnings),
+          bonusEarnings: round(weekBonus),
+          totalPayout: round(weekEarnings + weekBonus),
           deliveredCount: weekCount,
           avgPerDelivery: weekCount > 0 ? round(weekEarnings / weekCount) : 0,
         },
         thisMonth: {
           earnings: round(monthEarnings),
+          bonusEarnings: round(monthBonus),
+          totalPayout: round(monthEarnings + monthBonus),
           deliveredCount: monthCount,
           avgPerDelivery: monthCount > 0 ? round(monthEarnings / monthCount) : 0,
         },
         allTime: {
           earnings: round(allTimeEarnings),
+          bonusEarnings: round(allTimeBonus),
+          totalPayout: round(allTimeEarnings + allTimeBonus),
           deliveredCount: allTimeCount,
           avgPerDelivery: allTimeCount > 0 ? round(allTimeEarnings / allTimeCount) : 0,
         },

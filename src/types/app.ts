@@ -235,6 +235,8 @@ export type AdminCourierListItem = DbCourier & {
   delivered_count?: number;
   total_earnings?: number;
   today_earnings?: number;
+  total_bonuses?: number;
+  total_payout?: number;
 };
 
 export type AdminCourierDetail = {
@@ -248,8 +250,11 @@ export type AdminCourierDetail = {
     monthEarnings?: number;
     avgPerDelivery?: number;
     rating: number | null;
+    totalBonuses?: number;
+    totalPayout?: number;
   };
   deliveredOrders?: CourierDeliveredOrderEarningsItem[];
+  rewards?: CourierRewardHistoryItem[];
 };
 
 export type DbDeliveryZone = {
@@ -452,9 +457,11 @@ export type CourierOrderEarningsCalculation = {
 };
 
 export type CourierEarningsPeriodStats = {
-  earnings: number;
+  earnings: number; // Ganancias netas por entregas de pedidos (4D)
   deliveredCount: number;
   avgPerDelivery: number;
+  bonusEarnings?: number; // Recompensas y bonus conseguidos (4E)
+  totalPayout?: number; // Remuneración total = entregas + bonus
 };
 
 export type CourierEarningsSummary = {
@@ -462,6 +469,8 @@ export type CourierEarningsSummary = {
   thisWeek: CourierEarningsPeriodStats;
   thisMonth: CourierEarningsPeriodStats;
   allTime: CourierEarningsPeriodStats;
+  totalBonusesCount?: number;
+  totalBonusesAmount?: number;
 };
 
 export type CourierDeliveredOrderEarningsItem = {
@@ -482,6 +491,129 @@ export type CourierDeliveredOrderEarningsItem = {
   customerPhone: string | null;
   deliveryAddress: Address | null;
   calculation: CourierOrderEarningsCalculation;
+};
+
+// --- FASE 4E: INCENTIVOS Y RECOMPENSAS PARA REPARTIDORES ---
+
+export type DbCourierIncentive = {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  incentive_type: 'delivery_count';
+  target_deliveries: number;
+  bonus_amount: number;
+  start_at: string | null;
+  end_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DbCourierIncentiveReward = {
+  id: string;
+  incentive_id: string;
+  courier_id: string;
+  trigger_order_id: string | null;
+  achieved_at: string;
+  deliveries_count: number;
+  bonus_amount: number;
+  status: 'earned' | 'pending' | 'paid' | 'cancelled';
+  notes?: string | null;
+  created_at: string;
+};
+
+export type CourierIncentiveWithProgress = {
+  id: string;
+  name: string;
+  description: string | null;
+  incentive_type: string;
+  target_deliveries: number;
+  bonus_amount: number;
+  active: boolean;
+  start_at: string | null;
+  end_at: string | null;
+  is_expired: boolean;
+  is_future: boolean;
+  current_deliveries: number;
+  remaining_deliveries: number;
+  progress_percent: number;
+  is_achieved: boolean;
+  achieved_reward?: {
+    id: string;
+    bonus_amount: number;
+    achieved_at: string;
+    status: string;
+    deliveries_count: number;
+  } | null;
+  status_badge: 'achieved' | 'in_progress' | 'expired' | 'upcoming';
+};
+
+export type CourierRewardHistoryItem = {
+  id: string;
+  incentive_id: string;
+  incentive_name: string;
+  target_deliveries: number;
+  deliveries_count: number;
+  bonus_amount: number;
+  status: string;
+  achieved_at: string;
+  created_at: string;
+  trigger_order_id?: string | null;
+  courier_id?: string;
+  courier_name?: string;
+  courier_email?: string | null;
+};
+
+export type CourierIncentivesOverview = {
+  incentives: CourierIncentiveWithProgress[];
+  rewards: CourierRewardHistoryItem[];
+  summary: {
+    total_count: number;
+    total_earned: number;
+    today_earned: number;
+    week_earned: number;
+    month_earned: number;
+  };
+};
+
+export type AdminIncentiveListItem = DbCourierIncentive & {
+  total_rewards?: number;
+  total_bonus_paid?: number;
+};
+
+export type AdminCourierIncentiveProgress = {
+  courier_id: string;
+  profile_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  active: boolean;
+  available: boolean;
+  incentive_id: string;
+  incentive_name: string;
+  target_deliveries: number;
+  bonus_amount: number;
+  deliveries_count: number;
+  progress_percent: number;
+  is_achieved: boolean;
+  reward?: {
+    id: string;
+    bonus_amount: number;
+    achieved_at: string;
+    status: string;
+  } | null;
+};
+
+export type AdminIncentivesOverview = {
+  incentives: AdminIncentiveListItem[];
+  couriers_progress: AdminCourierIncentiveProgress[];
+  rewards: CourierRewardHistoryItem[];
+  summary: {
+    total_incentives: number;
+    active_incentives: number;
+    total_rewards: number;
+    total_bonus_amount: number;
+  };
 };
 
 

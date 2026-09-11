@@ -80,12 +80,13 @@ export async function adminFetchCouriers(
       }
     }
 
-    // 3. Obtener contador de pedidos asociados y métricas de ganancias (Fase 4D)
+    // 3. Obtener contador de pedidos asociados y métricas de ganancias (Fase 4D) y bonus (Fase 4E)
     const courierIds = couriersData.map((c) => c.id);
     const orderCounts = new Map<string, number>();
     const deliveredCounts = new Map<string, number>();
     const totalEarningsMap = new Map<string, number>();
     const todayEarningsMap = new Map<string, number>();
+    const totalBonusesMap = new Map<string, number>();
 
     if (courierIds.length > 0) {
       const { data: ordersData } = await supabase
@@ -120,6 +121,25 @@ export async function adminFetchCouriers(
           }
         }
       }
+
+      // Consultar recompensas de incentivos 4E
+      try {
+        const { data: rewardsData } = await supabase
+          .from('courier_incentive_rewards')
+          .select('courier_id, bonus_amount, status')
+          .in('courier_id', courierIds);
+
+        if (rewardsData) {
+          for (const r of rewardsData) {
+            if (r.status !== 'cancelled' && r.courier_id) {
+              const curB = totalBonusesMap.get(r.courier_id) || 0;
+              totalBonusesMap.set(r.courier_id, Math.round((curB + Number(r.bonus_amount || 0)) * 100) / 100);
+            }
+          }
+        }
+      } catch {
+        // Ignorar si la tabla aún no existe
+      }
     }
 
     // 4. Mapear resultados normalizados
@@ -130,6 +150,8 @@ export async function adminFetchCouriers(
       item.delivered_count = deliveredCounts.get(c.id) || 0;
       item.total_earnings = totalEarningsMap.get(c.id) || 0;
       item.today_earnings = todayEarningsMap.get(c.id) || 0;
+      item.total_bonuses = totalBonusesMap.get(c.id) || 0;
+      item.total_payout = Math.round(((item.total_earnings || 0) + (item.total_bonuses || 0)) * 100) / 100;
       return item;
     });
 
@@ -264,6 +286,38 @@ export async function adminFetchCourierDetail(
 
     const round = (val: number) => Math.round(val * 100) / 100;
 
+    // FASE 4E: Consultar recompensas e incentivos conseguidos por este repartidor
+    let courierRewards: any[] = [];
+    let courierTotalBonuses = 0;
+    try {
+      const { data: rewardsData } = await supabase
+        .from('courier_incentive_rewards')
+        .select('*, courier_incentives(name, target_deliveries)')
+        .eq('courier_id', courierId)
+        .order('achieved_at', { ascending: false });
+
+      if (rewardsData) {
+        courierRewards = rewardsData.map((r) => {
+          const bAmount = Number(r.bonus_amount || 0);
+          if (r.status !== 'cancelled') courierTotalBonuses += bAmount;
+          return {
+            id: r.id,
+            incentive_id: r.incentive_id,
+            incentive_name: r.courier_incentives?.name || 'Incentivo',
+            target_deliveries: Number(r.courier_incentives?.target_deliveries || r.deliveries_count),
+            deliveries_count: Number(r.deliveries_count || 0),
+            bonus_amount: bAmount,
+            status: r.status || 'earned',
+            achieved_at: r.achieved_at,
+            created_at: r.created_at,
+            trigger_order_id: r.trigger_order_id || null,
+          };
+        });
+      }
+    } catch {
+      // Ignorar si la tabla no está creada aún
+    }
+
     const courier: DbCourier = {
       id: courierData.id,
       profile_id: courierData.profile_id,
@@ -277,19 +331,25 @@ export async function adminFetchCourierDetail(
       updated_at: courierData.updated_at,
     };
 
+    const finalTotalEarnings = round(totalEarnings);
+    const finalTotalBonuses = round(courierTotalBonuses);
+
     const detail: AdminCourierDetail = {
       courier,
       profile: profileData as DbProfile,
       summary: {
         totalDeliveries,
-        totalEarnings: round(totalEarnings),
+        totalEarnings: finalTotalEarnings,
         todayEarnings: round(todayEarnings),
         weekEarnings: round(weekEarnings),
         monthEarnings: round(monthEarnings),
         avgPerDelivery: totalDeliveries > 0 ? round(totalEarnings / totalDeliveries) : 0,
         rating: null,
+        totalBonuses: finalTotalBonuses,
+        totalPayout: round(finalTotalEarnings + finalTotalBonuses),
       },
       deliveredOrders,
+      rewards: courierRewards,
     };
 
     return { data: detail, error: null };

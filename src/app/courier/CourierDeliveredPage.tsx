@@ -9,24 +9,29 @@ import {
   PackageCheck,
   DollarSign,
   TrendingUp,
+  Award,
+  Gift,
 } from 'lucide-react';
 import {
   courierFetchCurrentProfile,
   courierFetchEarningsSummary,
 } from '../../lib/courierOrders';
+import { courierFetchIncentivesOverview } from '../../lib/courierIncentives';
 import type {
   CourierEarningsSummary,
   CourierDeliveredOrderEarningsItem,
+  CourierIncentivesOverview,
 } from '../../types/app';
 
 export function CourierDeliveredPage() {
   const [orders, setOrders] = useState<CourierDeliveredOrderEarningsItem[]>([]);
   const [earningsSummary, setEarningsSummary] = useState<CourierEarningsSummary>({
-    today: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
-    thisWeek: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
-    thisMonth: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
-    allTime: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    today: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
+    thisWeek: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
+    thisMonth: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
+    allTime: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0, bonusEarnings: 0, totalPayout: 0 },
   });
+  const [incentivesData, setIncentivesData] = useState<CourierIncentivesOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,9 +42,13 @@ export function CourierDeliveredPage() {
 
     const profileRes = await courierFetchCurrentProfile();
     if (profileRes.courier) {
-      const res = await courierFetchEarningsSummary(profileRes.courier.id);
+      const [res, incRes] = await Promise.all([
+        courierFetchEarningsSummary(profileRes.courier.id),
+        courierFetchIncentivesOverview(),
+      ]);
       setEarningsSummary(res.summary);
       setOrders(res.orders);
+      setIncentivesData(incRes.data);
     }
 
     setLoading(false);
@@ -80,20 +89,30 @@ export function CourierDeliveredPage() {
         </button>
       </div>
 
-      {/* Resumen de Ganancias (Fase 4D) */}
+      {/* Resumen de Ganancias y Bonus (Fase 4D + 4E) */}
       <div className="bg-ya-black border-2 border-ya-gray p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp size={16} className="text-ya-lime" />
-          <h2 className="text-xs font-black uppercase tracking-widest text-white">
-            Liquidación Acumulada
-          </h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={16} className="text-ya-lime" />
+            <h2 className="text-xs font-black uppercase tracking-widest text-white">
+              Liquidación Acumulada
+            </h2>
+          </div>
+          <Link
+            to="/repartidor/incentivos"
+            className="text-[11px] font-black uppercase tracking-wider text-ya-lime hover:underline flex items-center gap-1"
+          >
+            <Award size={13} />
+            <span>Ver mis incentivos</span>
+            <ChevronRight size={13} />
+          </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
           <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
             <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Hoy</div>
-            <div className="text-xl font-black text-ya-lime mt-0.5">
-              {earningsSummary.today.earnings.toFixed(2)} €
+            <div className="text-lg sm:text-xl font-black text-white mt-0.5 font-mono">
+              {((earningsSummary.today.totalPayout ?? earningsSummary.today.earnings) || 0).toFixed(2)} €
             </div>
             <div className="text-[10px] text-gray-400 font-mono mt-0.5">
               {earningsSummary.today.deliveredCount} entregas
@@ -102,8 +121,8 @@ export function CourierDeliveredPage() {
 
           <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
             <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Esta Semana</div>
-            <div className="text-xl font-black text-white mt-0.5">
-              {earningsSummary.thisWeek.earnings.toFixed(2)} €
+            <div className="text-lg sm:text-xl font-black text-white mt-0.5 font-mono">
+              {((earningsSummary.thisWeek.totalPayout ?? earningsSummary.thisWeek.earnings) || 0).toFixed(2)} €
             </div>
             <div className="text-[10px] text-gray-400 font-mono mt-0.5">
               {earningsSummary.thisWeek.deliveredCount} entregas
@@ -111,22 +130,35 @@ export function CourierDeliveredPage() {
           </div>
 
           <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
-            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Este Mes</div>
-            <div className="text-xl font-black text-white mt-0.5">
-              {earningsSummary.thisMonth.earnings.toFixed(2)} €
+            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Por Pedidos</div>
+            <div className="text-lg sm:text-xl font-black text-white mt-0.5 font-mono">
+              {(earningsSummary.allTime.earnings || 0).toFixed(2)} €
             </div>
             <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-              {earningsSummary.thisMonth.deliveredCount} entregas
+              Media: {earningsSummary.allTime.avgPerDelivery.toFixed(2)} €
             </div>
           </div>
 
           <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
-            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Total Histórico</div>
-            <div className="text-xl font-black text-white mt-0.5">
-              {earningsSummary.allTime.earnings.toFixed(2)} €
+            <div className="text-[10px] text-emerald-400 font-black uppercase tracking-wider flex items-center justify-between">
+              <span>Bonus (4E)</span>
+              <Gift size={11} />
+            </div>
+            <div className="text-lg sm:text-xl font-black text-emerald-400 mt-0.5 font-mono">
+              +{(earningsSummary.allTime.bonusEarnings || 0).toFixed(2)} €
             </div>
             <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-              Media: {earningsSummary.allTime.avgPerDelivery.toFixed(2)} € / pedido
+              {incentivesData?.summary.total_count || 0} recompensas
+            </div>
+          </div>
+
+          <div className="bg-ya-lime/10 border-2 border-ya-lime/60 p-2.5 col-span-2 sm:col-span-1">
+            <div className="text-[10px] text-ya-lime font-black uppercase tracking-wider">Total Saldo</div>
+            <div className="text-lg sm:text-xl font-black text-ya-lime mt-0.5 font-mono">
+              {((earningsSummary.allTime.totalPayout ?? (earningsSummary.allTime.earnings + (earningsSummary.allTime.bonusEarnings || 0))) || 0).toFixed(2)} €
+            </div>
+            <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+              Total liquidable
             </div>
           </div>
         </div>

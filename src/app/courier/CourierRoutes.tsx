@@ -4,6 +4,7 @@ import { CourierDashboardPage } from './CourierDashboardPage';
 import { CourierOrdersPage } from './CourierOrdersPage';
 import { CourierOrderDetailPage } from './CourierOrderDetailPage';
 import { CourierDeliveredPage } from './CourierDeliveredPage';
+import { CourierIncentivesPage } from './CourierIncentivesPage';
 import { CourierProfilePage } from './CourierProfilePage';
 
 export function CourierRoutes() {
@@ -14,6 +15,7 @@ export function CourierRoutes() {
         <Route path="pedidos" element={<CourierOrdersPage />} />
         <Route path="pedidos/:id" element={<CourierOrderDetailPage />} />
         <Route path="entregados" element={<CourierDeliveredPage />} />
+        <Route path="incentivos" element={<CourierIncentivesPage />} />
         <Route path="perfil" element={<CourierProfilePage />} />
         <Route path="*" element={<Navigate to="/repartidor" replace />} />
       </Routes>

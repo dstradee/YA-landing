@@ -14,6 +14,7 @@ import {
   Loader2,
   Check,
   Power,
+  Award,
 } from 'lucide-react';
 import {
   adminFetchCouriers,
@@ -236,6 +237,14 @@ export function AdminCouriersPage() {
             <RefreshCw size={14} />
             <span className="hidden sm:inline">Refrescar</span>
           </button>
+
+          <Link
+            to="/admin/incentivos"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-ya-gray hover:bg-white hover:text-ya-black text-ya-lime text-xs font-black uppercase tracking-wider transition-colors border border-ya-lime/40"
+          >
+            <Award size={15} />
+            <span>Incentivos (4E)</span>
+          </Link>
 
           <button
             type="button"
@@ -510,19 +519,22 @@ export function AdminCouriersPage() {
                         </div>
                       </td>
 
-                      {/* Entregas y Ganancias (Fase 4D) */}
+                      {/* Entregas y Ganancias (Fase 4D + 4E) */}
                       <td className="py-3 px-4">
                         <div className="font-bold text-white text-xs">
                           {courier.delivered_count ?? 0} entregas
                         </div>
-                        <div className="text-[11px] font-mono text-ya-lime font-black mt-0.5">
-                          Total: {euro(courier.total_earnings ?? 0)}
+                        <div className="text-[11px] font-mono text-gray-300 mt-0.5">
+                          Pedidos: {euro(courier.total_earnings ?? 0)}
                         </div>
-                        {(courier.today_earnings ?? 0) > 0 && (
-                          <div className="text-[10px] font-mono text-gray-400 mt-0.5">
-                            Hoy: {euro(courier.today_earnings ?? 0)}
+                        {(courier.total_bonuses ?? 0) > 0 && (
+                          <div className="text-[10px] font-mono text-emerald-400 font-bold mt-0.5">
+                            + {euro(courier.total_bonuses ?? 0)} bonus (4E)
                           </div>
                         )}
+                        <div className="text-[11px] font-mono text-ya-lime font-black mt-0.5 border-t border-gray-800 pt-0.5">
+                          Total: {euro(courier.total_payout ?? ((courier.total_earnings ?? 0) + (courier.total_bonuses ?? 0)))}
+                        </div>
                       </td>
 
                       {/* Estado: Activo / Inactivo */}
@@ -625,7 +637,14 @@ export function AdminCouriersPage() {
                   <span className="text-gray-400">Entregas / Ganancias:</span>
                   <div className="text-right">
                     <span className="text-white font-bold mr-2">{courier.delivered_count ?? 0} entregas</span>
-                    <span className="text-ya-lime font-black">{euro(courier.total_earnings ?? 0)}</span>
+                    <span className="text-ya-lime font-black">
+                      {euro(courier.total_payout ?? ((courier.total_earnings ?? 0) + (courier.total_bonuses ?? 0)))}
+                    </span>
+                    {(courier.total_bonuses ?? 0) > 0 && (
+                      <span className="block text-[10px] text-emerald-400 font-bold">
+                        (incl. {euro(courier.total_bonuses ?? 0)} bonus 4E)
+                      </span>
+                    )}
                   </div>
                 </div>
 

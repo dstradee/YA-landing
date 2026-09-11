@@ -17,6 +17,8 @@ import {
   Shield,
   Bike,
   TrendingUp,
+  Award,
+  Gift,
 } from 'lucide-react';
 import {
   adminFetchCourierDetail,
@@ -566,12 +568,12 @@ export function AdminCourierDetailPage() {
               </div>
 
               <span className="text-[10px] font-black px-2 py-0.5 bg-ya-lime text-ya-black uppercase">
-                Fase 4D Activa
+                Fases 4D + 4E Activas
               </span>
             </div>
 
             {/* Tarjetas de métricas financieras */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
               <div className="p-3 bg-ya-gray/30 border border-ya-gray">
                 <div className="text-[10px] font-mono uppercase text-gray-400 flex items-center gap-1">
                   <Truck size={12} />
@@ -585,13 +587,36 @@ export function AdminCourierDetailPage() {
 
               <div className="p-3 bg-ya-gray/30 border border-ya-gray">
                 <div className="text-[10px] font-mono uppercase text-gray-400 flex items-center gap-1">
-                  <DollarSign size={12} className="text-ya-lime" />
-                  <span>Total Ganancias</span>
+                  <DollarSign size={12} className="text-gray-300" />
+                  <span>Por Pedidos</span>
                 </div>
-                <div className="text-xl font-black text-ya-lime mt-1">
+                <div className="text-xl font-black text-white mt-1">
                   {summary.totalEarnings.toFixed(2)} €
                 </div>
-                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Acumulado</div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Comisiones (4D)</div>
+              </div>
+
+              <div className="p-3 bg-ya-gray/30 border border-emerald-800/60">
+                <div className="text-[10px] font-mono uppercase text-emerald-400 flex items-center gap-1">
+                  <Gift size={12} />
+                  <span>Bonus (4E)</span>
+                </div>
+                <div className="text-xl font-black text-emerald-400 mt-1">
+                  +{(summary.totalBonuses || 0).toFixed(2)} €
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">
+                  {detail.rewards?.length || 0} recompensas
+                </div>
+              </div>
+
+              <div className="p-3 bg-ya-lime/10 border-2 border-ya-lime/70">
+                <div className="text-[10px] font-mono uppercase text-ya-lime font-bold">
+                  Total Liquidación
+                </div>
+                <div className="text-xl font-black text-ya-lime mt-1 font-mono">
+                  {((summary.totalPayout ?? (summary.totalEarnings + (summary.totalBonuses || 0))) || 0).toFixed(2)} €
+                </div>
+                <div className="text-[10px] font-mono text-gray-400 mt-0.5">Pedidos + Bonus</div>
               </div>
 
               <div className="p-3 bg-ya-gray/30 border border-ya-gray">
@@ -607,24 +632,81 @@ export function AdminCourierDetailPage() {
                 <div className="text-xl font-black text-white mt-1">
                   {(summary.weekEarnings ?? 0).toFixed(2)} €
                 </div>
-                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Semana en curso</div>
-              </div>
-
-              <div className="p-3 bg-ya-gray/30 border border-ya-gray">
-                <div className="text-[10px] font-mono uppercase text-gray-400">Este Mes</div>
-                <div className="text-xl font-black text-white mt-1">
-                  {(summary.monthEarnings ?? 0).toFixed(2)} €
-                </div>
-                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Mes en curso</div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Semana actual</div>
               </div>
 
               <div className="p-3 bg-ya-gray/30 border border-ya-gray">
                 <div className="text-[10px] font-mono uppercase text-gray-400">Media / Pedido</div>
-                <div className="text-xl font-black text-ya-lime mt-1">
+                <div className="text-xl font-black text-white mt-1">
                   {(summary.avgPerDelivery ?? 0).toFixed(2)} €
                 </div>
                 <div className="text-[10px] font-mono text-gray-500 mt-0.5">Por entrega</div>
               </div>
+            </div>
+
+            {/* Recompensas y Bonus Conseguidos (Fase 4E) */}
+            <div className="space-y-2 pt-2 border-t border-ya-gray">
+              <div className="text-xs font-black uppercase text-white tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-emerald-400">
+                  <Award size={14} />
+                  <span>Incentivos y Bonus Conseguidos (Fase 4E)</span>
+                </span>
+                <Link
+                  to="/admin/incentivos"
+                  className="text-gray-400 hover:text-ya-lime font-mono text-[11px] underline"
+                >
+                  Configurar incentivos →
+                </Link>
+              </div>
+
+              {!detail.rewards || detail.rewards.length === 0 ? (
+                <div className="p-4 border border-dashed border-ya-gray text-center text-gray-400 font-mono text-xs">
+                  Este repartidor todavía no ha completado ningún objetivo de incentivos.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-emerald-900/60 bg-emerald-950/10">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="bg-ya-gray/60 text-gray-300 uppercase text-[10px] border-b border-ya-gray">
+                      <tr>
+                        <th className="py-2.5 px-3">Incentivo</th>
+                        <th className="py-2.5 px-3 text-center">Entregas al Lograrlo</th>
+                        <th className="py-2.5 px-3 text-right">Bonus Otorgado</th>
+                        <th className="py-2.5 px-3">Fecha de Consecución</th>
+                        <th className="py-2.5 px-3 text-center">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {detail.rewards.map((rw) => (
+                        <tr key={rw.id} className="hover:bg-ya-gray/30 transition-colors">
+                          <td className="py-2.5 px-3 font-bold text-white">
+                            {rw.incentive_name}
+                          </td>
+                          <td className="py-2.5 px-3 text-center text-gray-300">
+                            {rw.deliveries_count} entregas
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-emerald-400">
+                            +{rw.bonus_amount.toFixed(2)} €
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-400">
+                            {new Date(rw.achieved_at).toLocaleDateString('es-ES', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-widest bg-emerald-950 text-emerald-300 border border-emerald-700">
+                              {rw.status === 'earned' ? 'Conseguido' : rw.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* Desglose de pedidos entregados */}

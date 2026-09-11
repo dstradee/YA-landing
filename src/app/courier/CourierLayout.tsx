@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   Loader2,
   ExternalLink,
+  Award,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import {
@@ -182,6 +183,7 @@ export function CourierLayout({ children }: CourierLayoutProps) {
     { to: '/repartidor', label: 'Inicio', icon: Truck, end: true },
     { to: '/repartidor/pedidos', label: 'Mis Pedidos', icon: Package, end: false },
     { to: '/repartidor/entregados', label: 'Entregados', icon: CheckCircle2, end: false },
+    { to: '/repartidor/incentivos', label: 'Incentivos', icon: Award, end: false },
     { to: '/repartidor/perfil', label: 'Perfil', icon: User, end: false },
   ];
 
@@ -268,7 +270,7 @@ export function CourierLayout({ children }: CourierLayoutProps) {
 
       {/* 3. BARRA DE NAVEGACIÓN INFERIOR PARA MÓVIL (Y TABS EN DESKTOP) */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-ya-black/95 backdrop-blur-md border-t-2 border-ya-gray">
-        <div className="max-w-md mx-auto grid grid-cols-4 h-16">
+        <div className="max-w-md mx-auto grid grid-cols-5 h-16">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.end
