@@ -28,6 +28,7 @@ import type {
   PackWithDetails,
   Product,
   DbProduct,
+  YaPlusBenefits,
 } from '../types/app';
 
 export const DEFAULT_COMMERCIAL_SETTINGS: DbCommercialSettings = {
@@ -75,6 +76,11 @@ export type CartPricingSummary = {
   total: number;
   totalSavings: number;
   lines: LinePricingDetail[];
+  // YA+ Membresía
+  isYaPlusApplied?: boolean;
+  yaPlusFreeShipping?: boolean;
+  yaPlusOrderDiscount?: number;
+  yaPlusTotalSavings?: number;
 };
 
 /**
@@ -175,6 +181,7 @@ export function calculateCartPricing(params: {
   discounts?: DbDiscount[];
   promotions?: DbPromotion[];
   settings?: DbCommercialSettings;
+  yaPlusBenefits?: YaPlusBenefits | null;
 }): CartPricingSummary {
   const cartLines = params.cartLines || params.lines || [];
   const {
@@ -183,6 +190,7 @@ export function calculateCartPricing(params: {
     discounts = [],
     promotions = [],
     settings = DEFAULT_COMMERCIAL_SETTINGS,
+    yaPlusBenefits = null,
   } = params;
 
   let rawSubtotal = 0;
@@ -316,8 +324,29 @@ export function calculateCartPricing(params: {
   const freeShippingThreshold = Number(settings.free_shipping_threshold ?? 30.0);
   const freeShippingEnabled = Boolean(settings.free_shipping_enabled);
 
-  const isFreeShipping = freeShippingEnabled && subtotal >= freeShippingThreshold;
-  const deliveryFee = isFreeShipping ? 0.0 : standardFee;
+  let isFreeShipping = freeShippingEnabled && subtotal >= freeShippingThreshold;
+  let deliveryFee = isFreeShipping ? 0.0 : standardFee;
+
+  // Beneficios de YA+ en Envío
+  let yaPlusFreeShipping = false;
+  if (yaPlusBenefits) {
+    if (yaPlusBenefits.free_shipping) {
+      isFreeShipping = true;
+      deliveryFee = 0.0;
+      yaPlusFreeShipping = true;
+    } else if (
+      yaPlusBenefits.free_shipping_min_order !== undefined &&
+      subtotal >= yaPlusBenefits.free_shipping_min_order
+    ) {
+      isFreeShipping = true;
+      deliveryFee = 0.0;
+      yaPlusFreeShipping = true;
+    } else if (yaPlusBenefits.shipping_discount_fixed) {
+      deliveryFee = Math.max(0, round2(deliveryFee - yaPlusBenefits.shipping_discount_fixed));
+    } else if (yaPlusBenefits.shipping_discount_percent) {
+      deliveryFee = Math.max(0, round2(deliveryFee * (1 - yaPlusBenefits.shipping_discount_percent / 100)));
+    }
+  }
 
   const freeShippingRemaining = Math.max(0, round2(freeShippingThreshold - subtotal));
   const freeShippingProgress = freeShippingThreshold > 0
@@ -330,9 +359,19 @@ export function calculateCartPricing(params: {
   const isMinOrderSatisfied = !minOrderEnabled || subtotal >= minOrderAmount;
   const minOrderRemaining = Math.max(0, round2(minOrderAmount - subtotal));
 
+  // Beneficios de YA+ en Descuento de Pedido
+  let yaPlusOrderDiscount = 0;
+  if (yaPlusBenefits?.order_discount_percent && yaPlusBenefits.order_discount_percent > 0) {
+    yaPlusOrderDiscount = round2(subtotalAfterPromotion * (yaPlusBenefits.order_discount_percent / 100));
+  }
+
+  const yaPlusDeliverySavings = yaPlusFreeShipping ? standardFee : Math.max(0, round2(standardFee - deliveryFee));
+  const yaPlusTotalSavings = round2(yaPlusOrderDiscount + (yaPlusFreeShipping ? yaPlusDeliverySavings : 0));
+  const isYaPlusApplied = Boolean(yaPlusBenefits && (yaPlusFreeShipping || yaPlusOrderDiscount > 0));
+
   // 9. TOTAL FINAL
-  const total = round2(subtotalAfterPromotion + deliveryFee);
-  const totalSavings = round2(totalLineDiscounts + promotionDiscount);
+  const total = round2(Math.max(0, subtotalAfterPromotion - yaPlusOrderDiscount) + deliveryFee);
+  const totalSavings = round2(totalLineDiscounts + promotionDiscount + yaPlusOrderDiscount + (yaPlusFreeShipping ? yaPlusDeliverySavings : 0));
 
   return {
     rawSubtotal,
@@ -355,6 +394,10 @@ export function calculateCartPricing(params: {
     total,
     totalSavings,
     lines: lineDetails,
+    isYaPlusApplied,
+    yaPlusFreeShipping,
+    yaPlusOrderDiscount,
+    yaPlusTotalSavings,
   };
 }
 

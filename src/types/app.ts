@@ -825,7 +825,14 @@ export type NotificationType =
   | 'admin_critical_incident'
   | 'admin_sourcing_needed'
   | 'promotion'
-  | 'system_alert';
+  | 'system_alert'
+  | 'ya_plus_subscribed'
+  | 'ya_plus_cancelled'
+  | 'ya_juntos_invite'
+  | 'ya_juntos_joined'
+  | 'ya_juntos_ready_to_pay'
+  | 'ya_juntos_payment_received'
+  | 'ya_juntos_fully_paid';
 
 export type NotificationChannel = 'in_app' | 'email' | 'push' | 'sms' | 'whatsapp';
 
@@ -862,4 +869,187 @@ export type NotificationsFetchResult = {
   unread_count: number;
   total_count: number;
 };
+
+// ==============================================================================
+// 11. MODELO FASE 9: YA+ (SUSCRIPCIONES Y BENEFICIOS)
+// ==============================================================================
+
+export type YaPlusPlanPeriodicity = 'monthly' | 'yearly' | 'quarterly' | 'weekly';
+
+export type YaPlusSubscriptionStatus =
+  | 'pending'
+  | 'active'
+  | 'cancelled'
+  | 'expired'
+  | 'payment_failed';
+
+export type YaPlusBenefits = {
+  free_shipping?: boolean;
+  shipping_discount_fixed?: number;
+  shipping_discount_percent?: number;
+  free_shipping_min_order?: number;
+  max_free_shipments_per_period?: number;
+  order_discount_percent?: number;
+  category_discounts?: Array<{ categorySlug: string; discountPercent: number }>;
+  product_discounts?: Array<{ productId: string; discountPercent: number }>;
+  exclusive_products?: string[];
+  exclusive_packs?: string[];
+  early_access?: boolean;
+};
+
+export type DbYaPlusPlan = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  currency: string;
+  periodicity: YaPlusPlanPeriodicity;
+  active: boolean;
+  sort_order: number;
+  color: string;
+  icon: string;
+  badge_text: string | null;
+  promotional_text: string | null;
+  benefits: YaPlusBenefits;
+  conditions: string | null;
+  starts_at?: string | null;
+  expires_at?: string | null;
+  is_test?: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DbUserSubscription = {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  plan_snapshot: Partial<DbYaPlusPlan>;
+  status: YaPlusSubscriptionStatus;
+  price: number;
+  currency: string;
+  started_at: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancelled_at: string | null;
+  cancel_at_period_end: boolean;
+  payment_id: string | null;
+  payment_reference: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  // Campos join opcionales
+  plan?: DbYaPlusPlan;
+  user_email?: string;
+  user_name?: string;
+};
+
+export type UserActiveSubscriptionInfo = {
+  has_active_subscription: boolean;
+  subscription_id?: string;
+  plan_id?: string;
+  plan_name?: string;
+  plan_slug?: string;
+  plan_color?: string;
+  benefits?: YaPlusBenefits;
+  started_at?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean;
+  price?: number;
+  currency?: string;
+};
+
+// ==============================================================================
+// 12. MODELO FASE 9: YA JUNTOS (PEDIDOS COMPARTIDOS TIPO TRICOUNT)
+// ==============================================================================
+
+export type YaJuntosStatus =
+  | 'open'
+  | 'confirmed'
+  | 'payment_pending'
+  | 'fully_paid'
+  | 'cancelled'
+  | 'expired';
+
+export type YaJuntosPaymentMode = 'single_payer' | 'split_equal' | 'split_by_items';
+
+export type YaJuntosParticipantRole = 'creator' | 'member';
+
+export type YaJuntosParticipantStatus = 'active' | 'left';
+
+export type YaJuntosParticipantPaymentStatus = 'pending' | 'paid';
+
+export type DbYaJuntosGroup = {
+  id: string;
+  code: string;
+  creator_id: string;
+  title: string;
+  status: YaJuntosStatus;
+  order_id: string | null;
+  payment_mode: YaJuntosPaymentMode;
+  single_payer_user_id: string | null;
+  delivery_address_id: string | null;
+  delivery_address_snapshot: Address | null;
+  delivery_zone_id: string | null;
+  subtotal: number;
+  delivery_fee: number;
+  discount_total: number;
+  total: number;
+  amount_paid: number;
+  notes: string | null;
+  frozen_at: string | null;
+  expires_at: string;
+  is_test: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DbYaJuntosParticipant = {
+  id: string;
+  group_id: string;
+  user_id: string;
+  display_name: string;
+  role: YaJuntosParticipantRole;
+  status: YaJuntosParticipantStatus;
+  joined_at: string;
+  allocated_amount: number;
+  paid_amount: number;
+  payment_status: YaJuntosParticipantPaymentStatus;
+  paid_at: string | null;
+  payment_id: string | null;
+  created_at: string;
+  updated_at: string;
+  // Join opcional
+  email?: string;
+};
+
+export type DbYaJuntosItem = {
+  id: string;
+  group_id: string;
+  added_by_user_id: string;
+  product_id: string;
+  quantity: number;
+  is_pack: boolean;
+  pack_id: string | null;
+  selections: CartPackSelection[];
+  unit_price: number;
+  discounted_unit_price: number;
+  line_subtotal: number;
+  created_at: string;
+  updated_at: string;
+  // Join opcionales
+  product_name?: string;
+  product_image?: string;
+  added_by_name?: string;
+};
+
+export type YaJuntosGroupWithDetails = DbYaJuntosGroup & {
+  participants: DbYaJuntosParticipant[];
+  items: DbYaJuntosItem[];
+  order_number?: string;
+  is_creator: boolean;
+  current_user_participant?: DbYaJuntosParticipant | null;
+};
+
 

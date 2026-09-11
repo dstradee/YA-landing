@@ -10,6 +10,8 @@ import {
   Plus,
   MapPin,
   PackageOpen,
+  Zap,
+  Users,
 } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 import { euro } from '../data/products';
@@ -46,6 +48,22 @@ export function AppHeader({ back }: { back?: boolean }) {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link
+            to="/app/ya-plus"
+            id="header-ya-plus-link"
+            className="hidden sm:flex items-center gap-1 border-2 border-ya-lime bg-ya-lime/10 px-2.5 py-1.5 font-mono text-[11px] font-black text-ya-lime hover:bg-ya-lime hover:text-ya-black transition"
+          >
+            <Zap size={13} />
+            YA+
+          </Link>
+          <Link
+            to="/app/juntos"
+            id="header-ya-juntos-link"
+            className="hidden md:flex items-center gap-1 border-2 border-zinc-700 bg-zinc-900 px-2.5 py-1.5 font-mono text-[11px] font-bold text-zinc-300 hover:border-white hover:text-white transition"
+          >
+            <Users size={13} />
+            JUNTOS
+          </Link>
           <NotificationBell buttonId="customer-notification-bell" />
           <Link
             id="header-cart-btn"

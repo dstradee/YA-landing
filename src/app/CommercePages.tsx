@@ -27,12 +27,14 @@ import {
   UserPlus,
   ShieldCheck,
   CheckCircle2,
+  Zap,
+  Users,
 } from 'lucide-react';
 import { PayPalPaymentSection } from '../components/PayPalPaymentSection';
 import { requestCapturePayPalOrder } from '../lib/paypalClient';
 
 export function CartPage() {
-  const { lines, clearCart, pricing, hasOutOfStockItems } = useCart();
+  const { lines, clearCart, pricing, hasOutOfStockItems, activeSubscription } = useCart();
 
   return (
     <>
@@ -181,7 +183,62 @@ export function CartPage() {
                 </div>
                 <span className="text-3xl font-black text-ya-lime">{euro(pricing.total)}</span>
               </div>
+
+              {/* YA+ Member Active Notice */}
+              {activeSubscription && (
+                <div className="mt-3 flex items-center gap-2 border border-ya-lime/40 bg-ya-lime/10 p-2.5 text-xs text-ya-lime">
+                  <Zap className="h-4 w-4 shrink-0" />
+                  <span className="font-mono text-[11px]">
+                    Beneficios <strong>YA+</strong> activos: Entrega gratuita y descuentos aplicados.
+                  </span>
+                </div>
+              )}
             </aside>
+
+            {/* YA Juntos & YA+ Upsell Cards */}
+            <div className="mt-4 space-y-2">
+              <Link
+                to="/app/juntos"
+                className="flex items-center justify-between border-2 border-zinc-700 bg-zinc-950 p-3 hover:border-ya-lime transition group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Users className="h-5 w-5 text-ya-lime shrink-0" />
+                  <div>
+                    <span className="text-xs font-black uppercase text-white block">
+                      ¿Pides en grupo? Usa YA Juntos
+                    </span>
+                    <span className="text-[11px] text-zinc-400">
+                      Comparte el carrito y cada uno paga lo suyo tipo Tricount
+                    </span>
+                  </div>
+                </div>
+                <span className="font-mono text-xs font-black text-ya-lime group-hover:underline shrink-0">
+                  CREAR GRUPO →
+                </span>
+              </Link>
+
+              {!activeSubscription && (
+                <Link
+                  to="/app/ya-plus"
+                  className="flex items-center justify-between border border-ya-lime/40 bg-ya-lime/10 p-3 hover:bg-ya-lime/20 transition group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Zap className="h-5 w-5 text-ya-lime shrink-0" />
+                    <div>
+                      <span className="text-xs font-black uppercase text-white block">
+                        Ahorra en este y todos tus pedidos con YA+
+                      </span>
+                      <span className="text-[11px] text-zinc-300">
+                        Envíos gratis ilimitados por solo 4,99 €/mes
+                      </span>
+                    </div>
+                  </div>
+                  <span className="font-mono text-xs font-black text-ya-lime group-hover:underline shrink-0">
+                    VER PLANES →
+                  </span>
+                </Link>
+              )}
+            </div>
 
             {hasOutOfStockItems ? (
               <div className="mt-6 space-y-2">

@@ -7,6 +7,8 @@ import { CartPage, CheckoutPage, OrderPage } from './CommercePages';
 import { PayPalReturnPage } from './PayPalReturnPage';
 import { LoginPage, OrdersPage, ProfilePage, RegisterPage } from './AccountPages';
 import NotificationsPage from './NotificationsPage';
+import YaPlusPage from './YaPlusPage';
+import YaJuntosPage from './YaJuntosPage';
 import { BottomNav } from './components';
 
 function AppFrame({ children }: { children: ReactNode }) {
@@ -118,6 +120,30 @@ export function CustomerRoutes() {
         element={
           <AppFrame>
             <NotificationsPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/app/ya-plus"
+        element={
+          <AppFrame>
+            <YaPlusPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/app/juntos"
+        element={
+          <AppFrame>
+            <YaJuntosPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/app/juntos/:code"
+        element={
+          <AppFrame>
+            <YaJuntosPage />
           </AppFrame>
         }
       />

@@ -8,6 +8,7 @@ import type {
   DbDiscount,
   DbPromotion,
   PackWithDetails,
+  UserActiveSubscriptionInfo,
 } from '../types/app';
 import {
   calculateCartPricing,
@@ -18,6 +19,8 @@ import { getCommercialSettings } from '../lib/commercialSettings';
 import { fetchActiveDiscounts } from '../lib/adminDiscounts';
 import { fetchActivePromotions } from '../lib/adminPromotions';
 import { fetchActivePacks } from '../lib/adminPacks';
+import { useAuth } from '../lib/auth';
+import { fetchUserActiveSubscription } from '../lib/yaPlus';
 
 type CartApi = {
   lines: CartLine[];
@@ -39,6 +42,9 @@ type CartApi = {
   refreshCommercialData: () => Promise<void>;
   hasOutOfStockItems: boolean;
   outOfStockLineIds: string[];
+  // YA+ Suscripciones Fase 9
+  activeSubscription: UserActiveSubscriptionInfo;
+  refreshSubscription: () => Promise<void>;
 };
 
 const CartContext = createContext<CartApi | undefined>(undefined);
@@ -82,12 +88,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  const { user } = useAuth();
   const [commercialSettings, setCommercialSettings] = useState<DbCommercialSettings>(
     DEFAULT_COMMERCIAL_SETTINGS
   );
   const [activePacks, setActivePacks] = useState<PackWithDetails[]>([]);
   const [activeDiscounts, setActiveDiscounts] = useState<DbDiscount[]>([]);
   const [activePromotions, setActivePromotions] = useState<DbPromotion[]>([]);
+  const [activeSubscription, setActiveSubscription] = useState<UserActiveSubscriptionInfo>({
+    has_active_subscription: false,
+  });
+
+  const refreshSubscription = useCallback(async () => {
+    try {
+      const sub = await fetchUserActiveSubscription(user?.id);
+      setActiveSubscription(sub);
+    } catch {
+      setActiveSubscription({ has_active_subscription: false });
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshSubscription();
+    const handleSubUpdate = () => {
+      refreshSubscription();
+    };
+    window.addEventListener('ya-subscription-updated', handleSubUpdate);
+    return () => {
+      window.removeEventListener('ya-subscription-updated', handleSubUpdate);
+    };
+  }, [refreshSubscription]);
 
   const refreshCommercialData = useCallback(async () => {
     try {
@@ -268,7 +298,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const count = lines.reduce((sum, item) => sum + item.quantity, 0);
 
-    // Motor de cálculo comercial determinista (Phase 3B)
+    // Motor de cálculo comercial determinista (Phase 3B & YA+ Fase 9)
     const pricing = calculateCartPricing({
       cartLines: lines,
       products,
@@ -276,6 +306,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       discounts: activeDiscounts,
       promotions: activePromotions,
       settings: commercialSettings,
+      yaPlusBenefits: activeSubscription.has_active_subscription ? activeSubscription.benefits : null,
     });
 
     // Validación de stock de líneas en el carrito (Fase 5)
@@ -314,6 +345,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       refreshCommercialData,
       hasOutOfStockItems,
       outOfStockLineIds,
+      activeSubscription,
+      refreshSubscription,
     };
   }, [
     lines,
@@ -323,6 +356,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     activePromotions,
     commercialSettings,
     refreshCommercialData,
+    activeSubscription,
+    refreshSubscription,
   ]);
 
   return <CartContext.Provider value={api}>{children}</CartContext.Provider>;
@@ -374,6 +409,8 @@ export const useCart = (): CartApi => {
       hasOutOfStockItems: false,
       outOfStockLineIds: [],
       refreshCommercialData: async () => {},
+      activeSubscription: { has_active_subscription: false },
+      refreshSubscription: async () => {},
     };
   }
   return context;

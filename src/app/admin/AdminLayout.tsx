@@ -21,6 +21,7 @@ import {
   Boxes,
   PackageSearch,
   AlertOctagon,
+  Zap,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { AdminErrorBoundary } from './AdminErrorBoundary';
@@ -49,6 +50,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     { to: '/admin/packs', label: 'Packs YA', icon: Box, end: false },
     { to: '/admin/descuentos', label: 'Descuentos', icon: Percent, end: false },
     { to: '/admin/promociones', label: 'Promociones', icon: Sparkles, end: false },
+    { to: '/admin/ya-plus', label: 'YA+', icon: Zap, end: false },
+    { to: '/admin/ya-juntos', label: 'YA Juntos', icon: Users, end: false },
     { to: '/admin/comercial', label: 'Comercial', icon: Sliders, end: false },
     { to: '/admin/configuracion', label: 'Configuración', icon: Settings, end: false },
   ];
