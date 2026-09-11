@@ -18,6 +18,7 @@ import {
   Box,
   Sliders,
   Award,
+  Boxes,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { AdminErrorBoundary } from './AdminErrorBoundary';
@@ -37,6 +38,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     { to: '/admin/clientes', label: 'Clientes', icon: Users, end: false },
     { to: '/admin/repartidores', label: 'Repartidores', icon: Truck, end: false },
     { to: '/admin/incentivos', label: 'Incentivos', icon: Award, end: false },
+    { to: '/admin/inventario', label: 'Inventario', icon: Boxes, end: false },
     { to: '/admin/productos', label: 'Productos', icon: Package, end: false },
     { to: '/admin/categorias', label: 'Categorías', icon: Layers, end: false },
     { to: '/admin/packs', label: 'Packs YA', icon: Box, end: false },

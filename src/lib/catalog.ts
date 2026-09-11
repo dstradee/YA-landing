@@ -31,6 +31,11 @@ export function adaptCategory(db: DbCategory): CatalogCategory {
 
 export function adaptProduct(db: DbProduct, categorySlugMap?: Map<string, string>): Product {
   const categorySlug = (categorySlugMap?.get(db.category_id) || 'mas') as CategorySlug;
+  const isAvailable =
+    db.active &&
+    (db.stock_mode === 'on_demand' ||
+      (db.stock_mode === 'in_stock' && (db.stock_quantity === undefined || db.stock_quantity > 0)));
+
   return {
     id: db.id,
     slug: db.slug,
@@ -41,7 +46,10 @@ export function adaptProduct(db: DbProduct, categorySlugMap?: Map<string, string
     image: db.image || '📦',
     description: db.description || '',
     active: db.active,
-    inStock: db.stock_mode === 'in_stock' && (db.stock_quantity === undefined || db.stock_quantity > 0),
+    inStock: isAvailable,
+    stockMode: db.stock_mode,
+    stockQuantity: db.stock_quantity ?? 0,
+    minStock: db.min_stock ?? 5,
     internalInstructions: db.internal_courier_notes || '',
   };
 }
@@ -105,7 +113,7 @@ export async function fetchActiveProducts(): Promise<Product[]> {
     // 2. Obtener productos activos (excluyendo notas internas y costes para el cliente)
     const { data, error } = await supabase
       .from('products')
-      .select('id, category_id, name, slug, description, image, price, active, stock_mode, stock_quantity, created_at, updated_at')
+      .select('id, category_id, name, slug, description, image, price, active, stock_mode, stock_quantity, min_stock, created_at, updated_at')
       .eq('active', true);
 
     if (error || !data || data.length === 0) {
@@ -136,7 +144,7 @@ export async function fetchProductById(idOrSlug: string): Promise<Product | null
 
     let query = supabase
       .from('products')
-      .select('id, category_id, name, slug, description, image, price, active, stock_mode, stock_quantity, created_at, updated_at')
+      .select('id, category_id, name, slug, description, image, price, active, stock_mode, stock_quantity, min_stock, created_at, updated_at')
       .eq('active', true);
 
     if (isUuid) {
@@ -340,6 +348,7 @@ export async function adminCreateProduct(prod: {
   active: boolean;
   stock_mode: 'in_stock' | 'out_of_stock' | 'on_demand';
   stock_quantity?: number;
+  min_stock?: number;
   internal_courier_notes?: string;
   suggested_purchase_locations?: string;
 }): Promise<{ success: boolean; error: string | null }> {

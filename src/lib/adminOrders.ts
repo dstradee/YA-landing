@@ -234,6 +234,12 @@ export async function adminUpdateOrderStatus(
       return { success: false, error: updateError.message };
     }
 
+    if (newStatus === 'cancelled') {
+      try {
+        window.dispatchEvent(new CustomEvent('ya-inventory-updated'));
+      } catch {}
+    }
+
     return { success: true, error: null };
   } catch (err: unknown) {
     return {

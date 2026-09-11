@@ -120,11 +120,15 @@ export function QuantitySelector({
   quantity,
   onAdd,
   onRemove,
+  max,
 }: {
   quantity: number;
   onAdd: () => void;
   onRemove: () => void;
+  max?: number;
 }) {
+  const isMaxReached = max !== undefined && quantity >= max;
+
   return (
     <div className="flex items-center border-2 border-ya-gray w-fit bg-ya-black">
       <button
@@ -139,8 +143,14 @@ export function QuantitySelector({
       <button
         aria-label="Aumentar cantidad"
         type="button"
+        disabled={isMaxReached}
         onClick={onAdd}
-        className="p-2 bg-ya-lime text-ya-black hover:bg-white transition-colors"
+        title={isMaxReached ? `Stock máximo disponible: ${max} u.` : 'Aumentar cantidad'}
+        className={`p-2 transition-colors ${
+          isMaxReached
+            ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-50'
+            : 'bg-ya-lime text-ya-black hover:bg-white'
+        }`}
       >
         <Plus size={16} />
       </button>
@@ -154,6 +164,11 @@ export function ProductCard({ product }: { product: Product }) {
   const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
   const category = categories.find((item) => item.slug === product.category);
   const isImageEmoji = !product.image.startsWith('http') && !product.image.startsWith('/');
+
+  const isLowStock =
+    product.inStock &&
+    product.stockMode === 'in_stock' &&
+    (product.stockQuantity ?? 0) <= (product.minStock ?? 5);
 
   return (
     <motion.article
@@ -175,7 +190,15 @@ export function ProductCard({ product }: { product: Product }) {
               referrerPolicy="no-referrer"
             />
           )}
-          {product.inStock && (
+          {!product.inStock ? (
+            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-red-400 bg-ya-black/90 px-2 py-0.5 border border-red-500/50">
+              AGOTADO
+            </span>
+          ) : isLowStock ? (
+            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-amber-400 bg-ya-black/90 px-1.5 py-0.5 border border-amber-500/50">
+              Últimas {product.stockQuantity} u.
+            </span>
+          ) : (
             <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-ya-lime bg-ya-black/80 px-1.5 py-0.5 border border-ya-lime/30">
               Stock
             </span>
@@ -190,10 +213,20 @@ export function ProductCard({ product }: { product: Product }) {
         <p className="font-black text-lg mt-2 text-ya-white">{euro(product.price)}</p>
       </Link>
 
-      {quantity ? (
+      {!product.inStock ? (
+        <button
+          id={`sold-out-btn-${product.id}`}
+          type="button"
+          disabled
+          className="m-4 mt-0 w-[calc(100%-2rem)] min-h-11 bg-ya-black border-2 border-red-500/40 text-red-400 font-black uppercase text-xs tracking-wider cursor-not-allowed opacity-80"
+        >
+          AGOTADO
+        </button>
+      ) : quantity ? (
         <div className="px-4 pb-4">
           <QuantitySelector
             quantity={quantity}
+            max={product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
             onAdd={() => increaseQuantity(product.id)}
             onRemove={() => decreaseQuantity(product.id)}
           />

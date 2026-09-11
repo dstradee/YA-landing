@@ -18,6 +18,9 @@ export type Product = {
   active: boolean;
   inStock: boolean;
   internalInstructions: string;
+  stockMode?: StockMode;
+  stockQuantity?: number;
+  minStock?: number;
 };
 
 export type CartPackSelection = {
@@ -117,6 +120,7 @@ export type DbProduct = {
   active: boolean;
   stock_mode: StockMode;
   stock_quantity: number;
+  min_stock?: number;
   internal_courier_notes: string | null;
   suggested_purchase_locations: string | null;
   created_at: string;
@@ -615,5 +619,48 @@ export type AdminIncentivesOverview = {
     total_bonus_amount: number;
   };
 };
+
+// ==============================================================================
+// 10. FASE 5 — SISTEMA DE INVENTARIO Y MOVIMIENTOS
+// ==============================================================================
+
+export type StockMovementType =
+  | 'entry'
+  | 'sale'
+  | 'cancellation'
+  | 'adjustment'
+  | 'loss'
+  | 'test_order';
+
+export type DbStockMovement = {
+  id: string;
+  product_id: string;
+  movement_type: StockMovementType;
+  quantity: number;
+  previous_stock: number;
+  new_stock: number;
+  order_id: string | null;
+  reason: string | null;
+  created_by: string | null;
+  created_at: string;
+  // Campos derivados / joins
+  product_name?: string;
+  product_slug?: string;
+  order_number?: string;
+  creator_email?: string;
+};
+
+export type InventorySummary = {
+  total_products: number;
+  in_stock_products: number;
+  low_stock_products: number;
+  out_of_stock_products: number;
+  on_demand_products: number;
+  total_units_in_stock: number;
+  total_retail_value: number;
+  total_cost_value: number;
+  estimated_gross_profit: number;
+};
+
 
 

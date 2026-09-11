@@ -105,12 +105,19 @@ export function CartItem({ line }: { line: CartLine }) {
   const originalUnitPrice = detail ? detail.originalUnitPrice : product.price;
   const hasDiscount = originalUnitPrice > unitPrice;
 
+  const isOut = !product.inStock || (product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) <= 0);
+  const exceedsStock = product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) < line.quantity;
+
   return (
     <article
       id={`cart-item-${product.id}`}
-      className="flex gap-3 bg-ya-gray p-3 border-2 border-ya-gray hover:border-ya-lime transition-colors"
+      className={`flex gap-3 p-3 border-2 transition-colors ${
+        isOut || exceedsStock
+          ? 'bg-red-950/20 border-red-500/60'
+          : 'bg-ya-gray border-ya-gray hover:border-ya-lime'
+      }`}
     >
-      <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden">
+      <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden relative">
         {isImageEmoji ? (
           <span>{product.image}</span>
         ) : (
@@ -121,10 +128,26 @@ export function CartItem({ line }: { line: CartLine }) {
             referrerPolicy="no-referrer"
           />
         )}
+        {isOut && (
+          <span className="absolute inset-x-0 bottom-0 bg-red-600 text-white text-[8px] font-black uppercase text-center tracking-wider">
+            AGOTADO
+          </span>
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
         <h3 className="font-black truncate text-sm text-white">{product.name}</h3>
+
+        {(isOut || exceedsStock) && (
+          <p className="text-[11px] font-bold text-red-400 mt-0.5 flex items-center gap-1">
+            <span>⚠️</span>
+            <span>
+              {isOut
+                ? 'Producto agotado. Quítalo para continuar.'
+                : `Solo quedan ${product.stockQuantity} u. disponibles.`}
+            </span>
+          </p>
+        )}
 
         <div className="flex items-baseline gap-2 mt-1">
           <span className="font-black text-ya-lime">{euro(unitPrice)}</span>
@@ -143,6 +166,7 @@ export function CartItem({ line }: { line: CartLine }) {
         <div className="flex justify-between items-center mt-2">
           <QuantitySelector
             quantity={line.quantity}
+            max={product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
             onAdd={() => increaseQuantity(lineKey)}
             onRemove={() => decreaseQuantity(lineKey)}
           />

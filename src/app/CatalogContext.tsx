@@ -62,12 +62,18 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadData();
 
+    const handleInventoryUpdated = () => {
+      loadData();
+    };
+    window.addEventListener('ya-inventory-updated', handleInventoryUpdated);
+
     // Supabase Realtime listener preparado para actualización sin recargar
     const unsubscribe = subscribeToCatalogChanges(() => {
       loadData();
     });
 
     return () => {
+      window.removeEventListener('ya-inventory-updated', handleInventoryUpdated);
       unsubscribe();
     };
   }, []);

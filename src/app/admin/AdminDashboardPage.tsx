@@ -13,9 +13,11 @@ import {
   AlertTriangle,
   ArrowUpRight,
   TrendingUp,
+  Boxes,
 } from 'lucide-react';
 import { adminFetchDashboardStats } from '../../lib/adminStats';
-import type { AdminDashboardStats, AdminOrderListItem, OrderStatus } from '../../types/app';
+import { fetchInventorySummary } from '../../lib/adminInventory';
+import type { AdminDashboardStats, AdminOrderListItem, OrderStatus, InventorySummary } from '../../types/app';
 import { euro } from '../../data/products';
 
 const statusBadges: Record<OrderStatus, { label: string; className: string }> = {
@@ -34,19 +36,29 @@ const statusBadges: Record<OrderStatus, { label: string; className: string }> = 
 export function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<AdminOrderListItem[]>([]);
+  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const res = await adminFetchDashboardStats();
+    const [res, invRes] = await Promise.all([
+      adminFetchDashboardStats(),
+      fetchInventorySummary(),
+    ]);
+
     if (res.error) {
       setError(res.error);
     } else {
       setStats(res.stats);
       setRecentOrders(res.recentOrders);
     }
+
+    if (invRes.data) {
+      setInventorySummary(invRes.data);
+    }
+
     setLoading(false);
   }, []);
 
@@ -197,6 +209,32 @@ export function AdminDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Alerta de Stock e Inventario (Fase 5) */}
+      {inventorySummary && (inventorySummary.out_of_stock_products > 0 || inventorySummary.low_stock_products > 0) && (
+        <div className="border-4 border-amber-500/80 bg-amber-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 border border-amber-500 bg-amber-500/20 text-amber-300 shrink-0">
+              <Boxes size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-amber-300 font-mono">
+                Alerta de Stock en Almacén
+              </p>
+              <p className="text-xs text-gray-200 mt-0.5">
+                Hay <strong className="text-white">{inventorySummary.out_of_stock_products} productos agotados</strong> y{' '}
+                <strong className="text-amber-300">{inventorySummary.low_stock_products} productos con stock bajo</strong>.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/inventario"
+            className="px-4 py-2 bg-amber-500 text-black font-black uppercase tracking-wider text-xs hover:bg-white transition-colors shrink-0"
+          >
+            Gestionar Inventario →
+          </Link>
+        </div>
+      )}
 
       {/* Operaciones de Pedidos en Curso (Pipeline Status) */}
       <div className="border-4 border-ya-gray bg-ya-black p-6">

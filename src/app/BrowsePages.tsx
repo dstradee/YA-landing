@@ -342,7 +342,15 @@ export function ProductPage() {
           <span className="absolute top-3 left-3 bg-ya-black border border-ya-gray px-2 py-1 text-[10px] font-black text-ya-lime uppercase tracking-widest">
             {product.category}
           </span>
-          {product.inStock && (
+          {!product.inStock ? (
+            <span className="absolute top-3 right-3 bg-red-600 text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border border-red-400">
+              Agotado
+            </span>
+          ) : product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) <= (product.minStock ?? 5) ? (
+            <span className="absolute top-3 right-3 bg-amber-500 text-ya-black px-2.5 py-1 text-[10px] font-black uppercase tracking-widest font-mono">
+              Últimas {product.stockQuantity} u.
+            </span>
+          ) : (
             <span className="absolute top-3 right-3 bg-ya-lime text-ya-black px-2 py-1 text-[10px] font-black uppercase tracking-widest">
               En stock
             </span>
@@ -350,13 +358,23 @@ export function ProductPage() {
         </div>
 
         <p className="font-bold text-ya-lime uppercase tracking-widest text-xs mt-6">
-          Disponible para entrega inmediata en Jerez
+          {product.inStock ? 'Disponible para entrega inmediata en Jerez' : 'Temporalmente fuera de inventario'}
         </p>
         <h1 className="font-black text-3xl sm:text-5xl tracking-tighter mt-2">{product.name}</h1>
         <p className="font-black text-3xl mt-4 text-ya-lime">{euro(product.price)}</p>
         <p className="text-gray-300 text-base sm:text-lg mt-4 leading-relaxed">
           {product.description}
         </p>
+
+        {/* Alerta de producto agotado */}
+        {!product.inStock && (
+          <div className="mt-6 bg-red-950/60 border-2 border-red-500/60 p-4 text-red-200 text-xs sm:text-sm font-bold flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <span>
+              Este producto se encuentra <strong>agotado</strong> en nuestro almacén de Jerez. No es posible tramitar pedidos de este artículo hasta su próxima reposición.
+            </span>
+          </div>
+        )}
 
         {/* Feedback visual al añadir */}
         {addedNotice && (
@@ -375,19 +393,30 @@ export function ProductPage() {
               <span className="text-xs font-bold uppercase text-gray-400 px-2">En carrito:</span>
               <QuantitySelector
                 quantity={quantity}
+                max={product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
                 onAdd={() => increaseQuantity(product.id)}
                 onRemove={() => decreaseQuantity(product.id)}
               />
             </div>
           )}
 
-          <button
-            id={`add-to-cart-btn-${product.id}`}
-            onClick={handleAdd}
-            className="flex-1 min-h-12 bg-ya-lime text-ya-black font-black uppercase text-base tracking-wider hover:bg-white transition-colors py-3 px-6"
-          >
-            {quantity ? 'Añadir otra unidad' : 'Añadir al carrito'}
-          </button>
+          {!product.inStock ? (
+            <button
+              id={`sold-out-btn-${product.id}`}
+              disabled
+              className="flex-1 min-h-12 bg-ya-gray border-2 border-red-500/40 text-red-400 font-black uppercase text-base tracking-wider cursor-not-allowed opacity-80 py-3 px-6"
+            >
+              Producto Agotado
+            </button>
+          ) : (
+            <button
+              id={`add-to-cart-btn-${product.id}`}
+              onClick={handleAdd}
+              className="flex-1 min-h-12 bg-ya-lime text-ya-black font-black uppercase text-base tracking-wider hover:bg-white transition-colors py-3 px-6"
+            >
+              {quantity ? 'Añadir otra unidad' : 'Añadir al carrito'}
+            </button>
+          )}
         </div>
 
         {/* Acceso directo al carrito si ya hay artículos */}

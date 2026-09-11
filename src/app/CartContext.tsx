@@ -29,7 +29,7 @@ type CartApi = {
   clearCart: () => void;
   count: number;
   subtotal: number;
-  // Motor Comercial Phase 3B
+  // Motor Comercial Phase 3B & Inventario Fase 5
   pricing: CartPricingSummary;
   commercialSettings: DbCommercialSettings;
   activePacks: PackWithDetails[];
@@ -37,6 +37,8 @@ type CartApi = {
   activeDiscounts: DbDiscount[];
   activePromotions: DbPromotion[];
   refreshCommercialData: () => Promise<void>;
+  hasOutOfStockItems: boolean;
+  outOfStockLineIds: string[];
 };
 
 const CartContext = createContext<CartApi | undefined>(undefined);
@@ -124,30 +126,50 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [lines]);
 
   const api = useMemo<CartApi>(() => {
-    // Añadir producto regular al carrito
-    const addToCart = (id: string, quantity = 1) =>
+    // Añadir producto regular al carrito con validación estricta de stock disponible
+    const addToCart = (id: string, quantity = 1) => {
+      const prod = products.find((p) => p.id === id || p.slug === id);
+      if (
+        prod &&
+        (!prod.inStock ||
+          (prod.stockMode === 'in_stock' && (prod.stockQuantity ?? 0) <= 0))
+      ) {
+        // Producto agotado: rechazar adición
+        return;
+      }
+
+      const maxAllowed =
+        prod && prod.stockMode === 'in_stock'
+          ? Math.max(0, prod.stockQuantity ?? 99)
+          : 99;
+
+      if (maxAllowed <= 0) return;
+
       setLines((old) => {
         const existingIdx = old.findIndex(
-          (item) => !item.isPack && (item.productId === id || item.lineId === id)
+          (item) => !item.isPack && (item.productId === id || item.lineId === id || (prod && (item.productId === prod.id || item.productId === prod.slug)))
         );
         if (existingIdx !== -1) {
+          const currentQty = old[existingIdx].quantity;
+          const targetQty = Math.min(currentQty + quantity, maxAllowed);
           const updated = [...old];
           updated[existingIdx] = {
             ...updated[existingIdx],
-            quantity: updated[existingIdx].quantity + quantity,
+            quantity: targetQty,
           };
           return updated;
         }
         return [
           ...old,
           {
-            lineId: `prod-${id}`,
-            productId: id,
-            quantity,
+            lineId: `prod-${prod ? prod.id : id}`,
+            productId: prod ? prod.id : id,
+            quantity: Math.min(quantity, maxAllowed),
             isPack: false,
           },
         ];
       });
+    };
 
     // Añadir Pack (cerrado o configurable) al carrito
     const addPackToCart = (
@@ -203,13 +225,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const increaseQuantity = (lineIdOrProductId: string) =>
       setLines((old) =>
-        old.map((item) =>
-          item.lineId === lineIdOrProductId ||
-          item.productId === lineIdOrProductId ||
-          item.packId === lineIdOrProductId
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
+        old.map((item) => {
+          if (
+            item.lineId === lineIdOrProductId ||
+            item.productId === lineIdOrProductId ||
+            item.packId === lineIdOrProductId
+          ) {
+            if (!item.isPack) {
+              const prod = products.find(
+                (p) => p.id === item.productId || p.slug === item.productId
+              );
+              if (
+                prod &&
+                prod.stockMode === 'in_stock' &&
+                item.quantity >= (prod.stockQuantity ?? 0)
+              ) {
+                // Ya ha alcanzado el límite de unidades disponibles
+                return item;
+              }
+            }
+            return { ...item, quantity: item.quantity + 1 };
+          }
+          return item;
+        })
       );
 
     const decreaseQuantity = (lineIdOrProductId: string) =>
@@ -240,6 +278,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
       settings: commercialSettings,
     });
 
+    // Validación de stock de líneas en el carrito (Fase 5)
+    const outOfStockLineIds = lines
+      .filter((item) => {
+        if (item.isPack) return false;
+        const prod = products.find(
+          (p) => p.id === item.productId || p.slug === item.productId
+        );
+        return (
+          prod &&
+          (!prod.inStock ||
+            (prod.stockMode === 'in_stock' && (prod.stockQuantity ?? 0) < item.quantity))
+        );
+      })
+      .map((item) => item.lineId || item.productId);
+
+    const hasOutOfStockItems = outOfStockLineIds.length > 0;
+
     return {
       lines,
       addToCart,
@@ -257,6 +312,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       activeDiscounts,
       activePromotions,
       refreshCommercialData,
+      hasOutOfStockItems,
+      outOfStockLineIds,
     };
   }, [
     lines,
@@ -314,6 +371,8 @@ export const useCart = (): CartApi => {
       packs: [],
       activeDiscounts: [],
       activePromotions: [],
+      hasOutOfStockItems: false,
+      outOfStockLineIds: [],
       refreshCommercialData: async () => {},
     };
   }

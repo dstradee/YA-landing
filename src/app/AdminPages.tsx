@@ -37,6 +37,7 @@ import { AdminPacksPage } from './admin/AdminPacksPage';
 import { AdminDiscountsPage } from './admin/AdminDiscountsPage';
 import { AdminPromotionsPage } from './admin/AdminPromotionsPage';
 import { AdminCommercialPage } from './admin/AdminCommercialPage';
+import { AdminInventoryPage } from './admin/AdminInventoryPage';
 
 // ==============================================================================
 // 1. COMPONENTE DE ACCESO / SEGURIDAD
@@ -1040,6 +1041,7 @@ export function AdminRoutes() {
         <Route path="/repartidores" element={<AdminCouriersPage />} />
         <Route path="/repartidores/:id" element={<AdminCourierDetailPage />} />
         <Route path="/incentivos" element={<AdminIncentivesPage />} />
+        <Route path="/inventario" element={<AdminInventoryPage />} />
         <Route path="/productos" element={<AdminProductsPage />} />
         <Route path="/categorias" element={<AdminCategoriesPage />} />
         <Route path="/packs" element={<AdminPacksPage />} />

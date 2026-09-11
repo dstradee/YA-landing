@@ -32,7 +32,7 @@ import { PayPalPaymentSection } from '../components/PayPalPaymentSection';
 import { requestCapturePayPalOrder } from '../lib/paypalClient';
 
 export function CartPage() {
-  const { lines, clearCart, pricing } = useCart();
+  const { lines, clearCart, pricing, hasOutOfStockItems } = useCart();
 
   return (
     <>
@@ -93,6 +93,19 @@ export function CartPage() {
                     style={{ width: `${pricing.freeShippingProgress}%` }}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Alerta de Artículos Agotados o Insuficientes (Fase 5) */}
+            {hasOutOfStockItems && (
+              <div
+                id="cart-out-of-stock-alert"
+                className="mt-3 p-3.5 border-2 border-red-500 bg-red-950/40 text-red-200 text-xs font-bold flex items-center gap-2"
+              >
+                <AlertCircle size={16} className="text-red-400 shrink-0" />
+                <span>
+                  Hay artículos en tu carrito con <strong>stock insuficiente o agotados</strong>. Por favor, retíralos o ajusta sus unidades para poder tramitar tu pedido.
+                </span>
               </div>
             )}
 
@@ -170,7 +183,19 @@ export function CartPage() {
               </div>
             </aside>
 
-            {pricing.isMinOrderSatisfied ? (
+            {hasOutOfStockItems ? (
+              <div className="mt-6 space-y-2">
+                <button
+                  disabled
+                  className="w-full bg-red-950/40 border-2 border-red-500/60 text-red-300 font-black p-4 text-center text-sm uppercase tracking-wider cursor-not-allowed"
+                >
+                  Quita los productos agotados para continuar
+                </button>
+                <p className="text-center text-xs text-red-400 font-bold">
+                  Revisa los productos marcados en rojo en tu cesta antes de tramitar el pedido.
+                </p>
+              </div>
+            ) : pricing.isMinOrderSatisfied ? (
               <Link
                 id="go-to-checkout-btn"
                 to="/app/checkout"
@@ -202,7 +227,7 @@ export function CartPage() {
 }
 
 export function CheckoutPage() {
-  const { lines, clearCart, pricing } = useCart();
+  const { lines, clearCart, pricing, hasOutOfStockItems } = useCart();
   const { user, profile, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -384,6 +409,14 @@ export function CheckoutPage() {
     if (isSubmitting) return;
 
     setError(null);
+
+    // Validar stock disponible antes de enviar al RPC (Fase 5)
+    if (hasOutOfStockItems) {
+      setError(
+        'Hay artículos en tu carrito con stock insuficiente o agotados. Por favor, regresa al carrito para quitarlos o ajustar sus cantidades antes de continuar.'
+      );
+      return;
+    }
 
     // Validar pedido mínimo de forma preventiva (exento en pedidos de prueba para administradores)
     if (checkoutMode !== 'test_free' && pricing.minOrderEnabled && !pricing.isMinOrderSatisfied) {
@@ -948,8 +981,26 @@ export function CheckoutPage() {
             </div>
           )}
 
-          {/* BOTÓN CONFIRMAR PEDIDO O BLOQUEO POR PEDIDO MÍNIMO */}
-          {checkoutMode === 'test_free' ? (
+          {/* BOTÓN CONFIRMAR PEDIDO O BLOQUEO POR STOCK / PEDIDO MÍNIMO */}
+          {hasOutOfStockItems ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled
+                className="w-full font-black p-4 text-sm uppercase tracking-wider bg-red-950/40 border-2 border-red-500/60 text-red-300 cursor-not-allowed"
+              >
+                Artículos sin stock en el carrito
+              </button>
+              <div className="text-center">
+                <Link
+                  to="/app/carrito"
+                  className="text-xs font-black uppercase tracking-wider text-ya-lime hover:underline inline-flex items-center gap-1"
+                >
+                  ← Volver al carrito para retirar productos agotados
+                </Link>
+              </div>
+            </div>
+          ) : checkoutMode === 'test_free' ? (
             <button
               id="confirm-test-order-btn"
               type="submit"
