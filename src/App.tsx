@@ -11,17 +11,28 @@ import { CustomerRoutes } from './app/CustomerRoutes';
 import { AdminRoutes } from './app/AdminPages';
 import { CourierRoutes } from './app/courier/CourierRoutes';
 import { AuthProvider } from './lib/auth';
+import { NotificationsProvider } from './app/NotificationsContext';
+import {
+  NotificationDrawer,
+  NotificationToast,
+  NotificationPreferencesModal,
+} from './components/notifications/NotificationComponents';
 
 function Landing() { return <div className="min-h-screen flex flex-col font-sans"><Navbar/><main className="flex-grow"><Hero/><Problem/><HowItWorks/><Categories/><Waitlist/><Local/></main><Footer/></div>; }
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/admin/*" element={<AdminRoutes />} />
-        <Route path="/repartidor/*" element={<CourierRoutes />} />
-      </Routes>
-      <CustomerRoutes />
+      <NotificationsProvider>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/admin/*" element={<AdminRoutes />} />
+          <Route path="/repartidor/*" element={<CourierRoutes />} />
+        </Routes>
+        <CustomerRoutes />
+        <NotificationDrawer />
+        <NotificationToast />
+        <NotificationPreferencesModal />
+      </NotificationsProvider>
     </AuthProvider>
   );
 }

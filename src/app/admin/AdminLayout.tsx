@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { AdminErrorBoundary } from './AdminErrorBoundary';
+import { NotificationBell } from '../../components/notifications/NotificationComponents';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -110,6 +111,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
+            <NotificationBell buttonId="admin-header-notification-bell" />
+
             <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-gray-400">
               <span className="w-2 h-2 rounded-full bg-ya-lime animate-pulse"></span>
               <span className="bg-ya-gray px-2 py-0.5 text-[10px] font-black uppercase text-ya-lime border border-ya-lime/30 tracking-wider">

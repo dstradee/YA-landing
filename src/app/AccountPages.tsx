@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   RefreshCw,
   Truck,
+  Bell,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { fetchUserOrders, type OrderWithDetails } from '../lib/orders';
@@ -542,6 +543,17 @@ export function ProfilePage() {
               <ShoppingBag size={18} className="text-ya-lime" /> Mis pedidos
             </span>
             <span className="text-gray-400">→</span>
+          </Link>
+
+          <Link
+            to="/app/notificaciones"
+            id="profile-notifications-link"
+            className="p-4 font-black flex items-center justify-between hover:bg-ya-gray transition-colors text-white"
+          >
+            <span className="flex items-center gap-2">
+              <Bell size={18} className="text-ya-lime" /> Notificaciones y Avisos
+            </span>
+            <span className="text-xs font-mono text-gray-400">Ver centro →</span>
           </Link>
 
           <div className="p-4 font-black flex items-center justify-between hover:bg-ya-gray transition-colors cursor-pointer text-white">

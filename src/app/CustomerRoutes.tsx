@@ -6,6 +6,7 @@ import { AppHome, CategoryPage, ProductPage, SearchPage } from './BrowsePages';
 import { CartPage, CheckoutPage, OrderPage } from './CommercePages';
 import { PayPalReturnPage } from './PayPalReturnPage';
 import { LoginPage, OrdersPage, ProfilePage, RegisterPage } from './AccountPages';
+import NotificationsPage from './NotificationsPage';
 import { BottomNav } from './components';
 
 function AppFrame({ children }: { children: ReactNode }) {
@@ -109,6 +110,14 @@ export function CustomerRoutes() {
         element={
           <AppFrame>
             <OrdersPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/app/notificaciones"
+        element={
+          <AppFrame>
+            <NotificationsPage />
           </AppFrame>
         }
       />

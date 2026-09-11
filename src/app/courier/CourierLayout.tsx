@@ -17,6 +17,7 @@ import {
   courierSubscribeToOrders,
 } from '../../lib/courierOrders';
 import type { DbCourier } from '../../types/app';
+import { NotificationBell } from '../../components/notifications/NotificationComponents';
 
 interface CourierLayoutProps {
   children: ReactNode;
@@ -243,6 +244,9 @@ export function CourierLayout({ children }: CourierLayoutProps) {
                 <span>{courier.available ? 'En Guardia' : 'No disponible'}</span>
               </button>
             ) : null}
+
+            {/* Campana de Notificaciones */}
+            <NotificationBell buttonId="courier-header-notification-bell" />
 
             {/* Enlace desktop a la app o salir */}
             <Link

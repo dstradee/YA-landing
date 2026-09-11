@@ -805,3 +805,61 @@ export type IncidentsSummary = {
   requires_refund_review_count: number;
 };
 
+// ==============================================================================
+// 10. MODELO FASE 8: NOTIFICACIONES Y PREFERENCIAS
+// ==============================================================================
+export type NotificationType =
+  | 'order_received'
+  | 'payment_confirmed'
+  | 'order_preparing'
+  | 'order_sourcing'
+  | 'order_prepared'
+  | 'order_delivering'
+  | 'order_delivered'
+  | 'order_cancelled'
+  | 'courier_order_available'
+  | 'courier_order_assigned'
+  | 'courier_incident_alert'
+  | 'order_incident'
+  | 'admin_new_order'
+  | 'admin_critical_incident'
+  | 'admin_sourcing_needed'
+  | 'promotion'
+  | 'system_alert';
+
+export type NotificationChannel = 'in_app' | 'email' | 'push' | 'sms' | 'whatsapp';
+
+export type DbNotification = {
+  id: string;
+  user_id: string;
+  order_id: string | null;
+  incident_id: string | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  link: string | null;
+  channel: NotificationChannel;
+  read: boolean;
+  read_at: string | null;
+  is_test: boolean;
+  data: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DbNotificationPreferences = {
+  user_id: string;
+  order_updates: boolean;
+  important_alerts: boolean;
+  promotions: boolean;
+  email_enabled: boolean;
+  push_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationsFetchResult = {
+  notifications: DbNotification[];
+  unread_count: number;
+  total_count: number;
+};
+

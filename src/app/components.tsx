@@ -16,6 +16,7 @@ import { euro } from '../data/products';
 import type { OrderStatus, Product } from '../types/app';
 import { useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
+import { NotificationBell } from '../components/notifications/NotificationComponents';
 
 export function AppHeader({ back }: { back?: boolean }) {
   const { count } = useCart();
@@ -44,7 +45,8 @@ export function AppHeader({ back }: { back?: boolean }) {
           </span>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <NotificationBell buttonId="customer-notification-bell" />
           <Link
             id="header-cart-btn"
             to="/app/carrito"
@@ -71,6 +73,7 @@ export function AppHeader({ back }: { back?: boolean }) {
     </header>
   );
 }
+
 
 export function BottomNav() {
   const nav = [
