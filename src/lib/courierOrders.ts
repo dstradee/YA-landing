@@ -7,6 +7,9 @@ import type {
   CourierOrderListItem,
   CourierOrderDetail,
   CourierDaySummary,
+  CourierOrderEarningsCalculation,
+  CourierEarningsSummary,
+  CourierDeliveredOrderEarningsItem,
   Address,
 } from '../types/app';
 
@@ -678,3 +681,258 @@ export function courierSubscribeToOrders(
     return () => {};
   }
 }
+
+/**
+ * FASE 4D: Calcula de forma atómica y pura la ganancia de un pedido asignado a repartidor.
+ * Fórmula: Ganancia = (subtotal * commission_percent / 100) + fixed_fee
+ * Utiliza los valores congelados en el pedido (courier_commission_percent, courier_fixed_fee).
+ */
+export function calculateCourierOrderEarnings(order: {
+  subtotal?: number | null;
+  courier_commission_percent?: number | null;
+  courier_fixed_fee?: number | null;
+  courier_payout_total?: number | null;
+  status?: string | null;
+}): CourierOrderEarningsCalculation {
+  const isDelivered = order.status === 'delivered';
+  const commPercent = order.courier_commission_percent != null ? Number(order.courier_commission_percent) : null;
+  const fixedFee = order.courier_fixed_fee != null ? Number(order.courier_fixed_fee) : null;
+  const subtotal = Number(order.subtotal || 0);
+
+  const hasCommissionConfigured = commPercent !== null || fixedFee !== null;
+
+  if (!hasCommissionConfigured) {
+    return {
+      earnings: 0,
+      hasCommissionConfigured: false,
+      commissionPercent: 0,
+      fixedFee: 0,
+      commissionAmount: 0,
+      fixedFeeAmount: 0,
+      formulaText: 'No calculada (sin comisión configurada)',
+    };
+  }
+
+  const safePercent = commPercent ?? 0;
+  const safeFixed = fixedFee ?? 0;
+  const commissionAmount = Math.round((subtotal * (safePercent / 100)) * 100) / 100;
+  const fixedFeeAmount = Math.round(safeFixed * 100) / 100;
+  const computedTotal = Math.round((commissionAmount + fixedFeeAmount) * 100) / 100;
+
+  // Si está entregado y tiene courier_payout_total explícito, respetamos el congelado; si no, el computado
+  const finalEarnings = order.courier_payout_total != null ? Number(order.courier_payout_total) : computedTotal;
+
+  const formulaText = `${subtotal.toFixed(2)} € × ${safePercent}% (${commissionAmount.toFixed(2)} €) + ${fixedFeeAmount.toFixed(2)} € fijo = ${computedTotal.toFixed(2)} €`;
+
+  return {
+    earnings: isDelivered ? finalEarnings : computedTotal,
+    hasCommissionConfigured: true,
+    commissionPercent: safePercent,
+    fixedFee: safeFixed,
+    commissionAmount,
+    fixedFeeAmount,
+    formulaText,
+  };
+}
+
+/**
+ * FASE 4D: Obtiene el resumen de ganancias del repartidor autenticado.
+ * Primero intenta llamar a la RPC segura courier_get_earnings_summary()
+ * y utiliza fallback protegido por RLS sobre public.orders.
+ */
+export async function courierFetchEarningsSummary(courierId: string): Promise<{
+  summary: CourierEarningsSummary;
+  orders: CourierDeliveredOrderEarningsItem[];
+  error: string | null;
+}> {
+  const fallbackSummary: CourierEarningsSummary = {
+    today: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    thisWeek: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    thisMonth: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    allTime: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+  };
+
+  if (!isSupabaseConfigured || !courierId) {
+    return { summary: fallbackSummary, orders: [], error: null };
+  }
+
+  try {
+    // 1. Intentar llamar al RPC seguro courier_get_earnings_summary
+    const { data: rpcData, error: rpcError } = await supabase.rpc('courier_get_earnings_summary');
+
+    if (!rpcError && rpcData && typeof rpcData === 'object' && rpcData.today) {
+      const today = rpcData.today || { earnings: 0, count: 0, avg: 0 };
+      const thisWeek = rpcData.this_week || { earnings: 0, count: 0, avg: 0 };
+      const thisMonth = rpcData.this_month || { earnings: 0, count: 0, avg: 0 };
+      const allTime = rpcData.all_time || { earnings: 0, count: 0, avg: 0 };
+
+      const parsedOrders: CourierDeliveredOrderEarningsItem[] = (rpcData.orders || []).map((o: any) => {
+        const calc = calculateCourierOrderEarnings({
+          subtotal: o.subtotal,
+          courier_commission_percent: o.commission_percent,
+          courier_fixed_fee: o.fixed_fee,
+          courier_payout_total: o.payout_total,
+          status: 'delivered',
+        });
+
+        const snapshot = o.delivery_address_snapshot as Address | null;
+        return {
+          id: o.id,
+          orderNumber: o.order_number,
+          subtotal: Number(o.subtotal || 0),
+          deliveryFee: Number(o.delivery_fee || 0),
+          total: Number(o.total || 0),
+          paymentMethod: o.payment_method || 'card',
+          isTest: Boolean(o.is_test),
+          commissionPercent: o.commission_percent != null ? Number(o.commission_percent) : null,
+          fixedFee: o.fixed_fee != null ? Number(o.fixed_fee) : null,
+          payoutTotal: calc.earnings,
+          hasCommissionConfigured: calc.hasCommissionConfigured,
+          deliveredAt: o.delivered_at,
+          createdAt: o.created_at,
+          customerName: snapshot?.name || 'Cliente YA',
+          customerPhone: snapshot?.phone || null,
+          deliveryAddress: snapshot || null,
+          calculation: calc,
+        };
+      });
+
+      return {
+        summary: {
+          today: {
+            earnings: Number(today.earnings || 0),
+            deliveredCount: Number(today.count || 0),
+            avgPerDelivery: Number(today.avg || 0),
+          },
+          thisWeek: {
+            earnings: Number(thisWeek.earnings || 0),
+            deliveredCount: Number(thisWeek.count || 0),
+            avgPerDelivery: Number(thisWeek.avg || 0),
+          },
+          thisMonth: {
+            earnings: Number(thisMonth.earnings || 0),
+            deliveredCount: Number(thisMonth.count || 0),
+            avgPerDelivery: Number(thisMonth.avg || 0),
+          },
+          allTime: {
+            earnings: Number(allTime.earnings || 0),
+            deliveredCount: Number(allTime.count || 0),
+            avgPerDelivery: Number(allTime.avg || 0),
+          },
+        },
+        orders: parsedOrders,
+        error: null,
+      };
+    }
+
+    // 2. Fallback resiliente: consultar directamente public.orders con RLS
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('courier_id', courierId)
+      .eq('status', 'delivered')
+      .order('delivered_at', { ascending: false });
+
+    if (ordersError) {
+      return { summary: fallbackSummary, orders: [], error: ordersError.message };
+    }
+
+    const orders = (ordersData || []) as DbOrder[];
+    const now = new Date();
+
+    // Rango hoy (desde 00:00:00 local)
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+    // Rango esta semana (desde lunes 00:00:00)
+    const dayOfWeek = (now.getDay() + 6) % 7; // 0 para lunes, 6 para domingo
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
+
+    // Rango este mes (desde el 1 del mes 00:00:00)
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    let todayEarnings = 0;
+    let todayCount = 0;
+    let weekEarnings = 0;
+    let weekCount = 0;
+    let monthEarnings = 0;
+    let monthCount = 0;
+    let allTimeEarnings = 0;
+    let allTimeCount = orders.length;
+
+    const parsedOrders: CourierDeliveredOrderEarningsItem[] = orders.map((order) => {
+      const calc = calculateCourierOrderEarnings(order);
+      const deliveryDate = new Date(order.delivered_at || order.updated_at || order.created_at);
+
+      if (deliveryDate >= todayStart) {
+        todayEarnings += calc.earnings;
+        todayCount++;
+      }
+      if (deliveryDate >= weekStart) {
+        weekEarnings += calc.earnings;
+        weekCount++;
+      }
+      if (deliveryDate >= monthStart) {
+        monthEarnings += calc.earnings;
+        monthCount++;
+      }
+      allTimeEarnings += calc.earnings;
+
+      const snapshot = order.delivery_address_snapshot as Address | null;
+      return {
+        id: order.id,
+        orderNumber: order.order_number,
+        subtotal: Number(order.subtotal || 0),
+        deliveryFee: Number(order.delivery_fee || 0),
+        total: Number(order.total || 0),
+        paymentMethod: order.payment_method || 'card',
+        isTest: Boolean(order.is_test),
+        commissionPercent: order.courier_commission_percent != null ? Number(order.courier_commission_percent) : null,
+        fixedFee: order.courier_fixed_fee != null ? Number(order.courier_fixed_fee) : null,
+        payoutTotal: calc.earnings,
+        hasCommissionConfigured: calc.hasCommissionConfigured,
+        deliveredAt: order.delivered_at || order.updated_at,
+        createdAt: order.created_at,
+        customerName: snapshot?.name || 'Cliente YA',
+        customerPhone: snapshot?.phone || null,
+        deliveryAddress: snapshot || null,
+        calculation: calc,
+      };
+    });
+
+    const round = (val: number) => Math.round(val * 100) / 100;
+
+    return {
+      summary: {
+        today: {
+          earnings: round(todayEarnings),
+          deliveredCount: todayCount,
+          avgPerDelivery: todayCount > 0 ? round(todayEarnings / todayCount) : 0,
+        },
+        thisWeek: {
+          earnings: round(weekEarnings),
+          deliveredCount: weekCount,
+          avgPerDelivery: weekCount > 0 ? round(weekEarnings / weekCount) : 0,
+        },
+        thisMonth: {
+          earnings: round(monthEarnings),
+          deliveredCount: monthCount,
+          avgPerDelivery: monthCount > 0 ? round(monthEarnings / monthCount) : 0,
+        },
+        allTime: {
+          earnings: round(allTimeEarnings),
+          deliveredCount: allTimeCount,
+          avgPerDelivery: allTimeCount > 0 ? round(allTimeEarnings / allTimeCount) : 0,
+        },
+      },
+      orders: parsedOrders,
+      error: null,
+    };
+  } catch (err: unknown) {
+    return {
+      summary: fallbackSummary,
+      orders: [],
+      error: err instanceof Error ? err.message : 'Error inesperado al consultar ganancias del repartidor.',
+    };
+  }
+}
+

@@ -7,15 +7,26 @@ import {
   Search,
   ChevronRight,
   PackageCheck,
+  DollarSign,
+  TrendingUp,
 } from 'lucide-react';
 import {
   courierFetchCurrentProfile,
-  courierFetchOrders,
+  courierFetchEarningsSummary,
 } from '../../lib/courierOrders';
-import type { CourierOrderListItem } from '../../types/app';
+import type {
+  CourierEarningsSummary,
+  CourierDeliveredOrderEarningsItem,
+} from '../../types/app';
 
 export function CourierDeliveredPage() {
-  const [orders, setOrders] = useState<CourierOrderListItem[]>([]);
+  const [orders, setOrders] = useState<CourierDeliveredOrderEarningsItem[]>([]);
+  const [earningsSummary, setEarningsSummary] = useState<CourierEarningsSummary>({
+    today: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    thisWeek: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    thisMonth: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    allTime: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,11 +37,9 @@ export function CourierDeliveredPage() {
 
     const profileRes = await courierFetchCurrentProfile();
     if (profileRes.courier) {
-      const ordersRes = await courierFetchOrders({
-        courierId: profileRes.courier.id,
-        filter: 'delivered',
-      });
-      setOrders(ordersRes.orders);
+      const res = await courierFetchEarningsSummary(profileRes.courier.id);
+      setEarningsSummary(res.summary);
+      setOrders(res.orders);
     }
 
     setLoading(false);
@@ -44,9 +53,9 @@ export function CourierDeliveredPage() {
   const filteredOrders = orders.filter((o) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
-    const orderNum = o.order_number.toLowerCase();
+    const orderNum = o.orderNumber.toLowerCase();
     const customer = o.customerName.toLowerCase();
-    const street = (o.deliveryAddress?.street || o.delivery_address_snapshot?.street || '').toLowerCase();
+    const street = (o.deliveryAddress?.street || '').toLowerCase();
     return orderNum.includes(term) || customer.includes(term) || street.includes(term);
   });
 
@@ -55,9 +64,9 @@ export function CourierDeliveredPage() {
       {/* Cabecera */}
       <div className="flex items-center justify-between border-b-2 border-ya-gray pb-3">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tight">Entregados</h1>
+          <h1 className="text-2xl font-black uppercase tracking-tight">Entregas y Ganancias</h1>
           <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">
-            Historial de pedidos completados ({orders.length})
+            Historial de pedidos completados y liquidación ({orders.length})
           </p>
         </div>
 
@@ -69,6 +78,58 @@ export function CourierDeliveredPage() {
           <RefreshCw size={13} className={refreshing ? 'animate-spin text-ya-lime' : ''} />
           <span>Refrescar</span>
         </button>
+      </div>
+
+      {/* Resumen de Ganancias (Fase 4D) */}
+      <div className="bg-ya-black border-2 border-ya-gray p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={16} className="text-ya-lime" />
+          <h2 className="text-xs font-black uppercase tracking-widest text-white">
+            Liquidación Acumulada
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Hoy</div>
+            <div className="text-xl font-black text-ya-lime mt-0.5">
+              {earningsSummary.today.earnings.toFixed(2)} €
+            </div>
+            <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+              {earningsSummary.today.deliveredCount} entregas
+            </div>
+          </div>
+
+          <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Esta Semana</div>
+            <div className="text-xl font-black text-white mt-0.5">
+              {earningsSummary.thisWeek.earnings.toFixed(2)} €
+            </div>
+            <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+              {earningsSummary.thisWeek.deliveredCount} entregas
+            </div>
+          </div>
+
+          <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Este Mes</div>
+            <div className="text-xl font-black text-white mt-0.5">
+              {earningsSummary.thisMonth.earnings.toFixed(2)} €
+            </div>
+            <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+              {earningsSummary.thisMonth.deliveredCount} entregas
+            </div>
+          </div>
+
+          <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+            <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Total Histórico</div>
+            <div className="text-xl font-black text-white mt-0.5">
+              {earningsSummary.allTime.earnings.toFixed(2)} €
+            </div>
+            <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+              Media: {earningsSummary.allTime.avgPerDelivery.toFixed(2)} € / pedido
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Buscador */}
@@ -102,59 +163,82 @@ export function CourierDeliveredPage() {
           <p className="text-xs text-gray-400 max-w-sm mx-auto">
             {searchTerm
               ? 'Prueba a buscar con otro término.'
-              : 'Los pedidos que marques como entregados aparecerán aquí.'}
+              : 'Los pedidos que marques como entregados aparecerán aquí con su liquidación.'}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {filteredOrders.map((order) => {
-            const deliveredDate = order.delivered_at || order.updated_at;
+            const deliveredDate = order.deliveredAt;
             const addressText = order.deliveryAddress
               ? `${order.deliveryAddress.street || ''} ${order.deliveryAddress.number || ''}`
-              : order.delivery_address_snapshot?.street || 'Dirección registrada';
+              : 'Dirección registrada';
 
             return (
               <div
                 key={order.id}
-                className="border-2 border-ya-gray bg-ya-gray/30 p-3.5 space-y-2 hover:border-gray-500 transition-colors"
+                className="border-2 border-ya-gray bg-ya-gray/30 p-3.5 space-y-2.5 hover:border-gray-500 transition-colors"
               >
+                {/* Fila superior: Nº de pedido, estados y ganancias */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-sm text-ya-lime">
-                        {order.order_number}
+                      <span className="font-mono font-black text-sm text-white">
+                        {order.orderNumber}
                       </span>
                       <span className="px-2 py-0.5 bg-green-950/80 border border-green-500 text-green-400 text-[10px] font-black uppercase tracking-wider">
                         ✓ Entregado
                       </span>
+                      {order.isTest && (
+                        <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-mono uppercase">
+                          Prueba
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
                       <Clock size={12} className="text-gray-500" />
                       <span>
-                        {new Date(deliveredDate).toLocaleDateString('es-ES', {
-                          day: '2-digit',
-                          month: 'short',
-                        })}{' '}
+                        {deliveredDate
+                          ? new Date(deliveredDate).toLocaleDateString('es-ES', {
+                              day: '2-digit',
+                              month: 'short',
+                            })
+                          : '—'}{' '}
                         •{' '}
-                        {new Date(deliveredDate).toLocaleTimeString('es-ES', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {deliveredDate
+                          ? new Date(deliveredDate).toLocaleTimeString('es-ES', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : ''}
                       </span>
                     </div>
                   </div>
 
+                  {/* Bloque de Ganancia Destacada */}
                   <div className="text-right">
-                    <div className="text-sm font-black text-white">
-                      {Number(order.total).toFixed(2)} €
-                    </div>
-                    <div className="text-[10px] text-gray-400 uppercase font-mono">
-                      {order.payment_method}
+                    <div className="text-xs text-gray-400 font-mono uppercase">Tu Ganancia</div>
+                    <div className="text-lg font-black text-ya-lime flex items-center justify-end gap-0.5">
+                      <DollarSign size={16} className="text-ya-lime" />
+                      <span>+{order.payoutTotal.toFixed(2)} €</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-ya-black/50 border border-ya-gray/70 p-2.5 text-xs flex items-start justify-between gap-2">
+                {/* Desglose de liquidación */}
+                <div className="bg-ya-black/70 border border-ya-gray/80 p-2 text-xs flex flex-wrap items-center justify-between gap-2 font-mono">
+                  <div className="text-gray-400 text-[11px]">
+                    <span className="text-gray-500 uppercase mr-1">Fórmula:</span>
+                    <span className="text-gray-300">{order.calculation.formulaText}</span>
+                  </div>
+                  <div className="text-gray-400 text-[11px]">
+                    <span className="text-gray-500 uppercase mr-1">Subtotal:</span>
+                    <span className="text-white font-bold">{order.subtotal.toFixed(2)} €</span>
+                  </div>
+                </div>
+
+                {/* Fila inferior: Dirección y enlace */}
+                <div className="bg-ya-black/40 border border-ya-gray/60 p-2.5 text-xs flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2 min-w-0">
                     <MapPin size={14} className="text-ya-lime shrink-0 mt-0.5" />
                     <div className="truncate">
@@ -169,7 +253,7 @@ export function CourierDeliveredPage() {
                     to={`/repartidor/pedidos/${order.id}`}
                     className="shrink-0 text-xs font-black uppercase tracking-wider text-ya-lime hover:underline flex items-center gap-0.5"
                   >
-                    <span>Ver</span>
+                    <span>Detalle</span>
                     <ChevronRight size={13} />
                   </Link>
                 </div>
@@ -181,3 +265,4 @@ export function CourierDeliveredPage() {
     </div>
   );
 }
+

@@ -8,11 +8,13 @@ import {
   CheckCircle2,
   AlertTriangle,
   CreditCard,
+  DollarSign,
 } from 'lucide-react';
 import {
   courierFetchCurrentProfile,
   courierFetchOrderDetail,
   courierUpdateOrderStatus,
+  calculateCourierOrderEarnings,
 } from '../../lib/courierOrders';
 import type { CourierOrderDetail, DbCourier } from '../../types/app';
 
@@ -286,6 +288,46 @@ export function CourierOrderDetailPage() {
           </div>
         </div>
       </section>
+
+      {/* TARJETA 2B: REMUNERACIÓN DEL REPARTIDOR (FASE 4D) */}
+      {(() => {
+        const calc = calculateCourierOrderEarnings(order);
+        return (
+          <section className="border-2 border-ya-lime/50 bg-ya-black p-4 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-black uppercase tracking-widest text-ya-lime flex items-center gap-1.5">
+                <DollarSign size={15} className="text-ya-lime" />
+                <span>{isDelivered ? 'Ganancia Congelada (Fase 4D)' : 'Remuneración Estimada'}</span>
+              </h2>
+              {isDelivered && (
+                <span className="px-2 py-0.5 bg-ya-lime text-ya-black text-[10px] font-black uppercase tracking-wider">
+                  ✓ Liquidada
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-baseline justify-between pt-1">
+              <div>
+                <div className="text-2xl font-black text-ya-lime">
+                  +{calc.earnings.toFixed(2)} €
+                </div>
+                <div className="text-[11px] font-mono text-gray-300 mt-0.5">
+                  {calc.formulaText}
+                </div>
+              </div>
+
+              {order.is_test && (
+                <div className="text-right">
+                  <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono uppercase">
+                    Pedido de Prueba
+                  </span>
+                  <div className="text-[9px] text-gray-500 font-mono mt-0.5">Sin cobro real</div>
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* TARJETA 3: PRODUCTOS DEL PEDIDO */}
       <section className="border-2 border-ya-gray bg-ya-gray/30 p-4 space-y-3">

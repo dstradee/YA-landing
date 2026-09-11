@@ -16,7 +16,6 @@ import {
   Loader2,
   Shield,
   Bike,
-  Award,
   TrendingUp,
 } from 'lucide-react';
 import {
@@ -553,58 +552,155 @@ export function AdminCourierDetailPage() {
             </div>
           </form>
 
-          {/* Bloque 4: Estadísticas Futuras (Preparado para Fase 4D) */}
+          {/* Bloque 4: Estadísticas Operativas y Liquidaciones de Ganancias (Fase 4D) */}
           <div className="p-5 bg-ya-black border-2 border-ya-gray space-y-4">
             <div className="border-b border-ya-gray pb-2 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
-                  <TrendingUp className="text-gray-400" size={16} />
-                  <span>Estadísticas Operativas y Liquidaciones</span>
+                  <TrendingUp className="text-ya-lime" size={16} />
+                  <span>Liquidaciones y Ganancias (Fase 4D)</span>
                 </h2>
                 <p className="text-[11px] font-mono text-gray-400 mt-0.5">
-                  Métricas de rendimiento e histórico de liquidación del repartidor
+                  Cálculo automático de ganancias por pedidos entregados con tarifas congeladas
                 </p>
               </div>
 
-              <span className="text-[10px] font-mono px-2 py-0.5 bg-ya-gray border border-gray-700 text-gray-300 uppercase">
-                Próximamente · Fase 4D
+              <span className="text-[10px] font-black px-2 py-0.5 bg-ya-lime text-ya-black uppercase">
+                Fase 4D Activa
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-4 bg-ya-gray/30 border border-ya-gray">
+            {/* Tarjetas de métricas financieras */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="p-3 bg-ya-gray/30 border border-ya-gray">
                 <div className="text-[10px] font-mono uppercase text-gray-400 flex items-center gap-1">
                   <Truck size={12} />
-                  <span>Pedidos Entregados</span>
+                  <span>Entregas</span>
                 </div>
-                <div className="text-2xl font-black text-white mt-1">
+                <div className="text-xl font-black text-white mt-1">
                   {summary.totalDeliveries}
                 </div>
-                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Histórico global</div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Histórico total</div>
               </div>
 
-              <div className="p-4 bg-ya-gray/30 border border-ya-gray opacity-80">
+              <div className="p-3 bg-ya-gray/30 border border-ya-gray">
                 <div className="text-[10px] font-mono uppercase text-gray-400 flex items-center gap-1">
-                  <DollarSign size={12} />
-                  <span>Ganancias Acumuladas</span>
+                  <DollarSign size={12} className="text-ya-lime" />
+                  <span>Total Ganancias</span>
                 </div>
-                <div className="text-2xl font-black text-ya-lime/70 mt-1">0,00 €</div>
-                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Fase 4D: Liquidaciones</div>
+                <div className="text-xl font-black text-ya-lime mt-1">
+                  {summary.totalEarnings.toFixed(2)} €
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Acumulado</div>
               </div>
 
-              <div className="p-4 bg-ya-gray/30 border border-ya-gray opacity-80">
-                <div className="text-[10px] font-mono uppercase text-gray-400 flex items-center gap-1">
-                  <Award size={12} />
-                  <span>Recompensas & Bonus</span>
+              <div className="p-3 bg-ya-gray/30 border border-ya-gray">
+                <div className="text-[10px] font-mono uppercase text-gray-400">Hoy</div>
+                <div className="text-xl font-black text-white mt-1">
+                  {(summary.todayEarnings ?? 0).toFixed(2)} €
                 </div>
-                <div className="text-2xl font-black text-gray-400 mt-1">0,00 €</div>
-                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Fase 4E: Recompensas</div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Entregas hoy</div>
+              </div>
+
+              <div className="p-3 bg-ya-gray/30 border border-ya-gray">
+                <div className="text-[10px] font-mono uppercase text-gray-400">Esta Semana</div>
+                <div className="text-xl font-black text-white mt-1">
+                  {(summary.weekEarnings ?? 0).toFixed(2)} €
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Semana en curso</div>
+              </div>
+
+              <div className="p-3 bg-ya-gray/30 border border-ya-gray">
+                <div className="text-[10px] font-mono uppercase text-gray-400">Este Mes</div>
+                <div className="text-xl font-black text-white mt-1">
+                  {(summary.monthEarnings ?? 0).toFixed(2)} €
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Mes en curso</div>
+              </div>
+
+              <div className="p-3 bg-ya-gray/30 border border-ya-gray">
+                <div className="text-[10px] font-mono uppercase text-gray-400">Media / Pedido</div>
+                <div className="text-xl font-black text-ya-lime mt-1">
+                  {(summary.avgPerDelivery ?? 0).toFixed(2)} €
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 mt-0.5">Por entrega</div>
               </div>
             </div>
 
-            <p className="text-[10px] font-mono text-gray-500 italic">
-              * La arquitectura de datos para almacenar comisiones por pedido ya está preparada en la base de datos.
-              El cálculo automatizado de liquidaciones se activará con el módulo 4D.
+            {/* Desglose de pedidos entregados */}
+            <div className="space-y-2 pt-2">
+              <div className="text-xs font-black uppercase text-white tracking-wider flex items-center justify-between">
+                <span>Historial de Liquidación por Pedido</span>
+                <span className="text-gray-400 font-mono text-[11px]">
+                  {detail.deliveredOrders?.length ?? 0} registros
+                </span>
+              </div>
+
+              {!detail.deliveredOrders || detail.deliveredOrders.length === 0 ? (
+                <div className="p-6 border border-dashed border-ya-gray text-center text-gray-400 font-mono text-xs">
+                  Este repartidor aún no ha completado pedidos como entregado.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-ya-gray">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="bg-ya-gray/50 text-gray-400 uppercase text-[10px] border-b border-ya-gray">
+                      <tr>
+                        <th className="py-2.5 px-3">Pedido</th>
+                        <th className="py-2.5 px-3">Fecha Entrega</th>
+                        <th className="py-2.5 px-3">Cliente / Destino</th>
+                        <th className="py-2.5 px-3 text-right">Subtotal Pedido</th>
+                        <th className="py-2.5 px-3">Regla Aplicada</th>
+                        <th className="py-2.5 px-3 text-right">Ganancia Congelada</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ya-gray/30">
+                      {detail.deliveredOrders.map((ord) => (
+                        <tr key={ord.id} className="hover:bg-ya-gray/10">
+                          <td className="py-2.5 px-3 font-bold text-white">
+                            <div className="flex items-center gap-1.5">
+                              <span>{ord.orderNumber}</span>
+                              {ord.isTest && (
+                                <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase">
+                                  Prueba
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-400 text-[11px]">
+                            {ord.deliveredAt
+                              ? new Date(ord.deliveredAt).toLocaleDateString('es-ES', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-300 max-w-[180px] truncate">
+                            <div>{ord.customerName}</div>
+                            {ord.deliveryAddress?.city && (
+                              <div className="text-[10px] text-gray-500">{ord.deliveryAddress.city}</div>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-white">
+                            {ord.subtotal.toFixed(2)} €
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-300 text-[11px]">
+                            <span className="text-gray-400">{ord.calculation.formulaText}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-ya-lime text-sm">
+                            +{ord.payoutTotal.toFixed(2)} €
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[10px] font-mono text-gray-500">
+              * Las ganancias quedan congeladas atómicamente en la columna <code>courier_payout_total</code> al marcar el pedido como entregado (Fase 4D). Los pedidos de prueba calculan la remuneración idéntica con fines de verificación operativa.
             </p>
           </div>
         </div>

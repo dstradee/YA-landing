@@ -8,8 +8,10 @@ import {
   MapPin,
   AlertCircle,
   RefreshCw,
-  CreditCard,
+  
   ChevronRight,
+  DollarSign,
+  TrendingUp,
 } from 'lucide-react';
 import {
   courierFetchCurrentProfile,
@@ -19,12 +21,14 @@ import {
   courierAcceptOrder,
   courierUpdateOrderStatus,
   courierSubscribeToOrders,
+  courierFetchEarningsSummary,
 } from '../../lib/courierOrders';
 import type {
   DbCourier,
   DbProfile,
   CourierOrderListItem,
   CourierDaySummary,
+  CourierEarningsSummary,
   OrderStatus,
 } from '../../types/app';
 
@@ -36,6 +40,12 @@ export function CourierDashboardPage() {
     inProgress: 0,
     deliveredToday: 0,
     totalDelivered: 0,
+  });
+  const [earningsSummary, setEarningsSummary] = useState<CourierEarningsSummary>({
+    today: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    thisWeek: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    thisMonth: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
+    allTime: { earnings: 0, deliveredCount: 0, avgPerDelivery: 0 },
   });
   const [activeOrders, setActiveOrders] = useState<CourierOrderListItem[]>([]);
   const [availableOrders, setAvailableOrders] = useState<CourierOrderListItem[]>([]);
@@ -58,15 +68,17 @@ export function CourierDashboardPage() {
 
       const isAvailable = profileRes.courier.active && profileRes.courier.available;
 
-      const [summaryRes, ordersRes, availableRes] = await Promise.all([
+      const [summaryRes, ordersRes, availableRes, earningsRes] = await Promise.all([
         courierFetchDaySummary(profileRes.courier.id),
         courierFetchOrders({ courierId: profileRes.courier.id, filter: 'active' }),
         isAvailable ? courierFetchAvailableOrders() : Promise.resolve({ orders: [], error: null }),
+        courierFetchEarningsSummary(profileRes.courier.id),
       ]);
 
       setSummary(summaryRes.summary);
       setActiveOrders(ordersRes.orders);
       setAvailableOrders(availableRes.orders || []);
+      setEarningsSummary(earningsRes.summary);
     }
 
     setLoading(false);
@@ -291,17 +303,78 @@ export function CourierDashboardPage() {
             <div className="text-[10px] text-gray-400 font-bold uppercase mt-1">Completadas hoy</div>
           </div>
 
-          {/* Tarjeta de ganancias claramente rotulada como Próximamente / Fase 4D */}
-          <div className="bg-ya-gray/20 border-2 border-dashed border-gray-700 p-3.5 relative overflow-hidden">
+          {/* Tarjeta 4: Ganancias Hoy (Fase 4D Real) */}
+          <div className="bg-ya-gray/30 border-2 border-ya-gray p-3.5 relative overflow-hidden">
             <div className="flex items-center justify-between text-gray-400 mb-1">
-              <span className="text-[10px] font-black uppercase tracking-wider">Ganancias</span>
-              <CreditCard size={16} className="text-gray-500" />
+              <span className="text-[10px] font-black uppercase tracking-wider">Ganancias Hoy</span>
+              <DollarSign size={16} className="text-ya-lime" />
             </div>
-            <div className="text-lg font-black text-gray-400 flex items-center gap-1">
-              <span>-- €</span>
+            <div className="text-2xl sm:text-3xl font-black text-ya-lime">
+              {earningsSummary.today.earnings.toFixed(2)} €
             </div>
-            <div className="text-[9px] font-black uppercase tracking-wider text-ya-lime/90 mt-1">
-              Próximamente · Fase 4D
+            <div className="text-[10px] text-gray-400 font-bold uppercase mt-1">
+              {earningsSummary.today.deliveredCount} entregas hoy
+            </div>
+          </div>
+        </div>
+
+        {/* FASE 4D: Bloque de Resumen Financiero "Mis Ganancias" */}
+        <div className="bg-ya-black border-2 border-ya-gray p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-ya-lime" />
+              <h2 className="text-xs font-black uppercase tracking-widest text-white">
+                Mis Ganancias · Resumen
+              </h2>
+            </div>
+            <Link
+              to="/repartidor/entregados"
+              className="text-[11px] font-black uppercase tracking-wider text-ya-lime hover:underline flex items-center gap-1"
+            >
+              <span>Ver desglose completo</span>
+              <ChevronRight size={13} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+              <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Esta Semana</div>
+              <div className="text-lg font-black text-white mt-0.5">
+                {earningsSummary.thisWeek.earnings.toFixed(2)} €
+              </div>
+              <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                {earningsSummary.thisWeek.deliveredCount} entregas
+              </div>
+            </div>
+
+            <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+              <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Este Mes</div>
+              <div className="text-lg font-black text-white mt-0.5">
+                {earningsSummary.thisMonth.earnings.toFixed(2)} €
+              </div>
+              <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                {earningsSummary.thisMonth.deliveredCount} entregas
+              </div>
+            </div>
+
+            <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+              <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Total Histórico</div>
+              <div className="text-lg font-black text-white mt-0.5">
+                {earningsSummary.allTime.earnings.toFixed(2)} €
+              </div>
+              <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                {earningsSummary.allTime.deliveredCount} entregas
+              </div>
+            </div>
+
+            <div className="bg-ya-gray/40 border border-ya-gray p-2.5">
+              <div className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Media / Entrega</div>
+              <div className="text-lg font-black text-ya-lime mt-0.5">
+                {earningsSummary.allTime.avgPerDelivery.toFixed(2)} €
+              </div>
+              <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                por pedido entregado
+              </div>
             </div>
           </div>
         </div>

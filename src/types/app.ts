@@ -170,7 +170,11 @@ export type DbOrder = {
   notes: string | null;
   delivery_address_snapshot?: Address | null;
   delivered_at?: string | null;
+  courier_assigned_at?: string | null;
   courier_accepted_at?: string | null;
+  courier_commission_percent?: number | null;
+  courier_fixed_fee?: number | null;
+  courier_payout_total?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -228,6 +232,9 @@ export type AdminCourierListItem = DbCourier & {
   phone: string | null;
   user_role: UserRole;
   orders_count?: number;
+  delivered_count?: number;
+  total_earnings?: number;
+  today_earnings?: number;
 };
 
 export type AdminCourierDetail = {
@@ -236,8 +243,13 @@ export type AdminCourierDetail = {
   summary: {
     totalDeliveries: number;
     totalEarnings: number;
+    todayEarnings?: number;
+    weekEarnings?: number;
+    monthEarnings?: number;
+    avgPerDelivery?: number;
     rating: number | null;
   };
+  deliveredOrders?: CourierDeliveredOrderEarningsItem[];
 };
 
 export type DbDeliveryZone = {
@@ -425,6 +437,51 @@ export type CourierDaySummary = {
   inProgress: number;
   deliveredToday: number;
   totalDelivered: number;
+};
+
+// --- FASE 4D: CÁLCULO Y GESTIÓN DE GANANCIAS DE REPARTIDORES ---
+
+export type CourierOrderEarningsCalculation = {
+  earnings: number;
+  hasCommissionConfigured: boolean;
+  commissionPercent: number;
+  fixedFee: number;
+  commissionAmount: number;
+  fixedFeeAmount: number;
+  formulaText: string;
+};
+
+export type CourierEarningsPeriodStats = {
+  earnings: number;
+  deliveredCount: number;
+  avgPerDelivery: number;
+};
+
+export type CourierEarningsSummary = {
+  today: CourierEarningsPeriodStats;
+  thisWeek: CourierEarningsPeriodStats;
+  thisMonth: CourierEarningsPeriodStats;
+  allTime: CourierEarningsPeriodStats;
+};
+
+export type CourierDeliveredOrderEarningsItem = {
+  id: string;
+  orderNumber: string;
+  subtotal: number;
+  deliveryFee: number;
+  total: number;
+  paymentMethod: string;
+  isTest: boolean;
+  commissionPercent: number | null;
+  fixedFee: number | null;
+  payoutTotal: number;
+  hasCommissionConfigured: boolean;
+  deliveredAt: string | null;
+  createdAt: string;
+  customerName: string;
+  customerPhone: string | null;
+  deliveryAddress: Address | null;
+  calculation: CourierOrderEarningsCalculation;
 };
 
 

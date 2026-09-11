@@ -1,9 +1,12 @@
 import { supabase, isSupabaseConfigured } from './supabase';
+import { calculateCourierOrderEarnings } from './courierOrders';
 import type {
   DbCourier,
   DbProfile,
   AdminCourierListItem,
   AdminCourierDetail,
+  CourierDeliveredOrderEarningsItem,
+  Address,
 } from '../types/app';
 
 export interface CourierFilterOptions {
@@ -77,20 +80,43 @@ export async function adminFetchCouriers(
       }
     }
 
-    // 3. Obtener contador de pedidos asociados
+    // 3. Obtener contador de pedidos asociados y métricas de ganancias (Fase 4D)
     const courierIds = couriersData.map((c) => c.id);
     const orderCounts = new Map<string, number>();
+    const deliveredCounts = new Map<string, number>();
+    const totalEarningsMap = new Map<string, number>();
+    const todayEarningsMap = new Map<string, number>();
 
     if (courierIds.length > 0) {
       const { data: ordersData } = await supabase
         .from('orders')
-        .select('courier_id')
+        .select('courier_id, status, subtotal, courier_commission_percent, courier_fixed_fee, courier_payout_total, delivered_at, updated_at')
         .in('courier_id', courierIds);
 
       if (ordersData) {
+        const todayStr = new Date().toISOString().slice(0, 10);
         for (const o of ordersData) {
           if (o.courier_id) {
             orderCounts.set(o.courier_id, (orderCounts.get(o.courier_id) || 0) + 1);
+
+            if (o.status === 'delivered') {
+              deliveredCounts.set(o.courier_id, (deliveredCounts.get(o.courier_id) || 0) + 1);
+
+              const commPercent = o.courier_commission_percent != null ? Number(o.courier_commission_percent) : 0;
+              const fixedFee = o.courier_fixed_fee != null ? Number(o.courier_fixed_fee) : 0;
+              const subtotal = Number(o.subtotal || 0);
+              const computed = Math.round(((subtotal * commPercent / 100) + fixedFee) * 100) / 100;
+              const earnings = o.courier_payout_total != null ? Number(o.courier_payout_total) : computed;
+
+              const curTotal = totalEarningsMap.get(o.courier_id) || 0;
+              totalEarningsMap.set(o.courier_id, Math.round((curTotal + earnings) * 100) / 100);
+
+              const dDate = (o.delivered_at || o.updated_at || '').slice(0, 10);
+              if (dDate === todayStr) {
+                const curToday = todayEarningsMap.get(o.courier_id) || 0;
+                todayEarningsMap.set(o.courier_id, Math.round((curToday + earnings) * 100) / 100);
+              }
+            }
           }
         }
       }
@@ -101,6 +127,9 @@ export async function adminFetchCouriers(
       const prof = profilesMap.get(c.profile_id);
       const item = normalizeCourier(c, prof);
       item.orders_count = orderCounts.get(c.id) || 0;
+      item.delivered_count = deliveredCounts.get(c.id) || 0;
+      item.total_earnings = totalEarningsMap.get(c.id) || 0;
+      item.today_earnings = todayEarningsMap.get(c.id) || 0;
       return item;
     });
 
@@ -174,15 +203,66 @@ export async function adminFetchCourierDetail(
       };
     }
 
-    // 3. Obtener resumen de pedidos
+    // 3. Obtener pedidos entregados y desglose económico (Fase 4D)
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('id, total, status')
-      .eq('courier_id', courierId);
+      .select('*')
+      .eq('courier_id', courierId)
+      .eq('status', 'delivered')
+      .order('delivered_at', { ascending: false });
 
-    const totalDeliveries = (ordersData || []).filter(
-      (o) => o.status === 'delivered'
-    ).length;
+    const deliveredOrdersRaw = (ordersData || []) as any[];
+    const totalDeliveries = deliveredOrdersRaw.length;
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const dayOfWeek = (now.getDay() + 6) % 7;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek, 0, 0, 0, 0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    let todayEarnings = 0;
+    let weekEarnings = 0;
+    let monthEarnings = 0;
+    let totalEarnings = 0;
+
+    const deliveredOrders: CourierDeliveredOrderEarningsItem[] = deliveredOrdersRaw.map((o) => {
+      const calc = calculateCourierOrderEarnings(o);
+      const deliveryDate = new Date(o.delivered_at || o.updated_at || o.created_at);
+
+      if (deliveryDate >= todayStart) {
+        todayEarnings += calc.earnings;
+      }
+      if (deliveryDate >= weekStart) {
+        weekEarnings += calc.earnings;
+      }
+      if (deliveryDate >= monthStart) {
+        monthEarnings += calc.earnings;
+      }
+      totalEarnings += calc.earnings;
+
+      const snapshot = o.delivery_address_snapshot as Address | null;
+      return {
+        id: o.id,
+        orderNumber: o.order_number,
+        subtotal: Number(o.subtotal || 0),
+        deliveryFee: Number(o.delivery_fee || 0),
+        total: Number(o.total || 0),
+        paymentMethod: o.payment_method || 'card',
+        isTest: Boolean(o.is_test),
+        commissionPercent: o.courier_commission_percent != null ? Number(o.courier_commission_percent) : null,
+        fixedFee: o.courier_fixed_fee != null ? Number(o.courier_fixed_fee) : null,
+        payoutTotal: calc.earnings,
+        hasCommissionConfigured: calc.hasCommissionConfigured,
+        deliveredAt: o.delivered_at || o.updated_at,
+        createdAt: o.created_at,
+        customerName: snapshot?.name || 'Cliente YA',
+        customerPhone: snapshot?.phone || null,
+        deliveryAddress: snapshot || null,
+        calculation: calc,
+      };
+    });
+
+    const round = (val: number) => Math.round(val * 100) / 100;
 
     const courier: DbCourier = {
       id: courierData.id,
@@ -202,9 +282,14 @@ export async function adminFetchCourierDetail(
       profile: profileData as DbProfile,
       summary: {
         totalDeliveries,
-        totalEarnings: 0, // Reservado para Fase 4D
+        totalEarnings: round(totalEarnings),
+        todayEarnings: round(todayEarnings),
+        weekEarnings: round(weekEarnings),
+        monthEarnings: round(monthEarnings),
+        avgPerDelivery: totalDeliveries > 0 ? round(totalEarnings / totalDeliveries) : 0,
         rating: null,
       },
+      deliveredOrders,
     };
 
     return { data: detail, error: null };
@@ -529,3 +614,87 @@ export async function adminToggleCourierAvailable(
 
   return { success: true, newAvailable: nextAvailable, error: null };
 }
+
+/**
+ * FASE 4D: Consulta de ganancias por el administrador (global o por repartidor)
+ * Utiliza la RPC admin_get_courier_earnings con fallback resiliente.
+ */
+export async function adminFetchCourierEarnings(courierId?: string): Promise<{
+  today: { earnings: number; count: number; avg: number };
+  thisWeek: { earnings: number; count: number; avg: number };
+  thisMonth: { earnings: number; count: number; avg: number };
+  allTime: { earnings: number; count: number; avg: number };
+  orders: CourierDeliveredOrderEarningsItem[];
+  couriersBreakdown?: any[];
+  error: string | null;
+}> {
+  const fallback = {
+    today: { earnings: 0, count: 0, avg: 0 },
+    thisWeek: { earnings: 0, count: 0, avg: 0 },
+    thisMonth: { earnings: 0, count: 0, avg: 0 },
+    allTime: { earnings: 0, count: 0, avg: 0 },
+    orders: [],
+    error: null,
+  };
+
+  if (!isSupabaseConfigured) {
+    return fallback;
+  }
+
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('admin_get_courier_earnings', {
+      p_courier_id: courierId || null,
+    });
+
+    if (!rpcError && rpcData) {
+      return {
+        today: rpcData.today || fallback.today,
+        thisWeek: rpcData.this_week || fallback.thisWeek,
+        thisMonth: rpcData.this_month || fallback.thisMonth,
+        allTime: rpcData.all_time || fallback.allTime,
+        orders: rpcData.orders || [],
+        couriersBreakdown: rpcData.couriers || [],
+        error: null,
+      };
+    }
+
+    // Fallback: si se especificó courierId, llamar a adminFetchCourierDetail
+    if (courierId) {
+      const detail = await adminFetchCourierDetail(courierId);
+      if (detail.data) {
+        return {
+          today: {
+            earnings: detail.data.summary.todayEarnings || 0,
+            count: 0,
+            avg: 0,
+          },
+          thisWeek: {
+            earnings: detail.data.summary.weekEarnings || 0,
+            count: 0,
+            avg: 0,
+          },
+          thisMonth: {
+            earnings: detail.data.summary.monthEarnings || 0,
+            count: 0,
+            avg: 0,
+          },
+          allTime: {
+            earnings: detail.data.summary.totalEarnings || 0,
+            count: detail.data.summary.totalDeliveries || 0,
+            avg: detail.data.summary.avgPerDelivery || 0,
+          },
+          orders: detail.data.deliveredOrders || [],
+          error: null,
+        };
+      }
+    }
+
+    return fallback;
+  } catch (err: unknown) {
+    return {
+      ...fallback,
+      error: err instanceof Error ? err.message : 'Error al consultar ganancias administrativas.',
+    };
+  }
+}
+

@@ -450,6 +450,7 @@ export function AdminCouriersPage() {
                   <th className="py-3 px-4">Repartidor</th>
                   <th className="py-3 px-4">Contacto</th>
                   <th className="py-3 px-4">Remuneración Configurada</th>
+                  <th className="py-3 px-4">Entregas / Ganancias</th>
                   <th className="py-3 px-4">Estado Operativo</th>
                   <th className="py-3 px-4">Disponibilidad</th>
                   <th className="py-3 px-4 text-right">Acciones</th>
@@ -507,6 +508,21 @@ export function AdminCouriersPage() {
                             + {euro(courier.fixed_fee)} fijo / pedido
                           </span>
                         </div>
+                      </td>
+
+                      {/* Entregas y Ganancias (Fase 4D) */}
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-white text-xs">
+                          {courier.delivered_count ?? 0} entregas
+                        </div>
+                        <div className="text-[11px] font-mono text-ya-lime font-black mt-0.5">
+                          Total: {euro(courier.total_earnings ?? 0)}
+                        </div>
+                        {(courier.today_earnings ?? 0) > 0 && (
+                          <div className="text-[10px] font-mono text-gray-400 mt-0.5">
+                            Hoy: {euro(courier.today_earnings ?? 0)}
+                          </div>
+                        )}
                       </td>
 
                       {/* Estado: Activo / Inactivo */}
@@ -603,6 +619,14 @@ export function AdminCouriersPage() {
                   <span className="text-ya-lime font-black">
                     {courier.commission_percent}% + {euro(courier.fixed_fee)} fijo
                   </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-mono pb-2 border-b border-ya-gray/60">
+                  <span className="text-gray-400">Entregas / Ganancias:</span>
+                  <div className="text-right">
+                    <span className="text-white font-bold mr-2">{courier.delivered_count ?? 0} entregas</span>
+                    <span className="text-ya-lime font-black">{euro(courier.total_earnings ?? 0)}</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-1">
