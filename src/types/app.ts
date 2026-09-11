@@ -662,5 +662,146 @@ export type InventorySummary = {
   estimated_gross_profit: number;
 };
 
+// ==============================================================================
+// 11. FASE 6 — SOURCING / ABASTECIMIENTO
+// ==============================================================================
 
+export type SourcingStatus = 'pending' | 'sourcing' | 'sourced' | 'unavailable' | 'cancelled';
+
+export type DbSourcingItem = {
+  id: string;
+  order_id: string;
+  order_item_id: string | null;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  status: SourcingStatus;
+  is_test: boolean;
+  supplier_name: string | null;
+  supplier_reference: string | null;
+  source_cost: number | null;
+  notes: string | null;
+  managed_by: string | null;
+  created_at: string;
+  updated_at: string;
+  sourced_at: string | null;
+  // Joins y campos enriquecidos para UI
+  order_number?: string;
+  order_status?: OrderStatus;
+  order_created_at?: string;
+  order_notes?: string | null;
+  delivery_address?: any;
+  product_slug?: string;
+  product_image?: string | null;
+  product_price?: number;
+  product_estimated_cost?: number | null;
+  suggested_purchase_locations?: string | null;
+  internal_courier_notes?: string | null;
+};
+
+export type DbSourcingAuditLog = {
+  id: string;
+  sourcing_item_id: string;
+  order_id: string;
+  previous_status: SourcingStatus | null;
+  new_status: SourcingStatus;
+  supplier_name: string | null;
+  source_cost: number | null;
+  notes: string | null;
+  changed_by: string | null;
+  created_at: string;
+};
+
+export type SourcingSummary = {
+  pending_count: number;
+  sourcing_count: number;
+  sourced_today_count: number;
+  unavailable_count: number;
+  orders_pending_sourcing: number;
+};
+
+// ==============================================================================
+// 12. FASE 7 — INCIDENTS / INCIDENCIAS
+// ==============================================================================
+
+export type IncidentType =
+  | 'product_unavailable'
+  | 'partial_order'
+  | 'wrong_product'
+  | 'damaged_product'
+  | 'missing_product'
+  | 'preparation_issue'
+  | 'delivery_issue'
+  | 'customer_unavailable'
+  | 'address_issue'
+  | 'delay'
+  | 'returned_order'
+  | 'other';
+
+export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export type IncidentStatus = 'open' | 'investigating' | 'resolved' | 'cancelled';
+
+export type IncidentOrigin = 'admin' | 'courier' | 'system';
+
+export type DbIncident = {
+  id: string;
+  incident_number: string;
+  order_id: string;
+  order_item_id: string | null;
+  product_id: string | null;
+  type: IncidentType;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  title: string;
+  description: string;
+  internal_notes: string | null;
+  origin: IncidentOrigin;
+  is_test: boolean;
+  requires_refund_review: boolean;
+  courier_id: string | null;
+  reported_by: string | null;
+  resolved_by: string | null;
+  resolution_notes: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+
+  // Campos enriquecidos para UI
+  order_number?: string;
+  order_status?: OrderStatus;
+  order_total?: number;
+  order_is_test?: boolean;
+  order_created_at?: string;
+  customer_name?: string;
+  customer_phone?: string | null;
+  product_name?: string | null;
+  courier_name?: string | null;
+  reported_by_name?: string | null;
+  resolved_by_name?: string | null;
+};
+
+export type DbIncidentAuditLog = {
+  id: string;
+  incident_id: string;
+  order_id: string;
+  action: string;
+  previous_status: IncidentStatus | null;
+  new_status: IncidentStatus | null;
+  previous_severity: IncidentSeverity | null;
+  new_severity: IncidentSeverity | null;
+  notes: string | null;
+  changed_by: string | null;
+  changed_by_name?: string | null;
+  created_at: string;
+};
+
+export type IncidentsSummary = {
+  open_count: number;
+  investigating_count: number;
+  resolved_today_count: number;
+  critical_count: number;
+  affected_orders_count: number;
+  requires_refund_review_count: number;
+};
 

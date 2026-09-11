@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   CreditCard,
   DollarSign,
+  AlertOctagon,
+  X,
 } from 'lucide-react';
 import {
   courierFetchCurrentProfile,
@@ -16,13 +18,19 @@ import {
   courierUpdateOrderStatus,
   calculateCourierOrderEarnings,
 } from '../../lib/courierOrders';
-import type { CourierOrderDetail, DbCourier } from '../../types/app';
+import { courierReportIncident, courierFetchOrderIncidents } from '../../lib/incidents';
+import type { CourierOrderDetail, DbCourier, DbIncident, IncidentType } from '../../types/app';
 
 export function CourierOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
 
   const [courier, setCourier] = useState<DbCourier | null>(null);
   const [order, setOrder] = useState<CourierOrderDetail | null>(null);
+  const [incidents, setIncidents] = useState<DbIncident[]>([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportType, setReportType] = useState<IncidentType>('customer_unavailable');
+  const [reportDesc, setReportDesc] = useState('');
+  const [reporting, setReporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -43,15 +51,22 @@ export function CourierOrderDetailPage() {
 
     setCourier(profileRes.courier);
 
-    const detailRes = await courierFetchOrderDetail({
-      orderId: id,
-      courierId: profileRes.courier.id,
-    });
+    const [detailRes, incRes] = await Promise.all([
+      courierFetchOrderDetail({
+        orderId: id,
+        courierId: profileRes.courier.id,
+      }),
+      courierFetchOrderIncidents(id),
+    ]);
 
     if (detailRes.error) {
       setError(detailRes.error);
     } else {
       setOrder(detailRes.order);
+    }
+
+    if (incRes.incidents) {
+      setIncidents(incRes.incidents);
     }
 
     setLoading(false);
@@ -60,6 +75,31 @@ export function CourierOrderDetailPage() {
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+
+  const handleCourierReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!courier || !order) return;
+    if (!reportDesc.trim()) {
+      setActionError('Describe brevemente lo ocurrido para que central te asista.');
+      return;
+    }
+    setReporting(true);
+    const res = await courierReportIncident({
+      orderId: order.id,
+      type: reportType,
+      title: `Incidencia en reparto: ${reportType}`,
+      description: reportDesc,
+    });
+    setReporting(false);
+    if (res.error) {
+      setActionError(res.error);
+    } else {
+      setShowReportModal(false);
+      setReportDesc('');
+      const refreshed = await courierFetchOrderIncidents(order.id);
+      if (refreshed.incidents) setIncidents(refreshed.incidents);
+    }
+  };
 
   const handleAction = async (action: 'accept' | 'delivering' | 'delivered') => {
     if (!courier || !order) return;
@@ -381,6 +421,62 @@ export function CourierOrderDetailPage() {
         </div>
       </section>
 
+      {/* SECCIÓN: INCIDENCIAS REPORTADAS (FASE 7) */}
+      <section className="border-2 border-rose-500/40 bg-rose-950/20 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-black uppercase tracking-widest text-rose-400 flex items-center gap-1.5">
+            <AlertOctagon size={15} className="text-rose-400" />
+            <span>Incidencias y Ayuda en Ruta ({incidents.length})</span>
+          </h2>
+          {!isDelivered && (
+            <button
+              type="button"
+              onClick={() => setShowReportModal(true)}
+              className="px-2.5 py-1 bg-rose-500 hover:bg-white hover:text-black text-white text-[10px] font-black uppercase tracking-wider transition-colors"
+            >
+              + Reportar Problema
+            </button>
+          )}
+        </div>
+
+        {incidents.length === 0 ? (
+          <p className="text-[11px] text-gray-400 font-mono">
+            Sin incidencias en esta entrega. Si surge algún imprevisto (cliente ausente, dirección errónea o producto roto), repórtalo directamente.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {incidents.map((inc) => (
+              <div
+                key={inc.id}
+                className="p-2.5 bg-ya-black/80 border border-rose-500/40 text-xs space-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-ya-lime text-[11px]">
+                    {inc.incident_number}
+                  </span>
+                  <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider border ${
+                    inc.status === 'resolved'
+                      ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10'
+                      : inc.status === 'investigating'
+                      ? 'border-blue-400 text-blue-400 bg-blue-400/10'
+                      : 'border-amber-500 text-amber-400 bg-amber-500/10'
+                  }`}>
+                    {inc.status === 'resolved' ? 'Resuelta' : inc.status === 'investigating' ? 'En gestión' : 'Abierta'}
+                  </span>
+                </div>
+                <div className="font-bold text-white text-[11px]">{inc.title}</div>
+                <div className="text-[10px] text-gray-300">{inc.description}</div>
+                {inc.resolution_notes && (
+                  <div className="text-[10px] text-emerald-300 font-mono pt-1 border-t border-ya-gray/40">
+                    Instrucción de Central: {inc.resolution_notes}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* BARRA DE ACCIÓN INFERIOR OPERATIVA (TÁCTIL Y VISIBLE) */}
       {!isDelivered && (
         <div className="sticky bottom-16 sm:bottom-0 left-0 right-0 bg-ya-black/95 backdrop-blur-md border-2 border-ya-gray p-3 shadow-2xl z-30">
@@ -417,6 +513,82 @@ export function CourierOrderDetailPage() {
                 {processing ? 'Guardando entrega...' : '✓ Marcar como Entregado al Cliente'}
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA REPORTAR INCIDENCIA POR EL REPARTIDOR */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4">
+          <div className="bg-ya-black border-4 border-ya-gray max-w-sm w-full p-5 text-white max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-ya-gray mb-3">
+              <div className="flex items-center gap-2">
+                <AlertOctagon className="text-rose-500" size={18} />
+                <h3 className="text-sm font-black uppercase tracking-tight">Reportar Incidencia en Ruta</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCourierReportSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-gray-400 font-mono uppercase text-[10px] mb-1">
+                  Motivo principal *
+                </label>
+                <select
+                  value={reportType}
+                  onChange={(e) => setReportType(e.target.value as IncidentType)}
+                  className="w-full bg-ya-gray/30 border-2 border-ya-gray p-2 text-white focus:border-ya-lime focus:outline-none"
+                >
+                  <option value="customer_unavailable">Cliente ausente / no responde</option>
+                  <option value="address_issue">Dirección errónea o portal inaccesible</option>
+                  <option value="damaged_product">Producto roto / dañado</option>
+                  <option value="delay">Retraso grave en ruta</option>
+                  <option value="delivery_issue">Problema con el vehículo / reparto</option>
+                  <option value="other">Otro motivo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-400 font-mono uppercase text-[10px] mb-1">
+                  ¿Qué ha ocurrido? (Detalles) *
+                </label>
+                <textarea
+                  rows={3}
+                  value={reportDesc}
+                  onChange={(e) => setReportDesc(e.target.value)}
+                  placeholder="Ej: He llamado 3 veces al timbre y teléfono pero no contesta nadie..."
+                  required
+                  className="w-full bg-ya-gray/30 border-2 border-ya-gray p-2 text-white focus:border-ya-lime focus:outline-none text-xs"
+                />
+              </div>
+
+              <p className="text-[10px] text-gray-400 font-mono">
+                Central YA recibirá tu aviso inmediatamente para asistirte o contactar con el cliente.
+              </p>
+
+              <div className="flex gap-2 pt-2 border-t border-ya-gray">
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(false)}
+                  className="flex-1 py-2 border-2 border-ya-gray text-gray-400 hover:text-white uppercase font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={reporting}
+                  className="flex-1 py-2 bg-rose-500 text-white font-black uppercase tracking-wider hover:bg-rose-600 transition-colors disabled:opacity-50"
+                >
+                  {reporting ? 'Enviando...' : 'Enviar a Central'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

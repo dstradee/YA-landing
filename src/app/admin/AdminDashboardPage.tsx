@@ -14,10 +14,14 @@ import {
   ArrowUpRight,
   TrendingUp,
   Boxes,
+  PackageSearch,
+  AlertOctagon,
 } from 'lucide-react';
 import { adminFetchDashboardStats } from '../../lib/adminStats';
 import { fetchInventorySummary } from '../../lib/adminInventory';
-import type { AdminDashboardStats, AdminOrderListItem, OrderStatus, InventorySummary } from '../../types/app';
+import { adminGetSourcingSummary } from '../../lib/sourcing';
+import { adminGetIncidentsSummary } from '../../lib/incidents';
+import type { AdminDashboardStats, AdminOrderListItem, OrderStatus, InventorySummary, SourcingSummary, IncidentsSummary } from '../../types/app';
 import { euro } from '../../data/products';
 
 const statusBadges: Record<OrderStatus, { label: string; className: string }> = {
@@ -37,15 +41,19 @@ export function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<AdminOrderListItem[]>([]);
   const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
+  const [sourcingSummary, setSourcingSummary] = useState<SourcingSummary | null>(null);
+  const [incidentsSummary, setIncidentsSummary] = useState<IncidentsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [res, invRes] = await Promise.all([
+    const [res, invRes, sourcingRes, incidentsRes] = await Promise.all([
       adminFetchDashboardStats(),
       fetchInventorySummary(),
+      adminGetSourcingSummary(),
+      adminGetIncidentsSummary(),
     ]);
 
     if (res.error) {
@@ -57,6 +65,14 @@ export function AdminDashboardPage() {
 
     if (invRes.data) {
       setInventorySummary(invRes.data);
+    }
+
+    if (sourcingRes.data) {
+      setSourcingSummary(sourcingRes.data);
+    }
+
+    if (incidentsRes.data) {
+      setIncidentsSummary(incidentsRes.data);
     }
 
     setLoading(false);
@@ -232,6 +248,62 @@ export function AdminDashboardPage() {
             className="px-4 py-2 bg-amber-500 text-black font-black uppercase tracking-wider text-xs hover:bg-white transition-colors shrink-0"
           >
             Gestionar Inventario →
+          </Link>
+        </div>
+      )}
+
+      {/* Alerta de Abastecimiento / Sourcing (Fase 6) */}
+      {sourcingSummary && (sourcingSummary.pending_count > 0 || sourcingSummary.sourcing_count > 0) && (
+        <div className="border-4 border-purple-500/80 bg-purple-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 border border-purple-500 bg-purple-500/20 text-purple-300 shrink-0 animate-pulse">
+              <PackageSearch size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-purple-300 font-mono">
+                Ruta de Abastecimiento Activa (Fase 6)
+              </p>
+              <p className="text-xs text-gray-200 mt-0.5">
+                Hay <strong className="text-white">{sourcingSummary.pending_count} artículos pendientes</strong> y{' '}
+                <strong className="text-purple-300">{sourcingSummary.sourcing_count} en ruta de compra</strong> para{' '}
+                <strong className="text-ya-lime">{sourcingSummary.orders_pending_sourcing} pedido(s)</strong>.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/abastecimiento"
+            className="px-4 py-2 bg-purple-500 text-white font-black uppercase tracking-wider text-xs hover:bg-white hover:text-black transition-colors shrink-0"
+          >
+            Ver Abastecimiento →
+          </Link>
+        </div>
+      )}
+
+      {/* Alerta de Incidencias Operativas (Fase 7) */}
+      {incidentsSummary && (incidentsSummary.open_count > 0 || incidentsSummary.critical_count > 0) && (
+        <div className="border-4 border-rose-500/80 bg-rose-950/25 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 border border-rose-500 bg-rose-500/20 text-rose-400 shrink-0 animate-pulse">
+              <AlertOctagon size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-rose-400 font-mono">
+                Incidencias Operativas Activas (Fase 7)
+              </p>
+              <p className="text-xs text-gray-200 mt-0.5">
+                Hay <strong className="text-white">{incidentsSummary.open_count} incidencia(s) abiertas</strong>
+                {incidentsSummary.critical_count > 0 && (
+                  <span className="text-rose-400"> ({incidentsSummary.critical_count} de alta prioridad / críticas)</span>
+                )}{' '}
+                afectando a <strong className="text-ya-lime">{incidentsSummary.affected_orders_count} pedido(s)</strong>.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/incidencias"
+            className="px-4 py-2 bg-rose-500 text-white font-black uppercase tracking-wider text-xs hover:bg-white hover:text-black transition-colors shrink-0"
+          >
+            Gestionar Incidencias →
           </Link>
         </div>
       )}
