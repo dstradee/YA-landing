@@ -11,8 +11,6 @@ import {
   confirmOrderInDatabase,
   verifyPayPalWebhookSignature,
   isPayPalSandbox,
-  PAYPAL_MODE,
-  getPayPalCredentials,
 } from './paypalServer';
 
 function parseJsonBody(req: IncomingMessage): Promise<any> {
@@ -45,31 +43,31 @@ export async function handlePayPalDevRequest(
 ) {
   const url = req.url?.split('?')[0];
 
-  if (!url?.startsWith('/api/paypal/')) {
+  if (!url?.startsWith('/api/paypal/') && !url?.startsWith('/api/stripe/')) {
     return next();
   }
 
   try {
     // 1. /api/paypal/config
     if (url === '/api/paypal/config' && req.method === 'GET') {
-      const { clientId, clientSecret } = getPayPalCredentials();
-      const hasRealCredentials = Boolean(clientId && clientSecret);
+      const hasRealCredentials = Boolean(process.env.STRIPE_SECRET_KEY);
+      const publishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 
       return sendJson(res, 200, {
-        clientId: clientId || process.env.VITE_PAYPAL_CLIENT_ID || '',
-        environment: PAYPAL_MODE,
+        clientId: publishableKey,
+        environment: 'live',
         currency: 'EUR',
-        isSandbox: isPayPalSandbox,
+        isSandbox: false,
         hasRealCredentials,
         enabledMethods: {
-          paypal: true,
+          paypal: false,
           card: true,
-          googlepay: false,
-          applepay: false,
+          googlepay: true,
+          applepay: true,
           bizum: false,
         },
         bizumNotice:
-          'Bizum no es una pasarela procesada por PayPal. Los pagos se procesan de forma segura e inmediata con PayPal o Tarjeta.',
+          'Los pagos se procesan de forma 100% segura mediante Stripe (Tarjeta, Apple Pay, Google Pay).',
       });
     }
 
@@ -130,13 +128,13 @@ export async function handlePayPalDevRequest(
           .insert({
             order_id: orderId,
             user_id: orderUserId,
-            provider: 'paypal',
+            provider: 'stripe',
             provider_order_id: result.paypalOrderId,
-            payment_method: paymentMethod || 'paypal',
+            payment_method: paymentMethod || 'card',
             status: 'pending',
             amount: orderTotal,
             currency: 'EUR',
-            raw_payload: { paypal_order_id: result.paypalOrderId },
+            raw_payload: { stripe_session_id: result.paypalOrderId },
           });
       }
 
@@ -174,7 +172,7 @@ export async function handlePayPalDevRequest(
             .from('payments')
             .select('order_id')
             .eq('provider_order_id', paypalOrderId)
-            .eq('provider', 'paypal')
+            .in('provider', ['stripe', 'paypal'])
             .maybeSingle();
 
           if (payRec?.order_id) {
@@ -208,12 +206,12 @@ export async function handlePayPalDevRequest(
           });
         }
 
-        // Relación PayPal: comprobar que la orden coincide si ya fue registrada en payments
+        // Relación: comprobar que la orden coincide si ya fue registrada en payments
         const { data: existingPayment } = await supabase
           .from('payments')
           .select('id, provider_order_id, provider_capture_id, status')
           .eq('order_id', order.id)
-          .eq('provider', 'paypal')
+          .in('provider', ['stripe', 'paypal'])
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -245,7 +243,7 @@ export async function handlePayPalDevRequest(
 
         if (existingPayment?.provider_order_id && paypalOrderId && existingPayment.provider_order_id !== paypalOrderId) {
           return sendJson(res, 400, {
-            error: 'Inconsistencia de seguridad: el identificador de orden de PayPal no coincide con el registrado para este pedido.',
+            error: 'Inconsistencia de seguridad: el identificador de orden no coincide con el registrado para este pedido.',
           });
         }
 
@@ -254,7 +252,7 @@ export async function handlePayPalDevRequest(
 
       if (!paypalOrderId) {
         return sendJson(res, 400, {
-          error: 'Falta el identificador de orden de PayPal (paypalOrderId).',
+          error: 'Falta el identificador de orden de pago (paypalOrderId).',
         });
       }
 
@@ -271,9 +269,9 @@ export async function handlePayPalDevRequest(
         console.error('Error capturando orden en dev middleware:', captureErr);
         const httpStatus = typeof captureErr?.status === 'number' && captureErr.status >= 400 && captureErr.status < 600 ? captureErr.status : 422;
         return sendJson(res, httpStatus, {
-          error: captureErr?.message || 'No se pudo capturar el pago en PayPal.',
-          name: captureErr?.paypalName || captureErr?.name || 'PayPalCaptureError',
-          message: captureErr?.paypalMessage || captureErr?.message || 'Error en validación de PayPal',
+          error: captureErr?.message || 'No se pudo capturar el pago en la pasarela.',
+          name: captureErr?.paypalName || captureErr?.name || 'PaymentCaptureError',
+          message: captureErr?.paypalMessage || captureErr?.message || 'Error en validación de pago',
           debug_id: captureErr?.debug_id || null,
           details: captureErr?.details || [],
           links: captureErr?.links || [],

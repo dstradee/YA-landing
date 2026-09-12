@@ -83,20 +83,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       cancelUrl,
     });
 
-    // 6. Persistir el intento de pago e ID de orden PayPal en public.payments (esquema real)
+    // 6. Persistir el intento de pago e ID de sesión en public.payments (esquema real)
     if (result?.paypalOrderId) {
       await supabase
         .from('payments')
         .insert({
           order_id: order.id,
           user_id: order.user_id,
-          provider: 'paypal',
+          provider: 'stripe',
           provider_order_id: result.paypalOrderId,
-          payment_method: paymentMethod || 'paypal',
+          payment_method: paymentMethod || 'card',
           status: 'pending',
           amount: authoritativeAmount,
           currency: 'EUR',
-          raw_payload: { paypal_order_id: result.paypalOrderId },
+          raw_payload: { stripe_session_id: result.paypalOrderId },
         });
     }
 
@@ -104,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err: any) {
     console.error('Error en /api/paypal/create-order:', err);
     return res.status(500).json({
-      error: err?.message || 'Error interno al crear la orden de pago en PayPal.',
+      error: err?.message || 'Error interno al crear la orden de pago en la pasarela.',
     });
   }
 }

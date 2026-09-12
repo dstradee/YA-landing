@@ -1,14 +1,9 @@
 // ==============================================================================
 // VERCEL SERVERLESS FUNCTION: /api/paypal/config
-// Devuelve la configuración pública y disponibilidad de métodos de pago
+// Devuelve la configuración pública y disponibilidad de métodos de pago (Stripe)
 // ==============================================================================
 
 import type { VercelRequest, VercelResponse } from '../_lib/types.ts';
-import {
-  getPayPalMode,
-  isPayPalSandboxMode,
-  getPayPalCredentials,
-} from '../_lib/paypalServer.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -16,33 +11,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const isSandbox = isPayPalSandboxMode();
-    const mode = getPayPalMode();
-    const { clientId, clientSecret } = getPayPalCredentials();
-    const hasRealCredentials = Boolean(clientId && clientSecret);
+    const hasRealCredentials = Boolean(process.env.STRIPE_SECRET_KEY);
+    const publishableKey = process.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 
     return res.status(200).json({
-      clientId,
-      environment: mode,
+      clientId: publishableKey,
+      environment: 'live',
       currency: 'EUR',
-      isSandbox,
+      isSandbox: false,
       hasRealCredentials,
       enabledMethods: {
-        paypal: true,
+        paypal: false,
         card: true,
-        googlepay: false,
-        applepay: false,
+        googlepay: true,
+        applepay: true,
         bizum: false,
       },
       bizumNotice:
-        'Bizum no es una pasarela procesada por PayPal. Los pagos se procesan de forma segura e inmediata con PayPal o Tarjeta.',
+        'Los pagos se procesan de forma 100% segura mediante Stripe (Tarjeta, Apple Pay, Google Pay).',
     });
   } catch (err: any) {
     console.error('Error en /api/paypal/config:', err);
     return res.status(500).json({
-      error: err?.message || 'Error interno al obtener configuración de PayPal',
-      environment: getPayPalMode(),
-      isSandbox: isPayPalSandboxMode(),
+      error: err?.message || 'Error interno al obtener configuración de la pasarela',
+      environment: 'live',
+      isSandbox: false,
     });
   }
 }

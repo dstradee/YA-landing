@@ -72,14 +72,14 @@ export function PayPalPaymentSection({
 
     setIsProcessing(true);
     setErrorMessage(null);
-    setStatusText('Iniciando sesión segura con PayPal Sandbox...');
+    setStatusText('Iniciando pasarela de pago segura con Stripe...');
 
     try {
       // 0. Obtener token de sesión del usuario en Supabase si está autenticado
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
 
-      // 1. Paso 1: Crear la orden en el servidor (PayPal Orders v2 API) con URLs de retorno
+      // 1. Paso 1: Crear la sesión en el servidor con URLs de retorno
       const origin = window.location.origin;
       const returnUrl = `${origin}/app/checkout/paypal-return?orderId=${encodeURIComponent(orderId)}`;
       const cancelUrl = `${origin}/app/checkout/paypal-cancel?orderId=${encodeURIComponent(orderId)}`;
@@ -96,12 +96,12 @@ export function PayPalPaymentSection({
       const orderIdCreated = createRes.paypalOrderId;
       setPaypalOrderId(orderIdCreated);
 
-      // Si es un entorno de prueba simulado (sin credenciales PayPal en sandbox)
+      // Si es un entorno de prueba simulado (sin credenciales)
       if (createRes.isSimulated) {
         if (simulatedType === 'cancelled') {
           setIsProcessing(false);
           setStatusText(null);
-          setErrorMessage('Has cancelado el pago en PayPal. Tu pedido sigue guardado como pendiente para que puedas completarlo.');
+          setErrorMessage('Has cancelado el pago. Tu pedido sigue guardado como pendiente para que puedas completarlo.');
           onPaymentCancel();
           return;
         }
@@ -115,7 +115,7 @@ export function PayPalPaymentSection({
           return;
         }
 
-        setStatusText('Confirmando simulación de pago en Sandbox...');
+        setStatusText('Confirmando simulación de pago...');
         const captureRes = await requestCapturePayPalOrder({
           orderId,
           paypalOrderId: orderIdCreated,
@@ -137,7 +137,6 @@ export function PayPalPaymentSection({
         return;
       }
 
-      // ENTORNO SANDBOX OFICIAL CON CREDENCIALES
       // Guardar contexto en sessionStorage para respaldar el retorno
       try {
         sessionStorage.setItem(
@@ -155,20 +154,16 @@ export function PayPalPaymentSection({
       }
 
       if (createRes.approveUrl) {
-        setStatusText(
-          config?.isSandbox
-            ? 'Redirigiendo a PayPal Sandbox para autorizar el pago...'
-            : 'Redirigiendo a PayPal para autorizar el pago...'
-        );
-        // Redirigir al cliente a la URL HATEOAS rel="approve" de PayPal
+        setStatusText('Redirigiendo a Stripe para autorizar el pago...');
+        // Redirigir al cliente a Stripe Checkout
         window.location.href = createRes.approveUrl;
         return;
       }
 
-      throw new Error('PayPal no proporcionó el enlace de aprobación seguro (rel="approve").');
+      throw new Error('Stripe no proporcionó el enlace de aprobación seguro.');
     } catch (err: any) {
       console.error('Error durante el proceso de pago:', err);
-      const msg = err?.message || 'Error inesperado al comunicarse con la pasarela de PayPal.';
+      const msg = err?.message || 'Error inesperado al comunicarse con la pasarela de Stripe.';
       setErrorMessage(msg);
       onPaymentError(msg);
     } finally {
@@ -178,41 +173,24 @@ export function PayPalPaymentSection({
 
   return (
     <div id="paypal-payment-section" className="space-y-4">
-      {/* Banner de Entorno (Sandbox vs Producción Live) */}
-      {config?.isSandbox ? (
-        <div className="border-2 border-ya-lime/40 bg-ya-gray/40 p-3.5 flex items-start gap-3 text-xs">
-          <div className="p-1 bg-ya-lime text-ya-black font-black uppercase text-[10px] tracking-wider shrink-0 mt-0.5">
-            SANDBOX
-          </div>
-          <div className="space-y-1">
-            <p className="font-black text-white uppercase tracking-wide">
-              Entorno de Pruebas · PayPal Sandbox v2
-            </p>
-            <p className="text-gray-300 text-[11px] leading-relaxed">
-              Pagos de prueba procesados a través de PayPal Sandbox. Se admiten pagos mediante <strong>PayPal</strong> y <strong>Tarjeta</strong>.
-            </p>
-            {paypalOrderId && (
-              <p className="text-ya-lime text-[10px] font-mono">
-                Orden PayPal activa: {paypalOrderId}
-              </p>
-            )}
-          </div>
+      <div className="border border-emerald-500/30 bg-ya-gray/40 p-3.5 flex items-start gap-3 text-xs">
+        <div className="p-1 bg-emerald-500 text-black font-black uppercase text-[10px] tracking-wider shrink-0 mt-0.5">
+          SEGURO
         </div>
-      ) : (
-        <div className="border border-emerald-500/30 bg-ya-gray/40 p-3.5 flex items-start gap-3 text-xs">
-          <div className="p-1 bg-emerald-500 text-black font-black uppercase text-[10px] tracking-wider shrink-0 mt-0.5">
-            SEGURO
-          </div>
-          <div className="space-y-1">
-            <p className="font-black text-white uppercase tracking-wide">
-              Pasarela Oficial · PayPal & Tarjetas
+        <div className="space-y-1">
+          <p className="font-black text-white uppercase tracking-wide">
+            Pasarela Oficial · Stripe & Tarjetas
+          </p>
+          <p className="text-gray-300 text-[11px] leading-relaxed">
+            Transacción 100% encriptada y protegida procesada directamente por Stripe.
+          </p>
+          {paypalOrderId && (
+            <p className="text-ya-lime text-[10px] font-mono">
+              Sesión activa: {paypalOrderId}
             </p>
-            <p className="text-gray-300 text-[11px] leading-relaxed">
-              Transacción 100% encriptada y protegida procesada directamente por PayPal.
-            </p>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Resumen del pedido a pagar */}
       <div className="border-2 border-ya-gray bg-ya-black p-4 flex items-center justify-between">
@@ -233,19 +211,19 @@ export function PayPalPaymentSection({
         </p>
 
         <div className="grid grid-cols-2 gap-3">
-          {/* 1. PayPal */}
+          {/* 1. Stripe / Pasarela */}
           <button
             type="button"
             id="select-method-paypal-btn"
-            onClick={() => onMethodChange('PayPal')}
+            onClick={() => onMethodChange('Stripe')}
             className={`p-4 border-2 font-black text-xs uppercase tracking-wider text-center transition-colors flex flex-col items-center justify-center gap-1.5 ${
               !isCard
                 ? 'border-ya-lime bg-ya-lime text-ya-black'
                 : 'border-ya-gray bg-ya-gray text-white hover:border-gray-400'
             }`}
           >
-            <span className="font-black text-sm">PayPal</span>
-            <span className="text-[10px] font-normal opacity-80 lowercase">Saldo o cuenta PayPal</span>
+            <span className="font-black text-sm">Stripe</span>
+            <span className="text-[10px] font-normal opacity-80 lowercase">Pago seguro Stripe</span>
           </button>
 
           {/* 2. Tarjeta */}
@@ -294,7 +272,7 @@ export function PayPalPaymentSection({
         <div className="border-2 border-ya-lime bg-ya-black p-5 text-center space-y-2.5 animate-pulse">
           <Loader2 size={26} className="animate-spin text-ya-lime mx-auto" />
           <p className="text-xs font-black uppercase tracking-wider text-ya-lime">
-            {statusText || 'Comunicando con PayPal Sandbox...'}
+            {statusText || 'Comunicando con la pasarela de pago...'}
           </p>
           <p className="text-[11px] text-gray-400 font-mono">
             Por favor no cierres esta ventana mientras procesamos la confirmación.
@@ -315,7 +293,7 @@ export function PayPalPaymentSection({
             <span>
               {isCard
                 ? `Pagar con Tarjeta · ${euro(amount)}`
-                : `Pagar con PayPal · ${euro(amount)}`}
+                : `Pagar con Stripe · ${euro(amount)}`}
             </span>
           </button>
 
@@ -341,7 +319,7 @@ export function PayPalPaymentSection({
                   type="button"
                   onClick={() => handleExecutePayment('cancelled')}
                   className="py-1.5 px-2 border border-gray-600 bg-ya-gray/40 text-gray-300 font-mono text-[10px] uppercase font-bold hover:bg-gray-700 transition-colors text-center cursor-pointer"
-                  title="Simula que el comprador cancela la operación en la ventana de PayPal"
+                  title="Simula que el comprador cancela la operación en la ventana de pago"
                 >
                   Simular Cancelación
                 </button>
@@ -356,7 +334,7 @@ export function PayPalPaymentSection({
         <div className="border-2 border-ya-lime bg-ya-lime/10 p-4 text-center space-y-2">
           <CheckCircle2 size={28} className="text-ya-lime mx-auto" />
           <p className="text-sm font-black uppercase tracking-wider text-ya-lime">
-            Pago confirmado por PayPal Sandbox
+            Pago confirmado por Stripe
           </p>
           <p className="text-xs text-gray-300 font-mono">
             Transacción registrada y confirmada en Supabase. Redirigiendo...

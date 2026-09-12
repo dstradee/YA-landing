@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .from('payments')
         .select('order_id')
         .eq('provider_order_id', paypalOrderId)
-        .eq('provider', 'paypal')
+        .in('provider', ['stripe', 'paypal'])
         .maybeSingle();
 
       if (paymentRecord?.order_id) {
@@ -89,12 +89,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 3. Verificación de vinculación de orden PayPal: Validar contra public.payments (esquema real)
+    // 3. Verificación de vinculación de orden: Validar contra public.payments (esquema real)
     const { data: existingPayment } = await supabase
       .from('payments')
       .select('id, provider_order_id, provider_capture_id, status')
       .eq('order_id', order.id)
-      .eq('provider', 'paypal')
+      .in('provider', ['stripe', 'paypal'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -105,13 +105,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!paypalOrderId) {
       return res.status(400).json({
-        error: 'No se encontró la orden de PayPal asociada a este pedido para confirmar el cobro.',
+        error: 'No se encontró la orden de pago asociada a este pedido para confirmar el cobro.',
       });
     }
 
     if (existingPayment?.provider_order_id && paypalOrderId && existingPayment.provider_order_id !== paypalOrderId) {
       return res.status(400).json({
-        error: `Discrepancia de seguridad: El pedido está vinculado a la orden PayPal ${existingPayment.provider_order_id} y se solicitó capturar ${paypalOrderId}.`,
+        error: `Discrepancia de seguridad: El pedido está vinculado a la orden ${existingPayment.provider_order_id} y se solicitó capturar ${paypalOrderId}.`,
       });
     }
 
@@ -164,9 +164,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Error capturando orden en /api/paypal/capture-order:', err);
     const httpStatus = typeof err?.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 422;
     return res.status(httpStatus).json({
-      error: err?.message || 'No se pudo capturar el pago en PayPal.',
-      name: err?.paypalName || err?.name || 'PayPalCaptureError',
-      message: err?.paypalMessage || err?.message || 'Error en validación de PayPal',
+      error: err?.message || 'No se pudo capturar el pago en la pasarela.',
+      name: err?.paypalName || err?.name || 'PaymentCaptureError',
+      message: err?.paypalMessage || err?.message || 'Error en validación de la pasarela de pago',
       debug_id: err?.debug_id || null,
       details: err?.details || [],
       links: err?.links || [],

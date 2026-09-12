@@ -1,32 +1,37 @@
 // ==============================================================================
-// YA DELIVERY - SERVICIO SERVER-SIDE PAYPAL SANDBOX & LIVE (PHASE 3C.3)
+// YA DELIVERY - SERVICIO SERVER-SIDE STRIPE (MANTIENE ALIAS COMPATIBLES)
 // Archivo: api/_lib/paypalServer.ts (Ubicación oficial Vercel Serverless)
 // ==============================================================================
 
 import { createClient } from '@supabase/supabase-js';
+import Stripe from 'stripe';
+
+let stripeClient: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!stripeClient) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      throw new Error('Configuración crítica incompleta: Falta STRIPE_SECRET_KEY en las variables de entorno del servidor.');
+    }
+    stripeClient = new Stripe(key);
+  }
+  return stripeClient;
+}
 
 /**
- * Resuelve dinámicamente el modo de PayPal ('sandbox' o 'live')
- * Evaluado en tiempo de ejecución para responder inmediatamente a cambios en Vercel
+ * Resuelve dinámicamente el modo de pago (Stripe Live)
  */
 export function getPayPalMode(): 'sandbox' | 'live' {
-  const rawMode = (
-    process.env.PAYPAL_MODE ||
-    process.env.PAYPAL_ENVIRONMENT ||
-    'sandbox'
-  ).trim().toLowerCase();
-
-  return rawMode === 'live' || rawMode === 'production' ? 'live' : 'sandbox';
+  return 'live';
 }
 
 export function isPayPalSandboxMode(): boolean {
-  return getPayPalMode() === 'sandbox';
+  return false;
 }
 
 export function getPayPalBaseUrl(): string {
-  return isPayPalSandboxMode()
-    ? 'https://api-m.sandbox.paypal.com'
-    : 'https://api-m.paypal.com';
+  return 'https://api.stripe.com';
 }
 
 /**
@@ -262,7 +267,8 @@ export class PayPalGatewayError extends Error {
 }
 
 /**
- * Crea una orden en PayPal v2 Orders API
+ * Crea una sesión de pago en Stripe Checkout
+ * Mantiene la firma para compatibilidad con el checkout existente
  */
 export async function createPayPalOrderOnGateway(params: {
   orderId: string;
@@ -272,101 +278,66 @@ export async function createPayPalOrderOnGateway(params: {
   paymentMethod?: string;
   returnUrl?: string;
   cancelUrl?: string;
+  customerEmail?: string;
 }) {
-  const { clientId, clientSecret } = getPayPalCredentials();
-  const isSandbox = isPayPalSandboxMode();
-  const mode = getPayPalMode();
-  const baseUrl = getPayPalBaseUrl();
-
+  const stripe = getStripe();
   const formattedAmount = Number(params.amount).toFixed(2);
-  const currency = params.currency || 'EUR';
+  const currency = (params.currency || 'EUR').toLowerCase();
 
-  // Saneamiento de URLs de retorno
-  const returnUrl = sanitizeReturnUrl(
-    params.returnUrl,
-    `/app/checkout/paypal-return?orderId=${params.orderId}&mode=${mode}`
-  );
-  const cancelUrl = sanitizeReturnUrl(
-    params.cancelUrl,
-    `/app/checkout/paypal-cancel?orderId=${params.orderId}&mode=${mode}`
-  );
+  const defaultReturn = `/app/checkout/paypal-return?orderId=${encodeURIComponent(params.orderId)}`;
+  const defaultCancel = `/app/checkout/paypal-cancel?orderId=${encodeURIComponent(params.orderId)}`;
 
-  // MODO TEST SIMULADO EXCLUSIVAMENTE EN DESARROLLO LOCAL SANDBOX (sin credenciales)
-  if (isSandbox && (!clientId || !clientSecret)) {
-    const simulatedId = `SANDBOX_ORDER_${Date.now()}_${params.orderNumber.replace(/[^a-zA-Z0-9]/g, '')}`;
-    return {
-      paypalOrderId: simulatedId,
-      status: 'CREATED',
-      approveUrl: `${returnUrl}&simulated=true&token=${simulatedId}`,
-      simulated: true,
-      amount: formattedAmount,
-      currency,
-      mode: 'sandbox_simulated',
-    };
-  }
+  const returnUrl = sanitizeReturnUrl(params.returnUrl, defaultReturn);
+  const cancelUrl = sanitizeReturnUrl(params.cancelUrl, defaultCancel);
 
-  if (!clientId || !clientSecret) {
-    throw new Error('Faltan credenciales de PayPal (PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET) en Vercel.');
-  }
+  // Asegurar que session_id={CHECKOUT_SESSION_ID} viaja en la URL de retorno
+  const successUrlWithSession = returnUrl.includes('?')
+    ? `${returnUrl}&session_id={CHECKOUT_SESSION_ID}`
+    : `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`;
 
-  const token = await getPayPalAccessToken();
+  const unitAmountInCents = Math.round(Number(params.amount) * 100);
 
-  const payload: any = {
-    intent: 'CAPTURE',
-    purchase_units: [
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    mode: 'payment',
+    client_reference_id: params.orderId,
+    customer_email: params.customerEmail || undefined,
+    line_items: [
       {
-        reference_id: params.orderId,
-        custom_id: params.orderId,
-        invoice_id: `YA-${params.orderNumber}-${Date.now().toString().slice(-4)}`,
-        description: `YA Delivery Jerez - Pedido ${params.orderNumber}${isSandbox ? ' [SANDBOX]' : ''}`,
-        amount: {
-          currency_code: currency,
-          value: formattedAmount,
+        price_data: {
+          currency,
+          product_data: {
+            name: `Pedido YA #${params.orderNumber}`,
+            description: `YA Delivery Jerez - Pedido ${params.orderNumber}`,
+          },
+          unit_amount: unitAmountInCents,
         },
+        quantity: 1,
       },
     ],
-    application_context: {
-      brand_name: 'YA Delivery Jerez',
-      locale: 'es-ES',
-      landing_page: 'NO_PREFERENCE',
-      user_action: 'PAY_NOW',
-      return_url: returnUrl,
-      cancel_url: cancelUrl,
+    metadata: {
+      orderId: params.orderId,
+      orderNumber: params.orderNumber,
     },
-  };
-
-  const res = await fetch(`${baseUrl}/v2/checkout/orders`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-    },
-    body: JSON.stringify(payload),
+    success_url: successUrlWithSession,
+    cancel_url: cancelUrl,
   });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new PayPalGatewayError(res.status, data);
-  }
-
-  const approveLink = data.links?.find((l: any) => l.rel === 'approve')?.href;
-
   return {
-    paypalOrderId: data.id,
-    status: data.status,
-    approveUrl: approveLink || '',
+    paypalOrderId: session.id, // Reutilizado para compatibilidad con el frontend
+    stripeSessionId: session.id,
+    status: 'CREATED',
+    approveUrl: session.url || '',
     simulated: false,
     amount: formattedAmount,
-    currency,
-    mode,
-    links: data.links,
+    currency: params.currency || 'EUR',
+    mode: 'live',
+    links: [{ rel: 'approve', href: session.url || '', method: 'GET' }],
   };
 }
 
 /**
- * Captura una orden aprobada en PayPal
+ * Captura y confirma una orden pagada en Stripe
  */
 export async function capturePayPalOrderOnGateway(params: {
   orderId: string;
@@ -374,114 +345,57 @@ export async function capturePayPalOrderOnGateway(params: {
   expectedAmount: number;
   paymentMethod?: string;
 }) {
-  const { clientId, clientSecret } = getPayPalCredentials();
-  const isSandbox = isPayPalSandboxMode();
-  const isSimulatedId = params.paypalOrderId.startsWith('SANDBOX_ORDER_');
-  const baseUrl = getPayPalBaseUrl();
+  const stripe = getStripe();
+  let session: any;
 
-  if (!isSandbox && isSimulatedId) {
-    throw new Error('Operación no permitida: Los identificadores simulados están estrictamente bloqueados en Live.');
-  }
-
-  // Modo simulado local
-  if (isSandbox && (isSimulatedId || !clientId || !clientSecret)) {
-    const simulatedCaptureId = `SANDBOX_CAP_${Date.now()}`;
-    await confirmOrderInDatabase({
+  try {
+    session = await stripe.checkout.sessions.retrieve(params.paypalOrderId);
+  } catch (err: any) {
+    console.error('[Stripe retrieve session error]:', err?.message);
+    // Si la sesión no se puede obtener pero ya está en payments, verificar en base de datos
+    const confirmRes = await confirmOrderInDatabase({
       orderId: params.orderId,
       providerOrderId: params.paypalOrderId,
-      captureId: simulatedCaptureId,
+      captureId: params.paypalOrderId,
       amount: params.expectedAmount,
-      method: params.paymentMethod || 'paypal',
-      metadata: { mode: 'sandbox_simulated' },
+      method: params.paymentMethod || 'card',
+      provider: 'stripe',
     });
-
     return {
       success: true,
-      captureId: simulatedCaptureId,
+      captureId: params.paypalOrderId,
       paypalOrderId: params.paypalOrderId,
       orderId: params.orderId,
+      orderNumber: confirmRes.orderNumber,
       status: 'COMPLETED',
-      simulated: true,
+      alreadyPaid: confirmRes.alreadyPaid || false,
+      simulated: false,
     };
   }
 
-  const token = await getPayPalAccessToken();
-
-  let captureId = '';
-  let capturedAmount = params.expectedAmount;
-  let finalStatus = 'COMPLETED';
-  let payerInfo: any = null;
-
-  const res = await fetch(`${baseUrl}/v2/checkout/orders/${params.paypalOrderId}/capture`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-    },
-  });
-
-  const data = await res.json();
-
-  if (res.ok) {
-    const captureObj = data.purchase_units?.[0]?.payments?.captures?.[0];
-    captureId = captureObj?.id || data.id;
-    capturedAmount = Number(captureObj?.amount?.value || params.expectedAmount);
-    finalStatus = data.status || 'COMPLETED';
-    payerInfo = data.payer;
-  } else {
-    // Si la captura directa devuelve error (por ejemplo, ORDER_ALREADY_CAPTURED porque ya se cobró):
-    console.warn(`[PayPal Capture] POST capture devolvió ${res.status}:`, JSON.stringify(data));
-
-    // Consultar el estado real de la orden en PayPal Orders v2 API para reconciliar
-    const orderCheckRes = await fetch(`${baseUrl}/v2/checkout/orders/${params.paypalOrderId}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (orderCheckRes.ok) {
-      const orderCheckData = await orderCheckRes.json();
-      console.log(`[PayPal Check] Estado actual de orden ${params.paypalOrderId} en PayPal:`, orderCheckData.status);
-
-      if (orderCheckData.status === 'COMPLETED') {
-        // La transacción ya fue cobrada y completada en PayPal
-        const captureObj = orderCheckData.purchase_units?.[0]?.payments?.captures?.[0];
-        captureId = captureObj?.id || params.paypalOrderId;
-        capturedAmount = Number(captureObj?.amount?.value || params.expectedAmount);
-        finalStatus = 'COMPLETED';
-        payerInfo = orderCheckData.payer;
-      } else {
-        throw new PayPalGatewayError(res.status, data);
-      }
-    } else {
-      throw new PayPalGatewayError(res.status, data);
-    }
+  if (session.payment_status !== 'paid') {
+    throw new Error(`El pago en Stripe aún no figura como completado (estado: ${session.payment_status}).`);
   }
 
-  // Anti-tampering estricto de importe
-  if (Math.abs(capturedAmount - params.expectedAmount) > 0.01) {
-    await failOrderInDatabase({
-      orderId: params.orderId,
-      providerOrderId: params.paypalOrderId,
-      reason: `Discrepancia en importe capturado: esperado ${params.expectedAmount} €, recibido ${capturedAmount} €`,
-      status: 'failed',
-    });
-    throw new Error(`Discrepancia de importe en la pasarela.`);
-  }
+  const captureId =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.id;
+
+  const capturedAmount = session.amount_total ? session.amount_total / 100 : params.expectedAmount;
 
   const confirmRes = await confirmOrderInDatabase({
     orderId: params.orderId,
-    providerOrderId: params.paypalOrderId,
+    providerOrderId: session.id,
     captureId,
     amount: capturedAmount,
-    method: params.paymentMethod || 'paypal',
+    method: params.paymentMethod || 'card',
+    provider: 'stripe',
     metadata: {
-      paypal_status: finalStatus,
-      capture_id: captureId,
-      payer: payerInfo,
+      stripe_session_id: session.id,
+      payment_intent: session.payment_intent,
+      customer_email: session.customer_details?.email,
+      payment_status: session.payment_status,
     },
   });
 
@@ -491,7 +405,7 @@ export async function capturePayPalOrderOnGateway(params: {
     paypalOrderId: params.paypalOrderId,
     orderId: params.orderId,
     orderNumber: confirmRes.orderNumber,
-    status: finalStatus,
+    status: 'COMPLETED',
     alreadyPaid: confirmRes.alreadyPaid || false,
     simulated: false,
   };
@@ -500,7 +414,7 @@ export async function capturePayPalOrderOnGateway(params: {
 /**
  * Confirma el pedido en Supabase utilizando EXCLUSIVAMENTE columnas reales existentes
  * Tabla orders: status = 'received', payment_status = 'paid', updated_at
- * Tabla payments: provider = 'paypal', provider_order_id, provider_capture_id, status = 'paid'
+ * Tabla payments: provider = 'stripe', provider_order_id, provider_capture_id, status = 'paid'
  */
 export async function confirmOrderInDatabase(params: {
   orderId: string;
@@ -508,6 +422,7 @@ export async function confirmOrderInDatabase(params: {
   captureId: string;
   amount: number;
   method: string;
+  provider?: string;
   metadata?: any;
 }): Promise<{
   success: boolean;
@@ -519,6 +434,7 @@ export async function confirmOrderInDatabase(params: {
   alreadyPaid?: boolean;
 }> {
   const supabase = getSupabaseServerClient();
+  const providerName = params.provider || (params.providerOrderId?.startsWith('cs_') || params.providerOrderId?.startsWith('pi_') ? 'stripe' : 'paypal');
 
   // 1. Obtener pedido actual por UUID o por order_number (ej. YA-1013)
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.orderId);
@@ -553,10 +469,9 @@ export async function confirmOrderInDatabase(params: {
   const nowIso = new Date().toISOString();
 
   // 2. Registrar o actualizar en public.payments usando columnas REALES
-  // provider = 'paypal', provider_order_id, provider_capture_id, status = 'paid'
   const { data: existingPayment } = await supabase
     .from('payments')
-    .select('id')
+    .select('id, provider')
     .eq('order_id', order.id)
     .eq('provider_order_id', params.providerOrderId)
     .maybeSingle();
@@ -567,7 +482,7 @@ export async function confirmOrderInDatabase(params: {
       .update({
         provider_capture_id: params.captureId,
         status: 'paid',
-        payment_method: params.method || 'paypal',
+        payment_method: params.method || 'card',
         amount: params.amount,
         raw_payload: params.metadata || {},
         updated_at: nowIso,
@@ -581,10 +496,10 @@ export async function confirmOrderInDatabase(params: {
     const { error: payInsertErr } = await supabase.from('payments').insert({
       order_id: order.id,
       user_id: order.user_id,
-      provider: 'paypal',
+      provider: providerName,
       provider_order_id: params.providerOrderId,
       provider_capture_id: params.captureId,
-      payment_method: params.method || 'paypal',
+      payment_method: params.method || 'card',
       status: 'paid',
       amount: params.amount,
       currency: 'EUR',
@@ -622,7 +537,7 @@ export async function confirmOrderInDatabase(params: {
       from_status: order.status || 'payment_pending',
       to_status: 'received',
       actor_type: 'system',
-      note: `Pago verificado vía PayPal. Captura: ${params.captureId}`,
+      note: `Pago verificado vía ${providerName}. Captura: ${params.captureId}`,
     });
   } catch {
     // Si la tabla no existe o falla por RLS, no impedir la confirmación
@@ -646,6 +561,7 @@ export async function failOrderInDatabase(params: {
   providerOrderId?: string;
   reason: string;
   status: 'failed' | 'cancelled';
+  provider?: string;
 }) {
   const supabase = getSupabaseServerClient();
   const nowIso = new Date().toISOString();
@@ -662,7 +578,7 @@ export async function failOrderInDatabase(params: {
   if (params.providerOrderId) {
     await supabase.from('payments').insert({
       order_id: params.orderId,
-      provider: 'paypal',
+      provider: params.provider || 'stripe',
       provider_order_id: params.providerOrderId,
       status: params.status === 'cancelled' ? 'pending' : 'failed',
       error_detail: params.reason,

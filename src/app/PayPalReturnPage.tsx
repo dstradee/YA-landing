@@ -18,12 +18,12 @@ export function PayPalReturnPage() {
   const { clearCart } = useCart();
 
   const orderIdParam = searchParams.get('orderId');
-  const tokenParam = searchParams.get('token'); // PayPal Order ID
+  const tokenParam = searchParams.get('token') || searchParams.get('session_id'); // Stripe Session ID o Token
   const payerIdParam = searchParams.get('PayerID');
-  const isCancelParam = searchParams.get('cancel') === 'true';
+  const isCancelParam = searchParams.get('cancel') === 'true' || searchParams.get('cancelled') === 'true';
 
   const [status, setStatus] = useState<'processing' | 'success' | 'cancelled' | 'error'>('processing');
-  const [statusText, setStatusText] = useState('Verificando aprobación en PayPal Sandbox...');
+  const [statusText, setStatusText] = useState('Verificando confirmación del pago...');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<any>(null);
   const [resolvedOrder, setResolvedOrder] = useState<{
@@ -76,7 +76,7 @@ export function PayPalReturnPage() {
       const paypalOrderId = tokenParam || undefined;
 
       try {
-        setStatusText('Capturando fondos y verificando pedido en PayPal...');
+        setStatusText('Confirmando fondos y verificando pedido...');
 
         // Obtener token de sesión Supabase si el usuario está autenticado
         const { data: sessionData } = await supabase.auth.getSession();
@@ -207,10 +207,10 @@ export function PayPalReturnPage() {
               <AlertCircle size={36} />
             </div>
             <h1 className="font-black text-2xl uppercase tracking-wider text-white">
-              Pago Cancelado en PayPal
+              Pago Cancelado
             </h1>
             <p className="text-xs text-gray-300 leading-relaxed max-w-md mx-auto">
-              Has cancelado el proceso en la ventana de PayPal. Tu pedido sigue guardado en nuestro sistema en reserva y pendiente de pago.
+              Has cancelado el proceso en la pasarela de pago. Tu pedido sigue guardado en nuestro sistema en reserva y pendiente de pago.
             </p>
 
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
