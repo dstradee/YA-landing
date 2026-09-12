@@ -21,6 +21,8 @@ const INITIAL_LOCAL_PACKS: PackWithDetails[] = [
     reference_price: 17.65,
     active: true,
     sort_order: 1,
+    free_shipping: false,
+    skip_min_order: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     items: [
@@ -69,6 +71,8 @@ const INITIAL_LOCAL_PACKS: PackWithDetails[] = [
     reference_price: 15.8,
     active: true,
     sort_order: 2,
+    free_shipping: false,
+    skip_min_order: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     groups: [
@@ -217,11 +221,14 @@ export async function fetchPacks(): Promise<PackWithDetails[]> {
           slug: p.slug,
           description: p.description,
           image: p.image,
+          images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
           pack_type: p.pack_type,
           price: Number(p.price),
           reference_price: p.reference_price ? Number(p.reference_price) : null,
           active: Boolean(p.active),
           sort_order: p.sort_order ?? 0,
+          free_shipping: Boolean(p.free_shipping),
+          skip_min_order: Boolean(p.skip_min_order),
           created_at: p.created_at,
           updated_at: p.updated_at,
           items: p.items || [],
@@ -416,6 +423,12 @@ export async function updatePack(
   if (isSupabaseConfigured) {
     try {
       const payload: any = { ...pack, updated_at: new Date().toISOString() };
+      if (pack.free_shipping !== undefined) {
+        payload.free_shipping = Boolean(pack.free_shipping);
+      }
+      if (pack.skip_min_order !== undefined) {
+        payload.skip_min_order = Boolean(pack.skip_min_order);
+      }
       delete payload.id;
       delete payload.created_at;
 

@@ -173,7 +173,16 @@ export async function fetchProductById(idOrSlug: string): Promise<Product | null
 
 export type CatalogUnsubscribe = () => void;
 
-export function subscribeToCatalogChanges(onChange: () => void): CatalogUnsubscribe {
+export type CatalogChangePayload = {
+  table: 'products' | 'categories';
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: any;
+  old: any;
+};
+
+export function subscribeToCatalogChanges(
+  onChange: (payload?: CatalogChangePayload) => void
+): CatalogUnsubscribe {
   if (!isSupabaseConfigured || typeof supabase.channel !== 'function') {
     return () => {};
   }
@@ -184,12 +193,26 @@ export function subscribeToCatalogChanges(onChange: () => void): CatalogUnsubscr
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'products' },
-        () => onChange()
+        (payload: any) => {
+          onChange({
+            table: 'products',
+            eventType: payload.eventType,
+            new: payload.new,
+            old: payload.old,
+          });
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'categories' },
-        () => onChange()
+        (payload: any) => {
+          onChange({
+            table: 'categories',
+            eventType: payload.eventType,
+            new: payload.new,
+            old: payload.old,
+          });
+        }
       )
       .subscribe();
 
