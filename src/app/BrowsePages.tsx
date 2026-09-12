@@ -7,6 +7,7 @@ import { SearchBar } from './SearchBar';
 import { useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
 import { PackCard } from './PackCard';
+import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 
 export function AppHome() {
   const { categories, products } = useCatalog();
@@ -364,7 +365,17 @@ export function ProductPage() {
   }
 
   const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
-  const isImageEmoji = !product.image.startsWith('http') && !product.image.startsWith('/');
+
+  const gallery = useMemo(() => {
+    if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
+      return product.images;
+    }
+    return product?.image ? [product.image] : [];
+  }, [product]);
+
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const currentImage = gallery[activeImageIdx] || product?.image || '📦';
+  const isImageEmoji = !isRealImageUrl(currentImage);
 
   const handleAdd = () => {
     addToCart(product.id);
@@ -379,10 +390,10 @@ export function ProductPage() {
         {/* Visual Box */}
         <div className="h-64 sm:h-80 bg-ya-gray border-2 border-ya-gray grid place-items-center text-8xl sm:text-9xl relative overflow-hidden">
           {isImageEmoji ? (
-            <span>{product.image}</span>
+            <span>{currentImage}</span>
           ) : (
             <img
-              src={product.image}
+              src={formatImageUrl(currentImage, 800)}
               alt={product.name}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
@@ -405,6 +416,38 @@ export function ProductPage() {
             </span>
           )}
         </div>
+
+        {/* Miniaturas de galería si tiene más de 1 imagen */}
+        {gallery.length > 1 && (
+          <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
+            {gallery.map((img, idx) => {
+              const isImg = isRealImageUrl(img);
+              const isSelected = idx === activeImageIdx;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setActiveImageIdx(idx)}
+                  className={`w-14 h-14 shrink-0 border-2 overflow-hidden bg-ya-gray flex items-center justify-center transition-all ${
+                    isSelected ? 'border-ya-lime scale-105 shadow-md' : 'border-ya-gray/70 opacity-60 hover:opacity-100'
+                  }`}
+                  aria-label={`Ver foto ${idx + 1}`}
+                >
+                  {isImg ? (
+                    <img
+                      src={formatImageUrl(img, 120)}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="text-xl">{img}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <p className="font-bold text-ya-lime uppercase tracking-widest text-xs mt-6">
           {product.inStock ? 'Disponible para entrega inmediata en Jerez' : 'Temporalmente fuera de inventario'}

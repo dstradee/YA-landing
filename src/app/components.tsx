@@ -19,6 +19,7 @@ import type { OrderStatus, Product } from '../types/app';
 import { useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
 import { NotificationBell } from '../components/notifications/NotificationComponents';
+import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 
 export function AppHeader({ back }: { back?: boolean }) {
   const { count } = useCart();
@@ -184,7 +185,7 @@ export function ProductCard({ product }: { product: Product }) {
   const { categories } = useCatalog();
   const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
   const category = categories.find((item) => item.slug === product.category);
-  const isImageEmoji = !product.image.startsWith('http') && !product.image.startsWith('/');
+  const isImg = isRealImageUrl(product.image);
 
   const isLowStock =
     product.inStock &&
@@ -200,16 +201,16 @@ export function ProductCard({ product }: { product: Product }) {
       className="bg-ya-gray border-2 border-ya-gray hover:border-ya-lime flex flex-col justify-between transition-colors"
     >
       <Link to={'/app/producto/' + product.id} className="block p-4 flex-1">
-        <div className="h-28 bg-ya-black border border-ya-gray flex items-center justify-center text-5xl mb-3 relative overflow-hidden">
-          {isImageEmoji ? (
-            <span>{product.image}</span>
-          ) : (
+        <div className="h-28 bg-ya-black border border-ya-gray flex items-center justify-center mb-3 relative overflow-hidden">
+          {isImg ? (
             <img
-              src={product.image}
+              src={formatImageUrl(product.image, 300)}
               alt={product.name}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
+          ) : (
+            <span className="text-5xl">{product.image}</span>
           )}
           {!product.inStock ? (
             <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-red-400 bg-ya-black/90 px-2 py-0.5 border border-red-500/50">

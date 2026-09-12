@@ -9,6 +9,7 @@ import { euro } from '../data/products';
 import { PackModal } from './PackModal';
 import { useCart } from './CartContext';
 import type { PackWithDetails } from '../types/app';
+import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 
 interface PackCardProps {
   pack: PackWithDetails;
@@ -57,9 +58,18 @@ export function PackCard({ pack }: PackCardProps) {
           )}
         </div>
 
-        {/* Visual / Emoji */}
-        <div className="h-28 my-2 bg-ya-black border-2 border-ya-gray/50 group-hover:border-ya-lime/40 flex items-center justify-center text-5xl transition-colors">
-          {pack.image || '📦'}
+        {/* Visual / Emoji o Imagen Real de Cloudinary */}
+        <div className="h-28 my-2 bg-ya-black border-2 border-ya-gray/50 group-hover:border-ya-lime/40 flex items-center justify-center transition-colors overflow-hidden">
+          {isRealImageUrl(pack.image) ? (
+            <img
+              src={formatImageUrl(pack.image, 400)}
+              alt={pack.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span className="text-5xl">{pack.image || '📦'}</span>
+          )}
         </div>
 
         {/* Nombre y descripción */}

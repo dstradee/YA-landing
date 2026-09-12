@@ -1,10 +1,10 @@
 // ==============================================================================
 // YA DELIVERY — GESTOR DE GALERÍA DE IMÁGENES (1 A 5 IMÁGENES)
 // Archivo: src/components/admin/ImageGalleryManager.tsx
-// Subida a Cloudinary, eliminación, reordenación y selección de imagen principal
+// Integración con Cloudinary Upload Widget oficial, reordenación y selección principal
 // ==============================================================================
 
-import React, { useState, useRef } from 'react';
+import { useState } from 'react';
 import {
   Upload,
   Trash2,
@@ -16,7 +16,12 @@ import {
   AlertCircle,
   Link as LinkIcon,
 } from 'lucide-react';
-import { uploadImageToCloudinary } from '../../lib/cloudinary';
+import {
+  openCloudinaryUploadWidget,
+  isRealImageUrl,
+  formatImageUrl,
+  getCloudinaryConfig,
+} from '../../lib/cloudinary';
 
 interface ImageGalleryManagerProps {
   images: string[];
@@ -31,39 +36,49 @@ export function ImageGalleryManager({
   maxImages = 5,
   label = 'Imágenes (1 a 5 con Cloudinary)',
 }: ImageGalleryManagerProps) {
-  const [uploading, setUploading] = useState(false);
+  const [openingWidget, setOpeningWidget] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [manualUrl, setManualUrl] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
+  // Apertura del Cloudinary Upload Widget oficial
+  const handleOpenCloudinary = async () => {
     if (images.length >= maxImages) {
       setUploadError(`Límite alcanzado: máximo ${maxImages} imágenes permitidas.`);
       return;
     }
 
-    setUploading(true);
     setUploadError(null);
+    setOpeningWidget(true);
 
-    const file = files[0];
-    const { url, error } = await uploadImageToCloudinary(file);
+    try {
+      await openCloudinaryUploadWidget({
+        folder: 'ya_delivery',
+        maxFiles: maxImages - images.length,
+        onSuccess: (secureUrl) => {
+          setOpeningWidget(false);
+          setUploadError(null);
 
-    if (error || !url) {
-      setUploadError(error || 'Error al procesar la imagen.');
-    } else {
-      onChange([...images, url]);
-    }
-
-    setUploading(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+          // Asegurar que guardamos una URL HTTPS REAL y optimizada
+          const finalUrl = formatImageUrl(secureUrl);
+          if (finalUrl) {
+            onChange([...images, finalUrl]);
+          }
+        },
+        onError: (errMsg) => {
+          setOpeningWidget(false);
+          setUploadError(errMsg);
+        },
+      });
+    } catch (err: any) {
+      setOpeningWidget(false);
+      setUploadError(err?.message || 'Error abriendo el widget de Cloudinary');
+    } finally {
+      setOpeningWidget(false);
     }
   };
 
+  // Añadir URL manual
   const handleAddManualUrl = () => {
     const trimmed = manualUrl.trim();
     if (!trimmed) return;
@@ -71,7 +86,9 @@ export function ImageGalleryManager({
       setUploadError(`Límite alcanzado: máximo ${maxImages} imágenes permitidas.`);
       return;
     }
-    onChange([...images, trimmed]);
+
+    const formatted = formatImageUrl(trimmed);
+    onChange([...images, formatted]);
     setManualUrl('');
     setShowManualInput(false);
     setUploadError(null);
@@ -100,6 +117,8 @@ export function ImageGalleryManager({
     onChange(next);
   };
 
+  const config = getCloudinaryConfig();
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -124,9 +143,16 @@ export function ImageGalleryManager({
       </div>
 
       {uploadError && (
-        <div className="p-2 border border-rose-500 bg-rose-500/10 text-rose-400 text-xs flex items-center gap-2 font-medium">
-          <AlertCircle size={14} className="shrink-0" />
-          <span>{uploadError}</span>
+        <div className="p-2.5 border border-rose-500/80 bg-rose-950/40 text-rose-300 text-xs flex items-start gap-2 font-medium">
+          <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold">{uploadError}</p>
+            {!config.isCustomConfigured && (
+              <p className="text-[11px] text-gray-300 font-normal">
+                Nota: Recuerda configurar las variables <code>VITE_CLOUDINARY_CLOUD_NAME</code> y <code>VITE_CLOUDINARY_UPLOAD_PRESET</code> en Vercel con tu cuenta de Cloudinary (unsigned preset).
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -137,7 +163,7 @@ export function ImageGalleryManager({
             type="url"
             value={manualUrl}
             onChange={(e) => setManualUrl(e.target.value)}
-            placeholder="https://res.cloudinary.com/..."
+            placeholder="https://res.cloudinary.com/... o https://..."
             className="flex-1 bg-ya-black border-2 border-ya-gray focus:border-ya-lime px-3 py-1.5 text-xs text-white font-mono outline-none"
           />
           <button
@@ -154,6 +180,9 @@ export function ImageGalleryManager({
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {images.map((imgUrl, index) => {
           const isMain = index === 0;
+          const isImg = isRealImageUrl(imgUrl);
+          const displayUrl = formatImageUrl(imgUrl, 300);
+
           return (
             <div
               key={`${imgUrl}-${index}`}
@@ -169,14 +198,18 @@ export function ImageGalleryManager({
                 </div>
               )}
 
-              {/* Thumbnail */}
-              <div className="w-full aspect-square bg-ya-black border border-ya-gray overflow-hidden flex items-center justify-center my-1">
-                {imgUrl.startsWith('http') || imgUrl.startsWith('data:') ? (
+              {/* Thumbnail con imagen real garantizada */}
+              <div className="w-full aspect-square bg-ya-black border border-ya-gray overflow-hidden flex items-center justify-center my-1 relative">
+                {isImg ? (
                   <img
-                    src={imgUrl}
+                    src={displayUrl}
                     alt={`Foto ${index + 1}`}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      // Si la URL falla al cargar, mostrar icono de respaldo en vez de romper la UI
+                      e.currentTarget.style.opacity = '0.3';
+                    }}
                   />
                 ) : (
                   <span className="text-3xl">{imgUrl}</span>
@@ -231,46 +264,40 @@ export function ImageGalleryManager({
           );
         })}
 
-        {/* Upload Button Box with dual choice (PC or URL) */}
+        {/* Upload Button Box con Cloudinary Upload Widget Oficial */}
         {images.length < maxImages && (
           <div
             className={`aspect-square border-2 border-dashed ${
-              uploading ? 'border-ya-lime bg-ya-lime/5' : 'border-ya-gray bg-ya-black'
+              openingWidget ? 'border-ya-lime bg-ya-lime/5' : 'border-ya-gray bg-ya-black hover:border-ya-lime/60'
             } flex flex-col items-center justify-center p-2 text-center transition-colors`}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
-              disabled={uploading}
-            />
-
-            {uploading ? (
-              <div className="flex flex-col items-center gap-2 text-ya-lime">
+            {openingWidget ? (
+              <div className="flex flex-col items-center gap-2 text-ya-lime p-2">
                 <Loader2 size={24} className="animate-spin" />
-                <span className="text-[10px] font-mono uppercase tracking-wider">Subiendo a Cloudinary...</span>
+                <span className="text-[10px] font-mono uppercase tracking-wider">
+                  Abriendo Cloudinary...
+                </span>
               </div>
             ) : (
               <div className="w-full flex flex-col items-center justify-center gap-2 h-full">
+                {/* Botón principal: abre directamente el Upload Widget Oficial de Cloudinary */}
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-2 px-1 bg-ya-gray/60 hover:bg-ya-lime hover:text-ya-black text-white text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-ya-gray"
-                  title="Subir archivo desde el ordenador mediante Cloudinary"
+                  onClick={handleOpenCloudinary}
+                  className="w-full py-2.5 px-2 bg-ya-gray hover:bg-ya-lime hover:text-ya-black text-white text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-ya-gray hover:border-ya-lime"
+                  title="Abrir Cloudinary Upload Widget oficial para subir desde PC, URL o cámara"
                 >
-                  <Upload size={13} className="text-ya-lime group-hover:text-ya-black" />
+                  <Upload size={14} className="text-ya-lime hover:text-ya-black shrink-0" />
                   <span>Subir desde PC</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowManualInput(true)}
-                  className="w-full py-1.5 px-1 bg-ya-gray/30 hover:bg-white hover:text-ya-black text-gray-300 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 border border-ya-gray/60"
-                  title="Introducir una URL directa de imagen o Cloudinary"
+                  className="w-full py-1.5 px-1 bg-ya-black hover:bg-ya-gray text-gray-300 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 border border-ya-gray/50"
+                  title="Pegar una URL directa de imagen"
                 >
-                  <LinkIcon size={12} />
+                  <LinkIcon size={11} />
                   <span>Pegar URL</span>
                 </button>
               </div>
@@ -280,7 +307,7 @@ export function ImageGalleryManager({
       </div>
 
       <p className="text-[11px] font-mono text-gray-400">
-        * La primera imagen de la lista se utiliza como portada principal. Arrastra o usa las flechas para ordenar.
+        * La primera imagen de la lista se utiliza como portada principal. Puedes añadir hasta {maxImages} fotos por producto o pack.
       </p>
     </div>
   );

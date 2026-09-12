@@ -25,6 +25,7 @@ import {
   adminAdjustStock,
 } from '../../lib/adminInventory';
 import { adminFetchProducts, type AdminProductItem } from '../../lib/catalog';
+import { isRealImageUrl, formatImageUrl } from '../../lib/cloudinary';
 import type { DbStockMovement, InventorySummary, StockMovementType } from '../../types/app';
 import { euro } from '../../data/products';
 
@@ -433,9 +434,9 @@ export function AdminInventoryPage() {
                       <td className="p-3">
                         <div className="flex items-center gap-2.5">
                           <div className="w-9 h-9 bg-ya-black border border-ya-gray grid place-items-center text-lg overflow-hidden shrink-0">
-                            {prod.image?.startsWith('http') || prod.image?.startsWith('/') ? (
+                            {isRealImageUrl(prod.image) ? (
                               <img
-                                src={prod.image}
+                                src={formatImageUrl(prod.image, 100)}
                                 alt={prod.name}
                                 className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"

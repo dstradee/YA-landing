@@ -3,6 +3,7 @@ import { QuantitySelector } from './components';
 import { useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
 import type { CartLine } from '../types/app';
+import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 
 export function CartItem({ line }: { line: CartLine }) {
   const { increaseQuantity, decreaseQuantity, removeFromCart, pricing, activePacks } = useCart();
@@ -16,7 +17,7 @@ export function CartItem({ line }: { line: CartLine }) {
     const pack = activePacks.find((p) => p.id === line.packId || p.slug === line.productId);
     const packName = pack?.name || line.packName || 'Pack';
     const packImage = pack?.image || line.packImage || '📦';
-    const isImageEmoji = !packImage.startsWith('http') && !packImage.startsWith('/');
+    const isImg = isRealImageUrl(packImage);
     const unitPrice = detail ? detail.discountedUnitPrice : pack?.price || line.unitPrice || 0;
     const originalUnitPrice = detail ? detail.originalUnitPrice : pack?.reference_price || unitPrice;
 
@@ -26,15 +27,15 @@ export function CartItem({ line }: { line: CartLine }) {
         className="flex gap-3 bg-ya-gray p-3 border-2 border-ya-lime/40 hover:border-ya-lime transition-colors relative"
       >
         <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden relative">
-          {isImageEmoji ? (
-            <span>{packImage}</span>
-          ) : (
+          {isImg ? (
             <img
-              src={packImage}
+              src={formatImageUrl(packImage, 150)}
               alt={packName}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
+          ) : (
+            <span>{packImage}</span>
           )}
           <span className="absolute bottom-0 inset-x-0 bg-ya-lime text-ya-black text-[8px] font-black uppercase text-center tracking-wider">
             PACK
@@ -100,7 +101,7 @@ export function CartItem({ line }: { line: CartLine }) {
   const product = getProductById(line.productId) || fallbackProductById(line.productId);
   if (!product) return null;
 
-  const isImageEmoji = !product.image.startsWith('http') && !product.image.startsWith('/');
+  const isImg = isRealImageUrl(product.image);
   const unitPrice = detail ? detail.discountedUnitPrice : product.price;
   const originalUnitPrice = detail ? detail.originalUnitPrice : product.price;
   const hasDiscount = originalUnitPrice > unitPrice;
@@ -118,15 +119,15 @@ export function CartItem({ line }: { line: CartLine }) {
       }`}
     >
       <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden relative">
-        {isImageEmoji ? (
-          <span>{product.image}</span>
-        ) : (
+        {isImg ? (
           <img
-            src={product.image}
+            src={formatImageUrl(product.image, 150)}
             alt={product.name}
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
+        ) : (
+          <span>{product.image}</span>
         )}
         {isOut && (
           <span className="absolute inset-x-0 bottom-0 bg-red-600 text-white text-[8px] font-black uppercase text-center tracking-wider">

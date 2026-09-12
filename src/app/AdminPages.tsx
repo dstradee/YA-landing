@@ -24,6 +24,7 @@ import {
 import { useAuth } from '../lib/auth';
 import { euro } from '../data/products';
 import { ImageGalleryManager } from '../components/admin/ImageGalleryManager';
+import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 import { AdminLayout } from './admin/AdminLayout';
 import { AdminDashboardPage } from './admin/AdminDashboardPage';
 import { AdminOrdersPage } from './admin/AdminOrdersPage';
@@ -728,20 +729,20 @@ export function AdminProductsPage() {
               </tr>
             ) : (
               products.map((prod) => {
-                const isEmoji = !prod.image?.startsWith('http') && !prod.image?.startsWith('/');
+                const isImg = isRealImageUrl(prod.image);
                 return (
                   <tr key={prod.id} className="hover:bg-ya-gray/30 transition-colors">
                     <td className="p-4">
                       <div className="w-12 h-12 bg-ya-gray border border-ya-gray grid place-items-center text-2xl overflow-hidden">
-                        {isEmoji ? (
-                          <span>{prod.image || '📦'}</span>
-                        ) : (
+                        {isImg ? (
                           <img
-                            src={prod.image || ''}
+                            src={formatImageUrl(prod.image, 100)}
                             alt={prod.name}
                             className="w-full h-full object-cover"
                             referrerPolicy="no-referrer"
                           />
+                        ) : (
+                          <span>{prod.image || '📦'}</span>
                         )}
                       </div>
                     </td>

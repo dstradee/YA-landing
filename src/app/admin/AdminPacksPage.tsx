@@ -24,6 +24,7 @@ import {
 } from '../../lib/adminPacks';
 import { adminFetchProducts, type AdminProductItem } from '../../lib/catalog';
 import { ImageGalleryManager } from '../../components/admin/ImageGalleryManager';
+import { isRealImageUrl, formatImageUrl } from '../../lib/cloudinary';
 import type { PackWithDetails, PackType } from '../../types/app';
 import { euro } from '../../data/products';
 
@@ -488,8 +489,19 @@ export function AdminPacksPage() {
                 <div>
                   {/* Top Bar */}
                   <div className="flex items-start justify-between gap-2 border-b-2 border-ya-gray/50 pb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{p.image || '📦'}</span>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 bg-ya-gray border border-ya-gray/80 flex items-center justify-center overflow-hidden shrink-0">
+                        {isRealImageUrl(p.image) ? (
+                          <img
+                            src={formatImageUrl(p.image, 100)}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="text-2xl">{p.image || '📦'}</span>
+                        )}
+                      </div>
                       <div>
                         <h3 className="font-black text-sm uppercase text-white tracking-tight leading-tight">
                           {p.name}
