@@ -14,6 +14,7 @@ import {
   createAdminTestOrderViaRpc,
   fetchOrderByIdOrNumber,
   subscribeToOrderStatus,
+  checkCouriersAvailable,
   type OrderWithDetails,
 } from '../lib/orders';
 import {
@@ -29,6 +30,7 @@ import {
   CheckCircle2,
   Zap,
   Users,
+  RefreshCw,
 } from 'lucide-react';
 import { PayPalPaymentSection } from '../components/PayPalPaymentSection';
 import { requestCapturePayPalOrder } from '../lib/paypalClient';
@@ -319,6 +321,25 @@ export function CheckoutPage() {
   // Notas para el repartidor
   const [courierNotes, setCourierNotes] = useState('');
 
+  // Disponibilidad de repartidores en Jerez
+  const [couriersAvailable, setCouriersAvailable] = useState<boolean | null>(null);
+  const [checkingCouriers, setCheckingCouriers] = useState(false);
+
+  // Comprobar disponibilidad de repartidores al cargar el checkout
+  useEffect(() => {
+    let isMounted = true;
+    setCheckingCouriers(true);
+    checkCouriersAvailable().then((res) => {
+      if (isMounted) {
+        setCouriersAvailable(res.available);
+        setCheckingCouriers(false);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // 1. Cargar direcciones del usuario autenticado y pre-rellenar datos de contacto
   useEffect(() => {
     if (!user) return;
@@ -483,6 +504,22 @@ export function CheckoutPage() {
         )} para tramitar el pedido.`
       );
       return;
+    }
+
+    // Validar disponibilidad de repartidores en Jerez (exento en pedidos de prueba para administradores)
+    if (checkoutMode !== 'test_free') {
+      setIsSubmitting(true);
+      const courierCheck = await checkCouriersAvailable();
+      if (!courierCheck.available) {
+        setCouriersAvailable(false);
+        setError(
+          'En este momento todos nuestros repartidores en Jerez están ocupados o no hay turnos activos. La tramitación de pedidos está pausada temporalmente para garantizar la calidad del servicio.'
+        );
+        setIsSubmitting(false);
+        return;
+      }
+      setCouriersAvailable(true);
+      setIsSubmitting(false);
     }
 
     let targetAddressId: string = '';
@@ -1089,6 +1126,40 @@ export function CheckoutPage() {
               <p className="text-center text-xs text-gray-400 font-bold">
                 Añade más productos o packs a tu carrito para alcanzar el pedido mínimo de entrega.
               </p>
+            </div>
+          ) : couriersAvailable === false ? (
+            <div className="space-y-3">
+              <div className="border-2 border-amber-500 bg-amber-500/10 p-4 font-mono text-xs text-amber-300 space-y-2">
+                <div className="flex items-center gap-2 font-black uppercase text-amber-400 text-sm">
+                  <AlertCircle size={18} />
+                  <span>Repartidores ocupados en Jerez</span>
+                </div>
+                <p className="text-gray-300 font-sans text-xs">
+                  Todos nuestros repartidores se encuentran actualmente en ruta completando entregas o fuera de turno. Para garantizar la puntualidad de tu pedido, el botón se reactivará en cuanto un repartidor quede libre.
+                </p>
+                <button
+                  type="button"
+                  disabled={checkingCouriers}
+                  onClick={async () => {
+                    setCheckingCouriers(true);
+                    const res = await checkCouriersAvailable();
+                    setCouriersAvailable(res.available);
+                    setCheckingCouriers(false);
+                  }}
+                  className="mt-2 px-3 py-1.5 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black font-bold uppercase text-[11px] flex items-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw size={13} className={checkingCouriers ? 'animate-spin' : ''} />
+                  <span>{checkingCouriers ? 'Comprobando repartidores...' : 'Recomprobar disponibilidad'}</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                disabled
+                className="w-full font-black p-4 text-sm uppercase tracking-wider bg-ya-gray text-gray-500 cursor-not-allowed border-2 border-ya-gray"
+              >
+                Repartidores no disponibles temporalmente
+              </button>
             </div>
           ) : (
             <button

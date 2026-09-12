@@ -264,7 +264,7 @@ export async function createPack(params: {
     min_select: number;
     max_select: number;
     sort_order?: number;
-    options: { product_id: string; default_selected?: boolean; sort_order?: number }[];
+    options: { product_id: string; default_selected?: boolean; sort_order?: number; price_supplement?: number }[];
   }[];
 }): Promise<{ success: boolean; data?: PackWithDetails; error?: string }> {
   const { pack, items = [], groups = [] } = params;
@@ -279,11 +279,14 @@ export async function createPack(params: {
           slug: pack.slug,
           description: pack.description,
           image: pack.image,
+          images: pack.images || (pack.image ? [pack.image] : []),
           pack_type: pack.pack_type,
           price: Number(pack.price),
           reference_price: pack.reference_price ? Number(pack.reference_price) : null,
           active: pack.active,
           sort_order: pack.sort_order ?? 0,
+          free_shipping: Boolean(pack.free_shipping),
+          skip_min_order: Boolean(pack.skip_min_order),
         })
         .select()
         .single();
@@ -328,6 +331,7 @@ export async function createPack(params: {
               product_id: opt.product_id,
               default_selected: Boolean(opt.default_selected),
               sort_order: opt.sort_order ?? oIdx + 1,
+              price_supplement: Number(opt.price_supplement || 0),
             }));
             await supabase.from('pack_group_options').insert(optRows);
           }
@@ -377,6 +381,7 @@ export async function createPack(params: {
               product_id: opt.product_id,
               default_selected: Boolean(opt.default_selected),
               sort_order: opt.sort_order ?? oIdx + 1,
+              price_supplement: Number(opt.price_supplement || 0),
               created_at: new Date().toISOString(),
             })),
           }))
@@ -402,7 +407,7 @@ export async function updatePack(
       min_select: number;
       max_select: number;
       sort_order?: number;
-      options: { product_id: string; default_selected?: boolean; sort_order?: number }[];
+      options: { product_id: string; default_selected?: boolean; sort_order?: number; price_supplement?: number }[];
     }[];
   }
 ): Promise<{ success: boolean; data?: PackWithDetails; error?: string }> {
@@ -453,6 +458,7 @@ export async function updatePack(
               product_id: opt.product_id,
               default_selected: Boolean(opt.default_selected),
               sort_order: opt.sort_order ?? oIdx + 1,
+              price_supplement: Number(opt.price_supplement || 0),
             }));
             await supabase.from('pack_group_options').insert(optRows);
           }

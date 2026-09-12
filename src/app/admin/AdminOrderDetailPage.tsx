@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { adminFetchOrderById, adminUpdateOrderStatus } from '../../lib/adminOrders';
+import { subscribeToOrderStatus } from '../../lib/orders';
 import { adminFetchSourcingItems, adminUpdateSourcingItem } from '../../lib/sourcing';
 import { adminFetchIncidents, adminCreateIncident, adminUpdateIncidentStatus } from '../../lib/incidents';
 import type {
@@ -155,6 +156,15 @@ export function AdminOrderDetailPage() {
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
+
+  // Suscripción en tiempo real a cambios de este pedido específico
+  useEffect(() => {
+    if (!id) return;
+    const unsub = subscribeToOrderStatus(id, () => {
+      loadOrder();
+    });
+    return () => unsub();
+  }, [id, loadOrder]);
 
   const isUnpaid = order?.status === 'payment_pending' || (order?.payment_status === 'pending' && order?.status !== 'cancelled');
 

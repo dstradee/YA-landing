@@ -86,6 +86,8 @@ export async function fetchPromotions(): Promise<DbPromotion[]> {
           sort_order: p.sort_order ?? 0,
           starts_at: p.starts_at,
           expires_at: p.expires_at,
+          applicable_product_id: p.applicable_product_id || null,
+          is_two_for_one: Boolean(p.is_two_for_one || p.discount_type === 'two_for_one'),
           created_at: p.created_at,
           updated_at: p.updated_at,
         }));
@@ -132,6 +134,8 @@ export async function createPromotion(
         sort_order: promo.sort_order ?? 0,
         starts_at: promo.starts_at || null,
         expires_at: promo.expires_at || null,
+        applicable_product_id: promo.applicable_product_id || null,
+        is_two_for_one: Boolean(promo.is_two_for_one || promo.discount_type === 'two_for_one'),
       };
 
       const { data, error } = await supabase

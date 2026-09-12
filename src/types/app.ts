@@ -14,6 +14,7 @@ export type Product = {
   estimatedCost: number;
   category: CategorySlug;
   image: string;
+  images?: string[];
   description: string;
   active: boolean;
   inStock: boolean;
@@ -28,6 +29,7 @@ export type CartPackSelection = {
   groupName: string;
   productId: string;
   productName: string;
+  priceSupplement?: number;
 };
 
 export type CartLine = {
@@ -42,6 +44,8 @@ export type CartLine = {
   packImage?: string;
   unitPrice?: number;
   packSelections?: CartPackSelection[];
+  packFreeShipping?: boolean;
+  packSkipMinOrder?: boolean;
 };
 
 export type Address = {
@@ -115,6 +119,7 @@ export type DbProduct = {
   slug: string;
   description: string | null;
   image: string | null;
+  images?: string[];
   price: number;
   estimated_cost: number | null;
   active: boolean;
@@ -282,7 +287,7 @@ export type DbSchedule = {
   updated_at: string;
 };
 
-export type DiscountType = 'fixed' | 'percentage';
+export type DiscountType = 'fixed' | 'percentage' | 'two_for_one';
 export type DiscountScope = 'product' | 'category';
 
 export type DbDiscount = {
@@ -317,6 +322,9 @@ export type DbPromotion = {
   sort_order?: number;
   starts_at: string | null;
   expires_at: string | null;
+  applicable_product_id?: string | null;
+  applicable_product_name?: string | null;
+  is_two_for_one?: boolean;
   created_at: string;
   updated_at?: string;
 };
@@ -332,7 +340,7 @@ export type DbCommercialSettings = {
   updated_at?: string;
 };
 
-// --- TIPOS DE PACKS (FASE 3B) ---
+// --- TIPOS DE PACKS (FASE 3B Y MEJORAS GENERALES) ---
 export type PackType = 'fixed' | 'configurable';
 
 export type DbPack = {
@@ -341,11 +349,14 @@ export type DbPack = {
   slug: string;
   description: string | null;
   image: string | null;
+  images?: string[];
   pack_type: PackType;
   price: number;
   reference_price: number | null;
   active: boolean;
   sort_order: number;
+  free_shipping?: boolean;
+  skip_min_order?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -378,6 +389,7 @@ export type DbPackGroupOption = {
   product_id: string;
   default_selected: boolean;
   sort_order: number;
+  price_supplement?: number;
   created_at: string;
   product?: DbProduct | Product | null;
 };
@@ -387,6 +399,26 @@ export type PackWithDetails = DbPack & {
   groups?: (DbPackGroup & { options: DbPackGroupOption[] })[];
   calculated_savings?: number;
   is_available?: boolean;
+};
+
+// --- TIPOS DE SUGERENCIAS DE PRODUCTOS ---
+export type ProductSuggestionStatus = 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'implemented';
+
+export type DbProductSuggestion = {
+  id: string;
+  user_id: string;
+  name: string;
+  category_name?: string | null;
+  brand?: string | null;
+  description?: string | null;
+  reference_url?: string | null;
+  estimated_price?: number | null;
+  status: ProductSuggestionStatus;
+  admin_notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  user_email?: string | null;
+  user_name?: string | null;
 };
 
 // --- 3. TIPOS PARA PANEL ADMIN (PHASE 3A) ---

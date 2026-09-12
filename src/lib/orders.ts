@@ -395,3 +395,36 @@ export function subscribeToOrderStatus(
     return () => {};
   }
 }
+
+// ==============================================================================
+// 7. COMPROBACIÓN DE DISPONIBILIDAD DE REPARTIDORES EN JEREZ
+// ==============================================================================
+export async function checkCouriersAvailable(): Promise<{ available: boolean; error: string | null }> {
+  if (!isSupabaseConfigured) {
+    return { available: true, error: null };
+  }
+
+  try {
+    // 1. Intentar RPC check_couriers_available
+    const { data: rpcData, error: rpcError } = await supabase.rpc('check_couriers_available');
+    if (!rpcError && typeof rpcData === 'boolean') {
+      return { available: rpcData, error: null };
+    }
+
+    // 2. Fallback: consulta directa a couriers activos y disponibles
+    const { count, error } = await supabase
+      .from('couriers')
+      .select('id', { count: 'exact', head: true })
+      .eq('active', true)
+      .eq('available', true);
+
+    if (!error) {
+      return { available: (count || 0) > 0, error: null };
+    }
+
+    return { available: true, error: null };
+  } catch {
+    return { available: true, error: null };
+  }
+}
+

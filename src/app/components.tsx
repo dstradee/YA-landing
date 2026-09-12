@@ -24,54 +24,54 @@ export function AppHeader({ back }: { back?: boolean }) {
   const { count } = useCart();
   return (
     <header id="app-header" className="sticky top-0 z-30 bg-ya-black border-b-2 border-ya-gray">
-      <div className="max-w-5xl mx-auto h-16 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="max-w-5xl mx-auto h-16 px-3 sm:px-4 flex items-center justify-between gap-1.5 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           {back && (
             <Link
               id="header-back-btn"
               aria-label="Volver"
               to="/app"
-              className="p-2 border-2 border-ya-gray hover:border-ya-lime transition-colors"
+              className="p-1.5 sm:p-2 border-2 border-ya-gray hover:border-ya-lime transition-colors shrink-0"
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={18} className="sm:w-5 sm:h-5" />
             </Link>
           )}
           <Link
             to="/app"
-            className="font-black text-4xl leading-none text-ya-lime tracking-tighter hover:opacity-90 transition-opacity"
+            className="font-black text-3xl sm:text-4xl leading-none text-ya-lime tracking-tighter hover:opacity-90 transition-opacity shrink-0"
           >
             YA
           </Link>
-          <span className="hidden sm:flex text-xs font-bold text-gray-300 items-center gap-1">
+          <span className="hidden lg:flex text-xs font-bold text-gray-300 items-center gap-1 shrink-0">
             <MapPin size={14} className="text-ya-lime" /> Jerez
           </span>
-        </div>
-
-        <div className="flex items-center gap-2">
           <Link
             to="/app/ya-plus"
             id="header-ya-plus-link"
-            className="hidden sm:flex items-center gap-1 border-2 border-ya-lime bg-ya-lime/10 px-2.5 py-1.5 font-mono text-[11px] font-black text-ya-lime hover:bg-ya-lime hover:text-ya-black transition"
+            className="flex items-center gap-1 border border-ya-lime sm:border-2 bg-ya-lime/10 px-2 sm:px-2.5 py-1 sm:py-1.5 font-mono text-[10px] sm:text-[11px] font-black text-ya-lime hover:bg-ya-lime hover:text-ya-black transition shrink-0 whitespace-nowrap"
           >
-            <Zap size={13} />
+            <Zap size={12} className="sm:w-3.5 sm:h-3.5" />
             YA+
           </Link>
           <Link
             to="/app/juntos"
             id="header-ya-juntos-link"
-            className="hidden md:flex items-center gap-1 border-2 border-zinc-700 bg-zinc-900 px-2.5 py-1.5 font-mono text-[11px] font-bold text-zinc-300 hover:border-white hover:text-white transition"
+            className="flex items-center gap-1 border border-zinc-700 sm:border-2 bg-zinc-900 px-2 sm:px-2.5 py-1 sm:py-1.5 font-mono text-[10px] sm:text-[11px] font-bold text-zinc-300 hover:border-white hover:text-white transition shrink-0 whitespace-nowrap"
           >
-            <Users size={13} />
+            <Users size={12} className="sm:w-3.5 sm:h-3.5" />
             JUNTOS
           </Link>
+        </div>
+
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <NotificationBell buttonId="customer-notification-bell" />
           <Link
             id="header-cart-btn"
             to="/app/carrito"
             aria-label="Abrir carrito"
-            className="relative p-2.5 border-2 border-ya-gray hover:border-ya-lime transition-colors"
+            className="relative p-2 sm:p-2.5 border-2 border-ya-gray hover:border-ya-lime transition-colors"
           >
-            <ShoppingBag size={20} />
+            <ShoppingBag size={18} className="sm:w-5 sm:h-5" />
             {count > 0 && (
               <span className="absolute -right-2 -top-2 min-w-5 h-5 px-1 text-center bg-ya-lime text-ya-black text-xs font-black leading-5">
                 {count}
@@ -82,9 +82,9 @@ export function AppHeader({ back }: { back?: boolean }) {
             id="header-profile-btn"
             to="/app/perfil"
             aria-label="Perfil"
-            className="p-2.5 border-2 border-ya-gray hover:border-ya-lime transition-colors"
+            className="p-2 sm:p-2.5 border-2 border-ya-gray hover:border-ya-lime transition-colors"
           >
-            <UserRound size={20} />
+            <UserRound size={18} className="sm:w-5 sm:h-5" />
           </Link>
         </div>
       </div>

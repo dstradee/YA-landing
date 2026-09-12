@@ -9,8 +9,13 @@ import {
   ArrowUpRight,
   Eye,
   MapPin,
+  Trash2,
+  CheckCircle2,
+  X,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
-import { adminFetchOrders, adminSubscribeToOrders } from '../../lib/adminOrders';
+import { adminFetchOrders, adminSubscribeToOrders, adminDeleteOrders } from '../../lib/adminOrders';
 import type { AdminOrderListItem, OrderStatus } from '../../types/app';
 import { euro } from '../../data/products';
 
@@ -52,6 +57,55 @@ export function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [sortAsc, setSortAsc] = useState(false);
+
+  // Eliminación y selección de pedidos
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; targetIds: string[]; title: string } | null>(null);
+  const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedOrderIds.length === orders.length) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(orders.map((o) => o.id));
+    }
+  };
+
+  const selectOnlyTestOrders = () => {
+    const testIds = orders.filter((o) => o.is_test).map((o) => o.id);
+    setSelectedOrderIds(testIds);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmModal || confirmModal.targetIds.length === 0) return;
+    setIsDeleting(true);
+    setActionNotice(null);
+    const count = confirmModal.targetIds.length;
+    const res = await adminDeleteOrders(confirmModal.targetIds);
+    setIsDeleting(false);
+    setConfirmModal(null);
+
+    if (res.success) {
+      setActionNotice({
+        type: 'success',
+        message: `Se han eliminado correctamente ${res.count || count} pedido(s) y todas sus relaciones (pagos, eventos, repartos).`,
+      });
+      setSelectedOrderIds((prev) => prev.filter((id) => !confirmModal.targetIds.includes(id)));
+      loadOrders();
+    } else {
+      setActionNotice({
+        type: 'error',
+        message: `Error al eliminar pedidos: ${res.error}`,
+      });
+    }
+  };
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -133,6 +187,143 @@ export function AdminOrdersPage() {
           </button>
         </div>
       </div>
+
+      {/* Alertas de acción */}
+      {actionNotice && (
+        <div
+          className={`p-4 border-4 font-mono text-xs flex items-center justify-between gap-3 ${
+            actionNotice.type === 'success'
+              ? 'border-ya-lime bg-ya-lime/10 text-white'
+              : 'border-red-500 bg-red-500/10 text-red-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {actionNotice.type === 'success' ? (
+              <CheckCircle2 size={18} className="text-ya-lime shrink-0" />
+            ) : (
+              <AlertTriangle size={18} className="text-red-400 shrink-0" />
+            )}
+            <span>{actionNotice.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionNotice(null)}
+            className="p-1 hover:text-white text-gray-400"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Barra de Gestión y Eliminación Masiva */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 border-2 border-ya-gray bg-ya-gray/10 font-mono text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="px-2.5 py-1.5 border border-ya-gray hover:border-white text-gray-300 hover:text-white flex items-center gap-1.5 font-bold uppercase text-[10px]"
+          >
+            {selectedOrderIds.length > 0 && selectedOrderIds.length === orders.length ? (
+              <CheckSquare size={13} className="text-ya-lime" />
+            ) : (
+              <Square size={13} />
+            )}
+            <span>
+              {selectedOrderIds.length === orders.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={selectOnlyTestOrders}
+            className="px-2.5 py-1.5 border border-purple-500/50 bg-purple-950/20 text-purple-300 hover:border-purple-400 flex items-center gap-1.5 font-bold uppercase text-[10px]"
+          >
+            <span>🧪 Seleccionar de prueba</span>
+          </button>
+
+          {selectedOrderIds.length > 0 && (
+            <span className="text-ya-lime font-bold text-[11px] px-2">
+              {selectedOrderIds.length} seleccionado(s)
+            </span>
+          )}
+        </div>
+
+        {selectedOrderIds.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setConfirmModal({
+                open: true,
+                targetIds: selectedOrderIds,
+                title: `Eliminar ${selectedOrderIds.length} pedidos seleccionados`,
+              })
+            }
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-black uppercase text-[11px] tracking-wider flex items-center gap-1.5 transition-colors shadow-[2px_2px_0px_0px_#000]"
+          >
+            <Trash2 size={14} />
+            <span>Eliminar seleccionados ({selectedOrderIds.length})</span>
+          </button>
+        )}
+      </div>
+
+      {/* Modal de Confirmación de Eliminación Segura */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-ya-black border-4 border-red-500 max-w-md w-full p-6 space-y-4 font-mono">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-500/20 border-2 border-red-500 text-red-400 shrink-0">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white uppercase tracking-tight">
+                  {confirmModal.title}
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Esta acción es definitiva. Se comprobarán y desvincularán automáticamente las dependencias asociadas (pagos, eventos de estado, líneas y entregas) para evitar claves huérfanas.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-ya-gray/20 border border-ya-gray p-3 text-xs text-gray-300 space-y-1">
+              <div className="text-white font-bold text-[11px] uppercase">
+                Pedidos a eliminar: {confirmModal.targetIds.length}
+              </div>
+              <p className="text-[10px] text-gray-400">
+                Afectará exclusivamente al entorno administrativo y eliminará los registros de prueba o erróneos sin afectar a pedidos legítimos.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t-2 border-ya-gray">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 border-2 border-ya-gray text-gray-300 font-bold uppercase text-xs hover:border-white hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-black uppercase text-xs flex items-center gap-2 tracking-wider"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Eliminando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Sí, eliminar definitivamente</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search & Filter Bar */}
       <div className="space-y-3">
@@ -236,6 +427,15 @@ export function AdminOrdersPage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b-4 border-ya-gray bg-ya-gray/30 text-gray-400 font-mono uppercase text-[11px]">
+                    <th className="py-3 px-3 w-10 text-center font-black">
+                      <input
+                        type="checkbox"
+                        checked={orders.length > 0 && selectedOrderIds.length === orders.length}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4 accent-ya-lime cursor-pointer"
+                        title="Seleccionar / Deseleccionar todos"
+                      />
+                    </th>
                     <th className="py-3 px-4 font-black">Nº Pedido</th>
                     <th className="py-3 px-4 font-black">Fecha / Hora</th>
                     <th className="py-3 px-4 font-black">Cliente</th>
@@ -243,11 +443,12 @@ export function AdminOrdersPage() {
                     <th className="py-3 px-4 font-black">Pago</th>
                     <th className="py-3 px-4 font-black">Estado</th>
                     <th className="py-3 px-4 font-black text-right">Total</th>
-                    <th className="py-3 px-4 font-black text-right">Acción</th>
+                    <th className="py-3 px-4 font-black text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y-2 divide-ya-gray font-mono">
                   {orders.map((ord) => {
+                    const isSelected = selectedOrderIds.includes(ord.id);
                     const badge = statusBadges[ord.status] || {
                       label: ord.status,
                       className: 'border-gray-500 text-gray-300',
@@ -272,7 +473,20 @@ export function AdminOrdersPage() {
                       : 'Jerez de la Frontera';
 
                     return (
-                      <tr key={ord.id} className="hover:bg-ya-gray/20 transition-colors">
+                      <tr
+                        key={ord.id}
+                        className={`transition-colors ${
+                          isSelected ? 'bg-ya-lime/10 hover:bg-ya-lime/15' : 'hover:bg-ya-gray/20'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectOrder(ord.id)}
+                            className="w-4 h-4 accent-ya-lime cursor-pointer"
+                          />
+                        </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <Link
@@ -349,13 +563,30 @@ export function AdminOrdersPage() {
                           <span className="text-sm font-black text-white">{euro(ord.total)}</span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Link
-                            to={`/admin/pedidos/${ord.id}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 border-2 border-ya-gray text-gray-300 hover:border-ya-lime hover:text-ya-lime text-xs font-black uppercase transition-colors"
-                          >
-                            <Eye size={13} />
-                            <span>Detalle</span>
-                          </Link>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Link
+                              to={`/admin/pedidos/${ord.id}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 border-2 border-ya-gray text-gray-300 hover:border-ya-lime hover:text-ya-lime text-xs font-black uppercase transition-colors"
+                              title="Ver detalle del pedido"
+                            >
+                              <Eye size={13} />
+                              <span>Detalle</span>
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setConfirmModal({
+                                  open: true,
+                                  targetIds: [ord.id],
+                                  title: `Eliminar pedido ${ord.order_number}`,
+                                })
+                              }
+                              className="p-1.5 border-2 border-ya-gray hover:border-red-500 text-gray-400 hover:text-red-400 transition-colors"
+                              title="Eliminar pedido definitivamente"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -368,6 +599,7 @@ export function AdminOrdersPage() {
           {/* Mobile Card Layout */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {orders.map((ord) => {
+              const isSelected = selectedOrderIds.includes(ord.id);
               const badge = statusBadges[ord.status] || {
                 label: ord.status,
                 className: 'border-gray-500 text-gray-300',
@@ -391,10 +623,20 @@ export function AdminOrdersPage() {
               return (
                 <div
                   key={ord.id}
-                  className="border-2 border-ya-gray bg-ya-black p-4 space-y-3 hover:border-ya-lime transition-colors"
+                  className={`border-2 p-4 space-y-3 transition-colors ${
+                    isSelected
+                      ? 'border-ya-lime bg-ya-lime/10'
+                      : 'border-ya-gray bg-ya-black hover:border-ya-lime'
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectOrder(ord.id)}
+                        className="w-4 h-4 accent-ya-lime cursor-pointer"
+                      />
                       <Link
                         to={`/admin/pedidos/${ord.id}`}
                         className="font-black text-white hover:text-ya-lime text-base tracking-tight font-mono"
@@ -432,13 +674,29 @@ export function AdminOrdersPage() {
 
                   <div className="flex items-center justify-between pt-2 border-t border-ya-gray text-xs">
                     <span className="text-[10px] font-mono text-gray-400">{formattedDate}</span>
-                    <Link
-                      to={`/admin/pedidos/${ord.id}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-ya-lime text-ya-black font-black uppercase text-[11px] tracking-wider hover:bg-white transition-colors"
-                    >
-                      <span>Ver Pedido</span>
-                      <ArrowUpRight size={13} />
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfirmModal({
+                            open: true,
+                            targetIds: [ord.id],
+                            title: `Eliminar pedido ${ord.order_number}`,
+                          })
+                        }
+                        className="p-1.5 border border-ya-gray hover:border-red-500 text-gray-400 hover:text-red-400"
+                        title="Eliminar pedido"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                      <Link
+                        to={`/admin/pedidos/${ord.id}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-ya-lime text-ya-black font-black uppercase text-[11px] tracking-wider hover:bg-white transition-colors"
+                      >
+                        <span>Ver Pedido</span>
+                        <ArrowUpRight size={13} />
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );

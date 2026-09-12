@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, Route, Routes } from 'react-router-dom';
+import { Link, Route, Routes, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   CheckCircle2,
@@ -23,6 +23,7 @@ import {
 } from '../lib/catalog';
 import { useAuth } from '../lib/auth';
 import { euro } from '../data/products';
+import { ImageGalleryManager } from '../components/admin/ImageGalleryManager';
 import { AdminLayout } from './admin/AdminLayout';
 import { AdminDashboardPage } from './admin/AdminDashboardPage';
 import { AdminOrdersPage } from './admin/AdminOrdersPage';
@@ -42,6 +43,7 @@ import { AdminSourcingPage } from './admin/AdminSourcingPage';
 import { AdminIncidentsPage } from './admin/AdminIncidentsPage';
 import AdminYaPlusPage from './admin/AdminYaPlusPage';
 import AdminYaJuntosPage from './admin/AdminYaJuntosPage';
+import { AdminSuggestionsPage } from './admin/AdminSuggestionsPage';
 
 // ==============================================================================
 // 1. COMPONENTE DE ACCESO / SEGURIDAD
@@ -480,11 +482,13 @@ export function AdminProductsPage() {
   const [editingProd, setEditingProd] = useState<AdminProductItem | null>(null);
 
   // Fields
+  const [searchParams] = useSearchParams();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const [price, setPrice] = useState('');
   const [estimatedCost, setEstimatedCost] = useState('');
   const [active, setActive] = useState(true);
@@ -510,6 +514,19 @@ export function AdminProductsPage() {
     loadData();
   }, []);
 
+  // Pre-rellenado automático si viene desde Sugerencias de clientes ("Convertir en producto")
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      openCreateModal();
+      const qName = searchParams.get('name');
+      const qPrice = searchParams.get('price');
+      const qDesc = searchParams.get('desc');
+      if (qName) handleNameChange(qName);
+      if (qPrice) setPrice(qPrice);
+      if (qDesc) setDescription(qDesc);
+    }
+  }, [searchParams]);
+
   const openCreateModal = () => {
     setEditingProd(null);
     setName('');
@@ -517,6 +534,7 @@ export function AdminProductsPage() {
     setCategoryId(categories[0]?.id || '');
     setDescription('');
     setImage('📦');
+    setImages([]);
     setPrice('2.50');
     setEstimatedCost('1.40');
     setActive(true);
@@ -534,6 +552,10 @@ export function AdminProductsPage() {
     setCategoryId(prod.category_id);
     setDescription(prod.description || '');
     setImage(prod.image || '📦');
+    const existingImgs = (prod as any).images && Array.isArray((prod as any).images) && (prod as any).images.length > 0
+      ? (prod as any).images
+      : prod.image ? [prod.image] : [];
+    setImages(existingImgs);
     setPrice(String(prod.price));
     setEstimatedCost(prod.estimated_cost ? String(prod.estimated_cost) : '');
     setActive(prod.active);
@@ -562,12 +584,14 @@ export function AdminProductsPage() {
     setActionError(null);
     setActionSuccess(null);
 
+    const primaryImg = images.length > 0 ? images[0] : (image.trim() || '📦');
     const payload = {
       category_id: categoryId,
       name,
       slug,
       description,
-      image,
+      image: primaryImg,
+      images: images.length > 0 ? images : [primaryImg],
       price: parseFloat(price) || 0,
       estimated_cost: estimatedCost ? parseFloat(estimatedCost) : undefined,
       active,
@@ -848,7 +872,7 @@ export function AdminProductsPage() {
                 </div>
                 <div>
                   <label className="block uppercase tracking-wider text-gray-300 mb-1.5">
-                    Imagen (Emoji o URL preparada para CDN)
+                    Imagen Principal / Icono
                   </label>
                   <input
                     type="text"
@@ -858,6 +882,21 @@ export function AdminProductsPage() {
                     className="w-full bg-ya-gray border-2 border-ya-gray focus:border-ya-lime p-3 text-white outline-none"
                   />
                 </div>
+              </div>
+
+              {/* Gestor de Galería Cloudinary (1 a 5 imágenes) */}
+              <div className="border-2 border-ya-gray bg-ya-gray/10 p-4">
+                <ImageGalleryManager
+                  images={images}
+                  onChange={(newImgs) => {
+                    setImages(newImgs);
+                    if (newImgs.length > 0) {
+                      setImage(newImgs[0]);
+                    }
+                  }}
+                  maxImages={5}
+                  label="Galería de imágenes del producto (1 a 5 con Cloudinary)"
+                />
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1051,6 +1090,7 @@ export function AdminRoutes() {
         <Route path="/productos" element={<AdminProductsPage />} />
         <Route path="/categorias" element={<AdminCategoriesPage />} />
         <Route path="/packs" element={<AdminPacksPage />} />
+        <Route path="/sugerencias" element={<AdminSuggestionsPage />} />
         <Route path="/descuentos" element={<AdminDiscountsPage />} />
         <Route path="/promociones" element={<AdminPromotionsPage />} />
         <Route path="/comercial" element={<AdminCommercialPage />} />

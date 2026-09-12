@@ -271,3 +271,45 @@ export function adminSubscribeToOrders(onChange: () => void): () => void {
     return () => {};
   }
 }
+
+/**
+ * Elimina uno o más pedidos de forma segura mediante la RPC admin_delete_orders
+ * que desvincula / limpia pagos, entregas, items e incidencias sin violar integridad referencial.
+ */
+export async function adminDeleteOrders(
+  orderIds: string[]
+): Promise<{ success: boolean; count?: number; error: string | null }> {
+  if (!isSupabaseConfigured) {
+    return { success: false, error: 'Supabase no está configurado.' };
+  }
+  if (!orderIds || orderIds.length === 0) {
+    return { success: false, error: 'No se seleccionaron pedidos para eliminar.' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('admin_delete_orders', {
+      p_order_ids: orderIds,
+    });
+
+    if (!error) {
+      return { success: true, count: typeof data === 'number' ? data : orderIds.length, error: null };
+    }
+
+    // Si la RPC no está instalada o falla, intentar borrado directo con RLS de admin
+    const { error: delError } = await supabase
+      .from('orders')
+      .delete()
+      .in('id', orderIds);
+
+    if (!delError) {
+      return { success: true, count: orderIds.length, error: null };
+    }
+    return { success: false, error: error.message || delError.message };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Error inesperado al eliminar pedidos.',
+    };
+  }
+}
+

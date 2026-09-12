@@ -81,6 +81,9 @@ export type CartPricingSummary = {
   yaPlusFreeShipping?: boolean;
   yaPlusOrderDiscount?: number;
   yaPlusTotalSavings?: number;
+  // Mejoras de Packs
+  hasPackFreeShipping?: boolean;
+  hasPackSkipMinOrder?: boolean;
 };
 
 /**
@@ -197,18 +200,36 @@ export function calculateCartPricing(params: {
   let subtotal = 0;
   let totalLineDiscounts = 0;
   const lineDetails: LinePricingDetail[] = [];
+  let hasPackFreeShipping = false;
+  let hasPackSkipMinOrder = false;
 
   for (const line of cartLines) {
     const isPack = Boolean(line.isPack || line.packId);
     const quantity = Math.max(1, line.quantity || 1);
 
     if (isPack) {
-      // Cálculo de línea de Pack
+      // Cálculo de línea de Pack (incluyendo suplementos de opciones)
       const packId = line.packId || line.productId;
       const foundPack = packs.find((p) => p.id === packId || p.slug === packId);
-      const unitPrice = foundPack ? Number(foundPack.price) : Number(line.unitPrice || 0);
+
+      // Evaluar si el pack tiene ventajas especiales
+      if (foundPack?.free_shipping || line.packFreeShipping) {
+        hasPackFreeShipping = true;
+      }
+      if (foundPack?.skip_min_order || line.packSkipMinOrder) {
+        hasPackSkipMinOrder = true;
+      }
+
+      // Sumar suplementos de opciones seleccionadas
+      const optionsSupplement = (line.packSelections || []).reduce(
+        (acc, sel) => acc + (Number(sel.priceSupplement) || 0),
+        0
+      );
+
+      const basePackPrice = foundPack ? Number(foundPack.price) : Number(line.unitPrice || 0);
+      const unitPrice = round2(basePackPrice + optionsSupplement);
       const originalPrice = foundPack?.reference_price
-        ? Number(foundPack.reference_price)
+        ? round2(Number(foundPack.reference_price) + optionsSupplement)
         : unitPrice;
       const lineSub = round2(unitPrice * quantity);
       const rawLineSub = round2(originalPrice * quantity);
@@ -221,7 +242,8 @@ export function calculateCartPricing(params: {
       const selectionsSummary: string[] = [];
       if (line.packSelections && line.packSelections.length > 0) {
         for (const s of line.packSelections) {
-          selectionsSummary.push(`${s.groupName}: ${s.productName}`);
+          const suppText = s.priceSupplement && s.priceSupplement > 0 ? ` (+${round2(s.priceSupplement)} €)` : '';
+          selectionsSummary.push(`${s.groupName}: ${s.productName}${suppText}`);
         }
       }
 
@@ -290,8 +312,7 @@ export function calculateCartPricing(params: {
   subtotal = round2(subtotal);
   totalLineDiscounts = round2(totalLineDiscounts);
 
-  // 5. EVALUACIÓN DE PROMOCIÓN AUTOMÁTICA
-  // REGLA: Elegir la promoción automática que suponga el mayor ahorro para el cliente
+  // 5. EVALUACIÓN DE PROMOCIÓN AUTOMÁTICA (incluyendo 2x1)
   let appliedPromotion: DbPromotion | null = null;
   let promotionDiscount = 0;
 
@@ -304,7 +325,17 @@ export function calculateCartPricing(params: {
 
   for (const promo of eligiblePromos) {
     let calcDiscount = 0;
-    if (promo.discount_type === 'percentage') {
+    if (promo.discount_type === 'two_for_one' || promo.is_two_for_one) {
+      // Promoción 2x1: por cada 2 unidades, 1 es gratis
+      for (const detail of lineDetails) {
+        if (!detail.isPack) {
+          if (!promo.applicable_product_id || detail.lineId === promo.applicable_product_id) {
+            const freeUnits = Math.floor(detail.quantity / 2);
+            calcDiscount += round2(freeUnits * detail.discountedUnitPrice);
+          }
+        }
+      }
+    } else if (promo.discount_type === 'percentage') {
       calcDiscount = round2(subtotal * (Number(promo.discount_value) / 100));
     } else {
       calcDiscount = Math.min(subtotal, Number(promo.discount_value));
@@ -324,7 +355,7 @@ export function calculateCartPricing(params: {
   const freeShippingThreshold = Number(settings.free_shipping_threshold ?? 30.0);
   const freeShippingEnabled = Boolean(settings.free_shipping_enabled);
 
-  let isFreeShipping = freeShippingEnabled && subtotal >= freeShippingThreshold;
+  let isFreeShipping = (freeShippingEnabled && subtotal >= freeShippingThreshold) || hasPackFreeShipping;
   let deliveryFee = isFreeShipping ? 0.0 : standardFee;
 
   // Beneficios de YA+ en Envío
@@ -356,7 +387,7 @@ export function calculateCartPricing(params: {
   // 8. PEDIDO MÍNIMO
   const minOrderEnabled = Boolean(settings.min_order_enabled);
   const minOrderAmount = Number(settings.min_order_amount ?? 10.0);
-  const isMinOrderSatisfied = !minOrderEnabled || subtotal >= minOrderAmount;
+  const isMinOrderSatisfied = hasPackSkipMinOrder || !minOrderEnabled || subtotal >= minOrderAmount;
   const minOrderRemaining = Math.max(0, round2(minOrderAmount - subtotal));
 
   // Beneficios de YA+ en Descuento de Pedido
@@ -398,6 +429,8 @@ export function calculateCartPricing(params: {
     yaPlusFreeShipping,
     yaPlusOrderDiscount,
     yaPlusTotalSavings,
+    hasPackFreeShipping,
+    hasPackSkipMinOrder,
   };
 }
 

@@ -343,6 +343,7 @@ export async function adminCreateProduct(prod: {
   slug: string;
   description?: string;
   image?: string;
+  images?: string[];
   price: number;
   estimated_cost?: number;
   active: boolean;

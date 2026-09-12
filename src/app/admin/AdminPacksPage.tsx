@@ -23,6 +23,7 @@ import {
   deletePack,
 } from '../../lib/adminPacks';
 import { adminFetchProducts, type AdminProductItem } from '../../lib/catalog';
+import { ImageGalleryManager } from '../../components/admin/ImageGalleryManager';
 import type { PackWithDetails, PackType } from '../../types/app';
 import { euro } from '../../data/products';
 
@@ -41,6 +42,9 @@ export function AdminPacksPage() {
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('📦');
+  const [images, setImages] = useState<string[]>([]);
+  const [freeShipping, setFreeShipping] = useState(false);
+  const [skipMinOrder, setSkipMinOrder] = useState(false);
   const [packType, setPackType] = useState<PackType>('fixed');
   const [price, setPrice] = useState('9.90');
   const [referencePrice, setReferencePrice] = useState('12.00');
@@ -51,11 +55,15 @@ export function AdminPacksPage() {
   const [fixedItems, setFixedItems] = useState<{ productId: string; quantity: number }[]>([]);
 
   // Grupos para pack personalizable
+  type LocalGroupOption = {
+    productId: string;
+    price_supplement: number;
+  };
   type LocalGroup = {
     name: string;
     min_select: number;
     max_select: number;
-    productIds: string[];
+    options: LocalGroupOption[];
   };
   const [configurableGroups, setConfigurableGroups] = useState<LocalGroup[]>([]);
 
@@ -88,6 +96,9 @@ export function AdminPacksPage() {
     setSlug('');
     setDescription('');
     setImage('📦');
+    setImages([]);
+    setFreeShipping(false);
+    setSkipMinOrder(false);
     setPackType('fixed');
     setPrice('9.90');
     setReferencePrice('');
@@ -104,6 +115,12 @@ export function AdminPacksPage() {
     setSlug(p.slug || '');
     setDescription(p.description || '');
     setImage(p.image || '📦');
+    const pImages = (p as any).images && Array.isArray((p as any).images) && (p as any).images.length > 0
+      ? (p as any).images
+      : p.image ? [p.image] : [];
+    setImages(pImages);
+    setFreeShipping(Boolean(p.free_shipping));
+    setSkipMinOrder(Boolean(p.skip_min_order));
     setPackType(p.pack_type);
     setPrice(String(p.price));
     setReferencePrice(p.reference_price ? String(p.reference_price) : '');
@@ -122,7 +139,10 @@ export function AdminPacksPage() {
         name: g.name,
         min_select: g.min_select,
         max_select: g.max_select,
-        productIds: (g.options || []).map((o) => o.product_id),
+        options: (g.options || []).map((o) => ({
+          productId: o.product_id,
+          price_supplement: Number(o.price_supplement) || 0,
+        })),
       }));
       setConfigurableGroups(groups);
       setFixedItems([]);
@@ -160,7 +180,7 @@ export function AdminPacksPage() {
         name: `Grupo ${configurableGroups.length + 1}`,
         min_select: 1,
         max_select: 1,
-        productIds: products.slice(0, 3).map((p) => p.id),
+        options: products.slice(0, 3).map((p) => ({ productId: p.id, price_supplement: 0 })),
       },
     ]);
   };
@@ -177,11 +197,23 @@ export function AdminPacksPage() {
 
   const toggleProductInGroup = (groupIndex: number, prodId: string) => {
     const group = configurableGroups[groupIndex];
-    const exists = group.productIds.includes(prodId);
-    const updatedIds = exists
-      ? group.productIds.filter((id) => id !== prodId)
-      : [...group.productIds, prodId];
-    updateConfigurableGroup(groupIndex, 'productIds', updatedIds);
+    const exists = group.options.some((o) => o.productId === prodId);
+    const updatedOptions = exists
+      ? group.options.filter((o) => o.productId !== prodId)
+      : [...group.options, { productId: prodId, price_supplement: 0 }];
+    const next = [...configurableGroups];
+    next[groupIndex] = { ...next[groupIndex], options: updatedOptions };
+    setConfigurableGroups(next);
+  };
+
+  const updateProductSupplement = (groupIndex: number, prodId: string, supplement: number) => {
+    const next = [...configurableGroups];
+    const group = next[groupIndex];
+    const opt = group.options.find((o) => o.productId === prodId);
+    if (opt) {
+      opt.price_supplement = Math.max(0, supplement || 0);
+      setConfigurableGroups(next);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,7 +249,7 @@ export function AdminPacksPage() {
           setSubmitting(false);
           return;
         }
-        if (grp.productIds.length === 0) {
+        if (grp.options.length === 0) {
           setActionError(`El grupo "${grp.name}" no tiene productos asignados.`);
           setSubmitting(false);
           return;
@@ -230,14 +262,18 @@ export function AdminPacksPage() {
       }
     }
 
+    const primaryImg = images.length > 0 ? images[0] : (image.trim() || '📦');
     const packData = {
       name: name.trim(),
       slug: cleanSlug,
       description: description.trim() || null,
-      image: image.trim() || '📦',
+      image: primaryImg,
+      images: images.length > 0 ? images : [primaryImg],
       pack_type: packType,
       price: pr,
       reference_price: referencePrice ? parseFloat(referencePrice) : null,
+      free_shipping: freeShipping,
+      skip_min_order: skipMinOrder,
       sort_order: sortOrder,
       active,
     };
@@ -257,9 +293,10 @@ export function AdminPacksPage() {
         min_select: cg.min_select,
         max_select: cg.max_select,
         sort_order: gIdx + 1,
-        options: cg.productIds.map((pid, oIdx) => ({
-          product_id: pid,
+        options: cg.options.map((opt, oIdx) => ({
+          product_id: opt.productId,
           sort_order: oIdx + 1,
+          price_supplement: Number(opt.price_supplement) || 0,
         })),
       }));
     }
@@ -461,15 +498,27 @@ export function AdminPacksPage() {
                       </div>
                     </div>
 
-                    <span
-                      className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase tracking-wider border ${
-                        p.pack_type === 'fixed'
-                          ? 'border-blue-500 text-blue-300 bg-blue-950/40'
-                          : 'border-purple-500 text-purple-300 bg-purple-950/40'
-                      }`}
-                    >
-                      {p.pack_type === 'fixed' ? 'FIJO' : 'PERSONALIZABLE'}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`px-2 py-0.5 text-[9px] font-mono font-black uppercase tracking-wider border ${
+                          p.pack_type === 'fixed'
+                            ? 'border-blue-500 text-blue-300 bg-blue-950/40'
+                            : 'border-purple-500 text-purple-300 bg-purple-950/40'
+                        }`}
+                      >
+                        {p.pack_type === 'fixed' ? 'FIJO' : 'PERSONALIZABLE'}
+                      </span>
+                      {p.free_shipping && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-black uppercase border border-emerald-500 text-emerald-300 bg-emerald-950/40">
+                          🚚 Envío Gratis
+                        </span>
+                      )}
+                      {p.skip_min_order && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-mono font-black uppercase border border-amber-500 text-amber-300 bg-amber-950/40">
+                          ⚡ Sin Mínimo
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Descripción */}
@@ -741,6 +790,48 @@ export function AdminPacksPage() {
                 </div>
               </div>
 
+              {/* Ventajas Logísticas del Pack */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="flex items-center justify-between p-3 border-2 border-ya-gray bg-ya-gray/20 cursor-pointer">
+                  <div>
+                    <span className="block font-bold text-white uppercase text-[11px]">🚚 Envío Gratuito</span>
+                    <span className="text-[10px] text-gray-400">Este pack exime los costes de envío del pedido</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={freeShipping}
+                    onChange={(e) => setFreeShipping(e.target.checked)}
+                    className="w-5 h-5 accent-ya-lime shrink-0 ml-2"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 border-2 border-ya-gray bg-ya-gray/20 cursor-pointer">
+                  <div>
+                    <span className="block font-bold text-white uppercase text-[11px]">⚡ Sin Pedido Mínimo</span>
+                    <span className="text-[10px] text-gray-400">Permite tramitar el pedido sin alcanzar el importe mínimo</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={skipMinOrder}
+                    onChange={(e) => setSkipMinOrder(e.target.checked)}
+                    className="w-5 h-5 accent-ya-lime shrink-0 ml-2"
+                  />
+                </label>
+              </div>
+
+              {/* Gestor de Galería Cloudinary (1 a 5 imágenes) */}
+              <div className="border-2 border-ya-gray bg-ya-gray/10 p-4">
+                <ImageGalleryManager
+                  images={images}
+                  onChange={(newImgs) => {
+                    setImages(newImgs);
+                    if (newImgs.length > 0) setImage(newImgs[0]);
+                  }}
+                  maxImages={5}
+                  label="Galería de imágenes del pack (1 a 5 con Cloudinary)"
+                />
+              </div>
+
               {/* SECCIÓN ESPECÍFICA SEGÚN TIPO */}
               {packType === 'fixed' ? (
                 /* PACK CERRADO: LISTA DE PRODUCTOS INCLUIDOS */
@@ -861,25 +952,56 @@ export function AdminPacksPage() {
                         {/* Selección de productos disponibles para este grupo */}
                         <div>
                           <label className="block text-gray-400 text-[10px] uppercase font-bold mb-1.5">
-                            Productos disponibles en este grupo ({grp.productIds.length} seleccionados):
+                            Productos disponibles en este grupo ({grp.options.length} seleccionados):
                           </label>
-                          <div className="max-h-32 overflow-y-auto border border-ya-gray/40 p-2 space-y-1 bg-ya-black">
+                          <div className="max-h-48 overflow-y-auto border border-ya-gray/40 p-2 space-y-1.5 bg-ya-black">
                             {products.map((p) => {
-                              const isSelected = grp.productIds.includes(p.id);
+                              const selectedOpt = grp.options.find((o) => o.productId === p.id);
+                              const isSelected = Boolean(selectedOpt);
                               return (
-                                <button
+                                <div
                                   key={p.id}
-                                  type="button"
-                                  onClick={() => toggleProductInGroup(gIdx, p.id)}
-                                  className={`w-full flex items-center justify-between px-2 py-1 text-left text-[11px] transition-colors ${
+                                  className={`p-1.5 border transition-colors ${
                                     isSelected
-                                      ? 'bg-ya-lime text-ya-black font-bold'
-                                      : 'text-gray-300 hover:bg-ya-gray/40'
+                                      ? 'border-ya-lime bg-ya-lime/10'
+                                      : 'border-ya-gray/40 hover:bg-ya-gray/20'
                                   }`}
                                 >
-                                  <span className="truncate">{p.name}</span>
-                                  {isSelected && <Check size={12} strokeWidth={3} />}
-                                </button>
+                                  <div
+                                    onClick={() => toggleProductInGroup(gIdx, p.id)}
+                                    className="flex items-center justify-between cursor-pointer text-[11px]"
+                                  >
+                                    <span className={`truncate ${isSelected ? 'text-ya-lime font-bold' : 'text-gray-300'}`}>
+                                      {p.name}
+                                    </span>
+                                    {isSelected ? (
+                                      <Check size={14} className="text-ya-lime shrink-0" strokeWidth={3} />
+                                    ) : (
+                                      <span className="text-[10px] text-gray-500 font-mono">+ añadir</span>
+                                    )}
+                                  </div>
+
+                                  {isSelected && (
+                                    <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-ya-gray/30">
+                                      <span className="text-[10px] font-mono text-gray-400">
+                                        Suplemento opción (€):
+                                      </span>
+                                      <input
+                                        type="number"
+                                        step="0.10"
+                                        min="0"
+                                        value={selectedOpt?.price_supplement ?? 0}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => updateProductSupplement(gIdx, p.id, parseFloat(e.target.value) || 0)}
+                                        placeholder="0.00"
+                                        className="w-20 bg-ya-gray/40 border border-ya-gray px-1.5 py-0.5 text-ya-lime font-bold text-[11px] focus:border-ya-lime focus:outline-none"
+                                      />
+                                      <span className="text-[10px] text-gray-500">
+                                        {(selectedOpt?.price_supplement || 0) > 0 ? `(+${selectedOpt?.price_supplement?.toFixed(2)}€ al pack)` : '(Incluido en base)'}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               );
                             })}
                           </div>

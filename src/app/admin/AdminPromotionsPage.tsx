@@ -22,11 +22,13 @@ import {
   updatePromotion,
   deletePromotion,
 } from '../../lib/adminPromotions';
+import { adminFetchProducts, type AdminProductItem } from '../../lib/catalog';
 import type { DbPromotion, DiscountType } from '../../types/app';
 import { euro } from '../../data/products';
 
 export function AdminPromotionsPage() {
   const [promotions, setPromotions] = useState<DbPromotion[]>([]);
+  const [products, setProducts] = useState<AdminProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export function AdminPromotionsPage() {
   const [discountType, setDiscountType] = useState<DiscountType>('percentage');
   const [discountValue, setDiscountValue] = useState('10');
   const [minimumOrder, setMinimumOrder] = useState('30.00');
+  const [applicableProductId, setApplicableProductId] = useState<string>('all');
   const [isAutomatic, setIsAutomatic] = useState(true);
   const [startsAt, setStartsAt] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
@@ -50,8 +53,14 @@ export function AdminPromotionsPage() {
     setLoading(true);
     setActionError(null);
     try {
-      const data = await fetchPromotions();
-      setPromotions(data);
+      const [promos, prodsRes] = await Promise.all([
+        fetchPromotions(),
+        adminFetchProducts(),
+      ]);
+      setPromotions(promos);
+      if (prodsRes.data) {
+        setProducts(prodsRes.data);
+      }
     } catch (err: any) {
       setActionError(err.message || 'Error al cargar promociones.');
     } finally {
@@ -71,6 +80,7 @@ export function AdminPromotionsPage() {
     setDiscountType('percentage');
     setDiscountValue('10');
     setMinimumOrder('30.00');
+    setApplicableProductId('all');
     setIsAutomatic(true);
     setStartsAt('');
     setExpiresAt('');
@@ -86,6 +96,7 @@ export function AdminPromotionsPage() {
     setDiscountType(p.discount_type);
     setDiscountValue(String(p.discount_value));
     setMinimumOrder(String(p.minimum_order));
+    setApplicableProductId(p.applicable_product_id || 'all');
     setIsAutomatic(p.is_automatic ?? true);
     setStartsAt(p.starts_at ? p.starts_at.slice(0, 16) : '');
     setExpiresAt(p.expires_at ? p.expires_at.slice(0, 16) : '');
@@ -104,10 +115,10 @@ export function AdminPromotionsPage() {
     setActionError(null);
     setActionSuccess(null);
 
-    const val = parseFloat(discountValue);
-    const minOrd = parseFloat(minimumOrder);
+    const val = discountType === 'two_for_one' ? 50 : parseFloat(discountValue);
+    const minOrd = discountType === 'two_for_one' ? (parseFloat(minimumOrder) || 0) : parseFloat(minimumOrder);
 
-    if (isNaN(val) || val <= 0) {
+    if (discountType !== 'two_for_one' && (isNaN(val) || val <= 0)) {
       setActionError('El valor del descuento debe ser mayor que 0.');
       setSubmitting(false);
       return;
@@ -139,6 +150,8 @@ export function AdminPromotionsPage() {
       discount_type: discountType,
       discount_value: val,
       minimum_order: minOrd,
+      applicable_product_id: applicableProductId === 'all' ? null : applicableProductId,
+      is_two_for_one: discountType === 'two_for_one',
       is_automatic: isAutomatic,
       starts_at: startsAt ? new Date(startsAt).toISOString() : null,
       expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
@@ -319,11 +332,26 @@ export function AdminPromotionsPage() {
                   </td>
 
                   <td className="p-4">
-                    <span className="bg-ya-lime/20 text-ya-lime px-2.5 py-1 font-black text-sm border border-ya-lime/40">
-                      {p.discount_type === 'percentage'
-                        ? `-${p.discount_value}%`
-                        : `-${euro(p.discount_value)}`}
-                    </span>
+                    {p.discount_type === 'two_for_one' || p.is_two_for_one ? (
+                      <div className="space-y-1">
+                        <span className="bg-amber-500/20 text-amber-300 font-black px-2.5 py-1 text-xs border border-amber-500/40 inline-block tracking-wider">
+                          2×1 OFERTA
+                        </span>
+                        {p.applicable_product_id ? (
+                          <span className="text-[10px] text-gray-400 block truncate max-w-[150px]">
+                            {products.find((prod) => prod.id === p.applicable_product_id)?.name || 'Producto específico'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 block">Todo el catálogo</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="bg-ya-lime/20 text-ya-lime px-2.5 py-1 font-black text-sm border border-ya-lime/40">
+                        {p.discount_type === 'percentage'
+                          ? `-${p.discount_value}%`
+                          : `-${euro(p.discount_value)}`}
+                      </span>
+                    )}
                   </td>
 
                   <td className="p-4 text-gray-300 font-bold">
@@ -462,33 +490,73 @@ export function AdminPromotionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-gray-300 uppercase font-bold mb-1">
-                    Tipo de Rebaja
+                    Tipo de Promoción
                   </label>
                   <select
                     value={discountType}
-                    onChange={(e) => setDiscountType(e.target.value as DiscountType)}
+                    onChange={(e) => {
+                      const val = e.target.value as DiscountType;
+                      setDiscountType(val);
+                      if (val === 'two_for_one') {
+                        setDiscountValue('50');
+                        setMinimumOrder('0.00');
+                      }
+                    }}
                     className="w-full bg-ya-gray/40 border-2 border-ya-gray px-3 py-2 text-white focus:border-ya-lime focus:outline-none"
                   >
                     <option value="percentage" className="bg-ya-black">Porcentaje (%)</option>
                     <option value="fixed" className="bg-ya-black">Importe Fijo (€)</option>
+                    <option value="two_for_one" className="bg-ya-black">Promoción 2×1 (Paga 1, Lleva 2)</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-gray-300 uppercase font-bold mb-1">
-                    Valor de Descuento *
+                    {discountType === 'two_for_one' ? 'Mecánica 2×1' : 'Valor de Descuento *'}
                   </label>
-                  <input
-                    type="number"
-                    step={discountType === 'percentage' ? '1' : '0.50'}
-                    min="0"
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(e.target.value)}
-                    className="w-full bg-ya-gray/30 border-2 border-ya-gray px-3 py-2 text-white focus:border-ya-lime focus:outline-none font-bold"
-                    placeholder="10"
-                    required
-                  />
+                  {discountType === 'two_for_one' ? (
+                    <div className="w-full bg-ya-gray/30 border-2 border-amber-500/40 px-3 py-2 text-amber-300 font-bold text-xs flex items-center">
+                      1 unidad gratis por cada 2 unidades
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      step={discountType === 'percentage' ? '1' : '0.50'}
+                      min="0"
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      className="w-full bg-ya-gray/30 border-2 border-ya-gray px-3 py-2 text-white focus:border-ya-lime focus:outline-none font-bold"
+                      placeholder="10"
+                      required
+                    />
+                  )}
                 </div>
+              </div>
+
+              {/* Selector de Producto Aplicable (para 2x1 o promociones directas) */}
+              <div>
+                <label className="block text-gray-300 uppercase font-bold mb-1">
+                  Producto Aplicable {discountType === 'two_for_one' && '(Obligatorio o General)'}
+                </label>
+                <select
+                  value={applicableProductId}
+                  onChange={(e) => setApplicableProductId(e.target.value)}
+                  className="w-full bg-ya-gray/40 border-2 border-ya-gray px-3 py-2 text-white focus:border-ya-lime focus:outline-none"
+                >
+                  <option value="all" className="bg-ya-black">
+                    Aplica a todos los productos individuales
+                  </option>
+                  {products.map((prod) => (
+                    <option key={prod.id} value={prod.id} className="bg-ya-black">
+                      {prod.name} ({euro(prod.price)})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  {discountType === 'two_for_one'
+                    ? 'Si seleccionas un producto concreto, el 2×1 solo se aplicará al comprar 2 o más unidades de ese producto.'
+                    : 'Puedes restringir la promoción a un producto específico o aplicarla de forma global.'}
+                </p>
               </div>
 
               {/* Pedido Mínimo */}
