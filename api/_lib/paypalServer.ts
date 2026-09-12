@@ -240,14 +240,23 @@ export class PayPalGatewayError extends Error {
 
   constructor(status: number, data: any) {
     const errorName = data?.name || 'PayPalError';
-    const message = data?.message || data?.error_description || 'Error en pasarela PayPal';
-    super(`[PayPal ${status}] ${errorName}: ${message}`);
+    const baseMessage = data?.message || data?.error_description || 'Error en pasarela PayPal';
+    const details = Array.isArray(data?.details) ? data.details : [];
+
+    let formattedDetails = '';
+    if (details.length > 0) {
+      formattedDetails = ' - ' + details
+        .map((d: any) => `${d.issue || ''}: ${d.description || ''}${d.field ? ' (' + d.field + ')' : ''}`)
+        .join('; ');
+    }
+
+    super(`[PayPal ${status}] ${errorName}: ${baseMessage}${formattedDetails}`);
     this.name = 'PayPalGatewayError';
     this.status = status;
     this.paypalName = errorName;
-    this.paypalMessage = message;
+    this.paypalMessage = `${baseMessage}${formattedDetails}`;
     this.debug_id = data?.debug_id || null;
-    this.details = Array.isArray(data?.details) ? data.details : [];
+    this.details = details;
     this.links = Array.isArray(data?.links) ? data.links : [];
   }
 }

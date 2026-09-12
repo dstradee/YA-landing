@@ -996,7 +996,7 @@ BEGIN
     v_total := GREATEST(0.00, v_subtotal + v_delivery_fee - v_best_promo_discount);
 
     -- 11. Generar número de pedido YA
-    v_order_number := 'YA-' || TO_CHAR(now(), 'YYYYMMDD') || '-' || UPPER(SUBSTRING(uuid_generate_v4()::TEXT FROM 1 FOR 4));
+    v_order_number := 'YA-' || TO_CHAR(now(), 'YYYYMMDD') || '-' || UPPER(SUBSTRING(gen_random_uuid()::TEXT FROM 1 FOR 4));
 
     -- 12. Insertar pedido en orders
     INSERT INTO public.orders (
@@ -1370,7 +1370,7 @@ BEGIN
         END IF;
     END LOOP;
 
-    v_order_number := 'TEST-' || TO_CHAR(now(), 'YYYYMMDD') || '-' || UPPER(SUBSTRING(uuid_generate_v4()::TEXT FROM 1 FOR 4));
+    v_order_number := 'TEST-' || TO_CHAR(now(), 'YYYYMMDD') || '-' || UPPER(SUBSTRING(gen_random_uuid()::TEXT FROM 1 FOR 4));
 
     -- Insertar pedido de prueba
     INSERT INTO public.orders (
