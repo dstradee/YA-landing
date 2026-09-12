@@ -220,7 +220,9 @@ $$;
 -- 7. RECOMPENSAS / REPARTIDORES: VISTA Y SINTAXIS PL/pgSQL 100% SEGURA
 -- ------------------------------------------------------------------------------
 -- Vista de consulta agregada
-CREATE OR REPLACE VIEW public.courier_reward_history AS
+DROP VIEW IF EXISTS public.courier_reward_history;
+
+CREATE VIEW public.courier_reward_history AS
 SELECT 
     r.id,
     r.courier_id,
@@ -239,9 +241,12 @@ SELECT
     r.notes,
     r.created_at
 FROM public.courier_incentive_rewards r
-JOIN public.couriers c ON c.id = r.courier_id
-LEFT JOIN public.profiles p ON p.id = c.profile_id
-JOIN public.courier_incentives i ON i.id = r.incentive_id;
+JOIN public.couriers c
+    ON c.id = r.courier_id
+LEFT JOIN public.profiles p
+    ON p.id = c.profile_id
+JOIN public.courier_incentives i
+    ON i.id = r.incentive_id;
 
 GRANT SELECT ON public.courier_reward_history TO authenticated, service_role;
 
