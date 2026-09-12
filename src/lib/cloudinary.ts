@@ -19,13 +19,32 @@ declare global {
   }
 }
 
+export interface ManagedImage {
+  id?: string;
+  url: string;
+  is_primary?: boolean;
+}
+
+/**
+ * Guarda la configuración de Cloudinary en localStorage (para pruebas o personalización admin).
+ */
+export function saveCloudinaryConfig(config: { cloudName: string; uploadPreset: string }) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('ya_cloudinary_cloud_name', config.cloudName);
+    localStorage.setItem('ya_cloudinary_upload_preset', config.uploadPreset);
+  }
+}
+
 /**
  * Obtiene la configuración de Cloudinary para el frontend (Cloud Name y Upload Preset unsigned).
  * NO requiere ni expone ninguna clave secreta (API Secret).
  */
 export function getCloudinaryConfig() {
-  const cloudName = (import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '').trim();
-  const uploadPreset = (import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '').trim();
+  const localCloudName = typeof window !== 'undefined' ? localStorage.getItem('ya_cloudinary_cloud_name') : null;
+  const localUploadPreset = typeof window !== 'undefined' ? localStorage.getItem('ya_cloudinary_upload_preset') : null;
+
+  const cloudName = (localCloudName || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '').trim();
+  const uploadPreset = (localUploadPreset || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '').trim();
 
   return {
     cloudName: cloudName || 'ya-delivery',
@@ -326,5 +345,50 @@ export async function uploadImageToCloudinary(
     return { url: null, error: msg };
   } catch (err: any) {
     return { url: null, error: err.message || 'Error de conexión con Cloudinary.' };
+  }
+}
+
+/**
+ * Función compatible con ImageManagerModal para subida directa devolviendo { url: string }
+ */
+export async function uploadToCloudinary(
+  file: File,
+  config?: { cloudName?: string; uploadPreset?: string }
+): Promise<{ url: string }> {
+  try {
+    if (!file.type.startsWith('image/')) {
+      throw new Error('El archivo seleccionado no es una imagen válida.');
+    }
+
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      throw new Error('La imagen excede el límite de 5 MB de Cloudinary gratuito.');
+    }
+
+    const currentConfig = getCloudinaryConfig();
+    const cloudName = config?.cloudName || currentConfig.cloudName;
+    const uploadPreset = config?.uploadPreset || currentConfig.uploadPreset;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    formData.append('folder', 'ya_delivery');
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const secureUrl = getOptimizedImageUrl(data.secure_url || data.url);
+      return { url: secureUrl };
+    }
+
+    const errorJson = await response.json().catch(() => null);
+    const msg = errorJson?.error?.message || 'Error al subir la imagen a Cloudinary.';
+    throw new Error(msg);
+  } catch (err: any) {
+    throw new Error(err.message || 'Error de conexión con Cloudinary.');
   }
 }

@@ -160,13 +160,30 @@ export async function createOrderViaRpc(input: CreateOrderInput): Promise<Create
 
     const rpcPayload = {
       p_address_id: input.addressId,
-      p_items: input.lines.map((l) => ({
-        product_id: l.isPack ? (l.packId || l.productId) : l.productId,
-        quantity: l.quantity,
-        is_pack: Boolean(l.isPack || l.packId),
-        pack_id: l.isPack ? (l.packId || l.productId) : undefined,
-        selections: l.selections || [],
-      })),
+      p_items: input.lines.map((l) => {
+        const normalizedSelections = (l.selections || []).map((s: any) => ({
+          group_id: s.group_id || s.groupId,
+          groupId: s.groupId || s.group_id,
+          group_name: s.group_name || s.groupName,
+          groupName: s.groupName || s.group_name,
+          product_id: s.product_id || s.productId,
+          productId: s.productId || s.product_id,
+          product_name: s.product_name || s.productName,
+          productName: s.productName || s.product_name,
+          price_supplement: Number(s.price_supplement ?? s.priceSupplement ?? 0),
+          priceSupplement: Number(s.priceSupplement ?? s.price_supplement ?? 0),
+          quantity: Math.max(1, Number(s.quantity) || 1),
+        }));
+
+        return {
+          product_id: l.isPack ? (l.packId || l.productId) : l.productId,
+          quantity: l.quantity,
+          is_pack: Boolean(l.isPack || l.packId),
+          pack_id: l.isPack ? (l.packId || l.productId) : undefined,
+          selections: normalizedSelections,
+          pack_selections: normalizedSelections,
+        };
+      }),
       p_notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
       p_payment_method: paymentMethodType,
     };
@@ -238,13 +255,30 @@ export async function createAdminTestOrderViaRpc(
   try {
     const rpcPayload = {
       p_address_id: input.addressId || null,
-      p_items: input.lines.map((l) => ({
-        product_id: l.isPack ? (l.packId || l.productId) : l.productId,
-        quantity: l.quantity,
-        is_pack: Boolean(l.isPack || l.packId),
-        pack_id: l.isPack ? (l.packId || l.productId) : undefined,
-        pack_selections: l.selections || [],
-      })),
+      p_items: input.lines.map((l) => {
+        const normalizedSelections = (l.selections || []).map((s: any) => ({
+          group_id: s.group_id || s.groupId,
+          groupId: s.groupId || s.group_id,
+          group_name: s.group_name || s.groupName,
+          groupName: s.groupName || s.group_name,
+          product_id: s.product_id || s.productId,
+          productId: s.productId || s.product_id,
+          product_name: s.product_name || s.productName,
+          productName: s.productName || s.product_name,
+          price_supplement: Number(s.price_supplement ?? s.priceSupplement ?? 0),
+          priceSupplement: Number(s.priceSupplement ?? s.price_supplement ?? 0),
+          quantity: Math.max(1, Number(s.quantity) || 1),
+        }));
+
+        return {
+          product_id: l.isPack ? (l.packId || l.productId) : l.productId,
+          quantity: l.quantity,
+          is_pack: Boolean(l.isPack || l.packId),
+          pack_id: l.isPack ? (l.packId || l.productId) : undefined,
+          selections: normalizedSelections,
+          pack_selections: normalizedSelections,
+        };
+      }),
       p_notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
     };
 

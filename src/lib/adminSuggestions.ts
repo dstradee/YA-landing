@@ -139,7 +139,7 @@ export async function fetchProductSuggestions(filters?: {
   if (filters?.query && filters.query.trim()) {
     const q = filters.query.toLowerCase().trim();
     list = list.filter((s) =>
-      s.name.toLowerCase().includes(q) ||
+      (s.name || s.title || '').toLowerCase().includes(q) ||
       (s.brand && s.brand.toLowerCase().includes(q)) ||
       (s.category_name && s.category_name.toLowerCase().includes(q))
     );

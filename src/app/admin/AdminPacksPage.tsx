@@ -940,7 +940,7 @@ export function AdminPacksPage() {
 
                         <div className="grid grid-cols-2 gap-3 text-[11px]">
                           <div>
-                            <label className="text-gray-400">Mínimo a elegir:</label>
+                            <label className="text-gray-400">Mínimo de unidades a elegir:</label>
                             <input
                               type="number"
                               min="1"
@@ -950,7 +950,7 @@ export function AdminPacksPage() {
                             />
                           </div>
                           <div>
-                            <label className="text-gray-400">Máximo a elegir:</label>
+                            <label className="text-gray-400">Máximo de unidades a elegir:</label>
                             <input
                               type="number"
                               min="1"
@@ -958,6 +958,9 @@ export function AdminPacksPage() {
                               onChange={(e) => updateConfigurableGroup(gIdx, 'max_select', parseInt(e.target.value) || 1)}
                               className="w-full mt-1 bg-ya-gray/30 border border-ya-gray px-2 py-1 text-white focus:border-ya-lime focus:outline-none"
                             />
+                          </div>
+                          <div className="col-span-2 text-[10px] text-gray-400">
+                            💡 El límite aplica al total de unidades seleccionadas en el grupo. El cliente puede combinar o repetir productos (ej: 3 Monster, o 2 Monster + 1 Red Bull).
                           </div>
                         </div>
 
@@ -996,11 +999,11 @@ export function AdminPacksPage() {
                                   {isSelected && (
                                     <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-ya-gray/30">
                                       <span className="text-[10px] font-mono text-gray-400">
-                                        Suplemento opción (€):
+                                        Suplemento por unidad (€):
                                       </span>
                                       <input
                                         type="number"
-                                        step="0.10"
+                                        step="0.05"
                                         min="0"
                                         value={selectedOpt?.price_supplement ?? 0}
                                         onClick={(e) => e.stopPropagation()}
@@ -1009,7 +1012,7 @@ export function AdminPacksPage() {
                                         className="w-20 bg-ya-gray/40 border border-ya-gray px-1.5 py-0.5 text-ya-lime font-bold text-[11px] focus:border-ya-lime focus:outline-none"
                                       />
                                       <span className="text-[10px] text-gray-500">
-                                        {(selectedOpt?.price_supplement || 0) > 0 ? `(+${selectedOpt?.price_supplement?.toFixed(2)}€ al pack)` : '(Incluido en base)'}
+                                        {(selectedOpt?.price_supplement || 0) > 0 ? `(+${selectedOpt?.price_supplement?.toFixed(2)}€ por cada unidad elegida)` : '(Incluido en el precio base)'}
                                       </span>
                                     </div>
                                   )}

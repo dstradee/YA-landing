@@ -336,9 +336,9 @@ export async function createPack(params: {
             const optRows = grp.options.map((opt, oIdx) => ({
               group_id: newGrp.id,
               product_id: opt.product_id,
+              price_supplement: Number((opt as any).price_supplement ?? (opt as any).priceSupplement ?? 0),
               default_selected: Boolean(opt.default_selected),
               sort_order: opt.sort_order ?? oIdx + 1,
-              price_supplement: Number(opt.price_supplement || 0),
             }));
             await supabase.from('pack_group_options').insert(optRows);
           }
@@ -469,9 +469,9 @@ export async function updatePack(
             const optRows = grp.options.map((opt, oIdx) => ({
               group_id: newGrp.id,
               product_id: opt.product_id,
+              price_supplement: Number((opt as any).price_supplement ?? (opt as any).priceSupplement ?? 0),
               default_selected: Boolean(opt.default_selected),
               sort_order: opt.sort_order ?? oIdx + 1,
-              price_supplement: Number(opt.price_supplement || 0),
             }));
             await supabase.from('pack_group_options').insert(optRows);
           }
@@ -520,6 +520,7 @@ export async function updatePack(
           id: `pgo-${id}-${gIdx}-${oIdx}`,
           group_id: `pg-${id}-${gIdx}`,
           product_id: opt.product_id,
+          price_supplement: Number((opt as any).price_supplement ?? (opt as any).priceSupplement ?? 0),
           default_selected: Boolean(opt.default_selected),
           sort_order: opt.sort_order ?? oIdx + 1,
           created_at: new Date().toISOString(),

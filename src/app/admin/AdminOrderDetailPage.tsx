@@ -761,21 +761,53 @@ export function AdminOrderDetailPage() {
               </div>
             ) : (
               <div className="divide-y-2 divide-ya-gray">
-                {order.items.map((item) => (
-                  <div key={item.id} className="py-3.5 flex items-center justify-between gap-4 font-mono">
-                    <div>
-                      <div className="font-sans font-black text-white text-sm">
-                        {item.product_name}
+                {order.items.map((item) => {
+                  const isPack = Boolean((item as any).is_pack);
+                  const selections = ((item as any).pack_selections_snapshot as any[]) || [];
+                  return (
+                    <div key={item.id} className="py-3.5 flex items-center justify-between gap-4 font-mono">
+                      <div>
+                        <div className="font-sans font-black text-white text-sm flex items-center gap-2">
+                          {isPack && (
+                            <span className="bg-ya-lime text-ya-black text-[9px] font-black uppercase px-1.5 py-0.5 tracking-wider font-sans">
+                              PACK
+                            </span>
+                          )}
+                          <span>{item.product_name}</span>
+                        </div>
+                        <div className="text-[11px] text-gray-400 mt-0.5">
+                          {item.quantity} × {euro(item.unit_price)}
+                        </div>
+                        {isPack && selections.length > 0 && (
+                          <div className="mt-1.5 space-y-0.5 pl-2 border-l-2 border-ya-lime/40">
+                            {selections.map((sel, sIdx) => {
+                              const q = Math.max(1, Number(sel.quantity) || 1);
+                              const supp = Number(sel.price_supplement ?? sel.priceSupplement ?? 0);
+                              return (
+                                <p key={sIdx} className="text-[11px] text-gray-300 font-sans flex items-center gap-2">
+                                  <span>
+                                    · {sel.group_name || sel.groupName}:{' '}
+                                    <span className="text-white font-bold">
+                                      {q > 1 ? `${q}x ` : ''}{sel.product_name || sel.productName}
+                                    </span>
+                                  </span>
+                                  {supp > 0 && (
+                                    <span className="text-amber-300 font-mono text-[10px]">
+                                      (+{euro(supp * q)})
+                                    </span>
+                                  )}
+                                </p>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-[11px] text-gray-400 mt-0.5">
-                        {item.quantity} × {euro(item.unit_price)}
+                      <div className="font-black text-white text-sm text-right">
+                        {euro(item.subtotal)}
                       </div>
                     </div>
-                    <div className="font-black text-white text-sm text-right">
-                      {euro(item.subtotal)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

@@ -363,6 +363,7 @@ DECLARE
     v_pack_sub_item RECORD;
     v_pack_group RECORD;
     v_selection JSONB;
+    v_selection_qty INT;
     v_chosen_option_count INT;
     v_chosen_opt_prod_id UUID;
     v_chosen_opt_prod RECORD;
@@ -548,7 +549,7 @@ BEGIN
                     );
                 END LOOP;
             ELSE
-                -- Pack configurable con verificación de suplementos de precio
+                -- Pack configurable con verificación de suplementos de precio y cantidades por opción
                 FOR v_pack_group IN
                     SELECT id, name, min_select, max_select
                     FROM public.pack_groups
@@ -556,20 +557,25 @@ BEGIN
                     ORDER BY sort_order ASC
                 LOOP
                     v_chosen_option_count := 0;
-                    FOR v_selection IN SELECT * FROM jsonb_array_elements(COALESCE(v_item->'pack_selections', '[]'::jsonb))
+                    FOR v_selection IN SELECT * FROM jsonb_array_elements(COALESCE(v_item->'pack_selections', v_item->'selections', '[]'::jsonb))
                     LOOP
-                        IF (v_selection->>'group_id')::UUID = v_pack_group.id THEN
-                            v_chosen_option_count := v_chosen_option_count + 1;
-                            v_chosen_opt_prod_id := (v_selection->>'product_id')::UUID;
+                        IF (COALESCE(v_selection->>'group_id', v_selection->>'groupId'))::UUID = v_pack_group.id THEN
+                            v_selection_qty := COALESCE((v_selection->>'quantity')::INT, 1);
+                            IF v_selection_qty <= 0 THEN
+                                v_selection_qty := 1;
+                            END IF;
+                            v_chosen_option_count := v_chosen_option_count + v_selection_qty;
+                            v_chosen_opt_prod_id := (COALESCE(v_selection->>'product_id', v_selection->>'productId'))::UUID;
 
-                            -- Obtener suplemento configurado en la opción
+                            -- Obtener suplemento unitario configurado en la opción
                             SELECT COALESCE(price_supplement, 0.00)
                             INTO v_chosen_opt_supplement
                             FROM public.pack_group_options
                             WHERE group_id = v_pack_group.id AND product_id = v_chosen_opt_prod_id;
 
                             v_chosen_opt_supplement := COALESCE(v_chosen_opt_supplement, 0.00);
-                            v_total_pack_supplements := v_total_pack_supplements + v_chosen_opt_supplement;
+                            -- Suplemento por unidad multiplicado por la cantidad seleccionada
+                            v_total_pack_supplements := v_total_pack_supplements + (v_chosen_opt_supplement * v_selection_qty);
 
                             SELECT id, name, active, stock_mode, stock_quantity
                             INTO v_chosen_opt_prod
@@ -581,22 +587,24 @@ BEGIN
                                 RAISE EXCEPTION 'La opción "%" seleccionada para el pack "%" está agotada.', v_chosen_opt_prod.name, v_pack_name;
                             END IF;
 
-                            IF v_chosen_opt_prod.stock_mode = 'in_stock' AND v_chosen_opt_prod.stock_quantity < v_item_qty THEN
+                            v_comp_needed := v_selection_qty * v_item_qty;
+
+                            IF v_chosen_opt_prod.stock_mode = 'in_stock' AND v_chosen_opt_prod.stock_quantity < v_comp_needed THEN
                                 RAISE EXCEPTION 'Stock insuficiente para la opción "%" del pack "%" (disponible: %, solicitado: %).', 
-                                    v_chosen_opt_prod.name, v_pack_name, v_chosen_opt_prod.stock_quantity, v_item_qty;
+                                    v_chosen_opt_prod.name, v_pack_name, v_chosen_opt_prod.stock_quantity, v_comp_needed;
                             END IF;
 
                             IF v_chosen_opt_prod.stock_mode = 'in_stock' THEN
                                 v_stock_deductions := v_stock_deductions || jsonb_build_object(
                                     'product_id', v_chosen_opt_prod.id,
-                                    'quantity', v_item_qty,
+                                    'quantity', v_comp_needed,
                                     'reason', 'Venta opción pack ' || v_pack_name
                                 );
                             ELSIF v_chosen_opt_prod.stock_mode = 'on_demand' THEN
                                 v_sourcing_queue := v_sourcing_queue || jsonb_build_object(
                                     'product_id', v_chosen_opt_prod.id,
                                     'product_name', v_chosen_opt_prod.name,
-                                    'quantity', v_item_qty,
+                                    'quantity', v_comp_needed,
                                     'match_key', 'pack_' || v_pack_id::TEXT
                                 );
                             END IF;
@@ -606,18 +614,20 @@ BEGIN
                                 'group_name', v_pack_group.name,
                                 'product_id', v_chosen_opt_prod.id,
                                 'product_name', v_chosen_opt_prod.name,
-                                'price_supplement', v_chosen_opt_supplement
+                                'quantity', v_selection_qty,
+                                'price_supplement', v_chosen_opt_supplement,
+                                'total_supplement', (v_chosen_opt_supplement * v_selection_qty)
                             );
                         END IF;
                     END LOOP;
 
                     IF v_chosen_option_count < v_pack_group.min_select THEN
-                        RAISE EXCEPTION 'Debes seleccionar al menos % opción(es) para "%" en el pack "%".', 
-                            v_pack_group.min_select, v_pack_group.name, v_pack_name;
+                        RAISE EXCEPTION 'Debes seleccionar al menos % unidad(es) para el grupo "%" en el pack "%" (seleccionadas: %).', 
+                            v_pack_group.min_select, v_pack_group.name, v_pack_name, v_chosen_option_count;
                     END IF;
                     IF v_chosen_option_count > v_pack_group.max_select THEN
-                        RAISE EXCEPTION 'Puedes seleccionar máximo % opción(es) para "%" en el pack "%".', 
-                            v_pack_group.max_select, v_pack_group.name, v_pack_name;
+                        RAISE EXCEPTION 'Puedes seleccionar máximo % unidad(es) para el grupo "%" en el pack "%" (seleccionadas: %).', 
+                            v_pack_group.max_select, v_pack_group.name, v_pack_name, v_chosen_option_count;
                     END IF;
                 END LOOP;
             END IF;
@@ -1015,8 +1025,18 @@ DECLARE
     v_pack_id UUID;
     v_pack_name TEXT;
     v_pack_price NUMERIC(10, 2);
+    v_pack_unit_price NUMERIC(10, 2);
     v_pack_type public.pack_type_enum;
     v_pack_snapshot JSONB;
+    v_pack_group RECORD;
+    v_selection JSONB;
+    v_selection_qty INT;
+    v_chosen_option_count INT;
+    v_chosen_opt_prod_id UUID;
+    v_chosen_opt_prod RECORD;
+    v_chosen_opt_supplement NUMERIC(10, 2);
+    v_total_pack_supplements NUMERIC(10, 2);
+    v_chosen_pack_items JSONB;
     
     -- Lista de items a insertar y sourcing
     v_order_items_to_insert JSONB := '[]'::jsonb;
@@ -1102,15 +1122,98 @@ BEGIN
             SELECT id, name, price, pack_type INTO v_pack_id, v_pack_name, v_pack_price, v_pack_type
             FROM public.packs WHERE id = v_item_ref::UUID;
 
-            v_line_subtotal := COALESCE(v_pack_price, 0.00) * v_item_qty;
+            v_chosen_pack_items := '[]'::jsonb;
+            v_total_pack_supplements := 0.00;
+
+            IF v_pack_type = 'fixed' THEN
+                -- Detectar componentes on_demand en pack fijo
+                FOR v_pack_sub_item IN
+                    SELECT pi.product_id, pi.quantity, p.name, p.stock_mode
+                    FROM public.pack_items pi
+                    JOIN public.products p ON p.id = pi.product_id
+                    WHERE pi.pack_id = v_pack_id
+                LOOP
+                    IF v_pack_sub_item.stock_mode = 'on_demand' THEN
+                        v_sourcing_queue := v_sourcing_queue || jsonb_build_object(
+                            'product_id', v_pack_sub_item.product_id,
+                            'product_name', v_pack_sub_item.name,
+                            'quantity', v_pack_sub_item.quantity * v_item_qty,
+                            'match_key', 'pack_' || v_pack_id::TEXT
+                        );
+                    END IF;
+                    v_chosen_pack_items := v_chosen_pack_items || jsonb_build_object(
+                        'product_id', v_pack_sub_item.product_id,
+                        'name', v_pack_sub_item.name,
+                        'quantity', v_pack_sub_item.quantity
+                    );
+                END LOOP;
+                v_pack_unit_price := COALESCE(v_pack_price, 0.00);
+            ELSE
+                -- Pack configurable: procesar opciones y suplementos por unidad
+                FOR v_pack_group IN
+                    SELECT id, name, min_select, max_select
+                    FROM public.pack_groups
+                    WHERE pack_id = v_pack_id
+                    ORDER BY sort_order ASC
+                LOOP
+                    v_chosen_option_count := 0;
+                    FOR v_selection IN SELECT * FROM jsonb_array_elements(COALESCE(v_item->'pack_selections', v_item->'selections', '[]'::jsonb))
+                    LOOP
+                        IF (COALESCE(v_selection->>'group_id', v_selection->>'groupId'))::UUID = v_pack_group.id THEN
+                            v_selection_qty := COALESCE((v_selection->>'quantity')::INT, 1);
+                            IF v_selection_qty <= 0 THEN
+                                v_selection_qty := 1;
+                            END IF;
+                            v_chosen_option_count := v_chosen_option_count + v_selection_qty;
+                            v_chosen_opt_prod_id := (COALESCE(v_selection->>'product_id', v_selection->>'productId'))::UUID;
+
+                            SELECT COALESCE(price_supplement, 0.00)
+                            INTO v_chosen_opt_supplement
+                            FROM public.pack_group_options
+                            WHERE group_id = v_pack_group.id AND product_id = v_chosen_opt_prod_id;
+
+                            v_chosen_opt_supplement := COALESCE(v_chosen_opt_supplement, 0.00);
+                            v_total_pack_supplements := v_total_pack_supplements + (v_chosen_opt_supplement * v_selection_qty);
+
+                            SELECT id, name, stock_mode INTO v_chosen_opt_prod
+                            FROM public.products WHERE id = v_chosen_opt_prod_id;
+
+                            IF v_chosen_opt_prod.stock_mode = 'on_demand' THEN
+                                v_sourcing_queue := v_sourcing_queue || jsonb_build_object(
+                                    'product_id', v_chosen_opt_prod.id,
+                                    'product_name', v_chosen_opt_prod.name,
+                                    'quantity', v_selection_qty * v_item_qty,
+                                    'match_key', 'pack_' || v_pack_id::TEXT
+                                );
+                            END IF;
+
+                            v_chosen_pack_items := v_chosen_pack_items || jsonb_build_object(
+                                'group_id', v_pack_group.id,
+                                'group_name', v_pack_group.name,
+                                'product_id', v_chosen_opt_prod.id,
+                                'product_name', v_chosen_opt_prod.name,
+                                'quantity', v_selection_qty,
+                                'price_supplement', v_chosen_opt_supplement,
+                                'total_supplement', (v_chosen_opt_supplement * v_selection_qty)
+                            );
+                        END IF;
+                    END LOOP;
+                END LOOP;
+                v_pack_unit_price := COALESCE(v_pack_price, 0.00) + v_total_pack_supplements;
+            END IF;
+
+            v_line_subtotal := v_pack_unit_price * v_item_qty;
             v_subtotal := v_subtotal + v_line_subtotal;
 
             v_pack_snapshot := jsonb_build_object(
                 'pack_id', v_pack_id,
                 'pack_name', v_pack_name,
                 'pack_type', v_pack_type,
-                'pack_price', v_pack_price,
-                'quantity', v_item_qty
+                'base_price', v_pack_price,
+                'unit_price', v_pack_unit_price,
+                'supplements_total', v_total_pack_supplements,
+                'quantity', v_item_qty,
+                'components', v_chosen_pack_items
             );
 
             v_order_items_to_insert := v_order_items_to_insert || jsonb_build_object(
@@ -1118,27 +1221,12 @@ BEGIN
                 'pack_id', v_pack_id,
                 'product_id', NULL,
                 'product_name', '[PACK] ' || COALESCE(v_pack_name, 'Pack'),
-                'unit_price', COALESCE(v_pack_price, 0.00),
+                'unit_price', v_pack_unit_price,
                 'quantity', v_item_qty,
                 'subtotal', v_line_subtotal,
                 'pack_snapshot', v_pack_snapshot,
                 'match_key', 'pack_' || v_pack_id::TEXT
             );
-
-            -- Detectar componentes on_demand en pack
-            FOR v_pack_sub_item IN
-                SELECT pi.product_id, pi.quantity, p.name, p.stock_mode
-                FROM public.pack_items pi
-                JOIN public.products p ON p.id = pi.product_id
-                WHERE pi.pack_id = v_pack_id AND p.stock_mode = 'on_demand'
-            LOOP
-                v_sourcing_queue := v_sourcing_queue || jsonb_build_object(
-                    'product_id', v_pack_sub_item.product_id,
-                    'product_name', v_pack_sub_item.name,
-                    'quantity', v_pack_sub_item.quantity * v_item_qty,
-                    'match_key', 'pack_' || v_pack_id::TEXT
-                );
-            END LOOP;
         ELSE
             v_item_ref := v_item->>'product_id';
             v_prod_id := NULL;

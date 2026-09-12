@@ -135,7 +135,7 @@ export function AdminSuggestionsPage() {
     // Redirigir a la pestaña de productos prellenando datos en query params
     const params = new URLSearchParams();
     params.set('action', 'new');
-    params.set('name', sugg.name);
+    params.set('name', sugg.name || sugg.title || '');
     if (sugg.category_name) params.set('category', sugg.category_name);
     if (sugg.estimated_price) params.set('price', String(sugg.estimated_price));
     if (sugg.description) params.set('desc', sugg.description);

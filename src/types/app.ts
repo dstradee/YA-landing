@@ -30,6 +30,7 @@ export type CartPackSelection = {
   productId: string;
   productName: string;
   priceSupplement?: number;
+  quantity?: number;
 };
 
 export type CartLine = {
@@ -403,12 +404,15 @@ export type PackWithDetails = DbPack & {
 
 // --- TIPOS DE SUGERENCIAS DE PRODUCTOS ---
 export type ProductSuggestionStatus = 'pending' | 'reviewing' | 'accepted' | 'rejected' | 'implemented';
+export type SuggestionStatus = ProductSuggestionStatus;
 
 export type DbProductSuggestion = {
   id: string;
   user_id: string;
-  name: string;
+  title?: string;
+  name?: string;
   category_name?: string | null;
+  category_hint?: string | null;
   brand?: string | null;
   description?: string | null;
   reference_url?: string | null;
@@ -420,6 +424,7 @@ export type DbProductSuggestion = {
   user_email?: string | null;
   user_name?: string | null;
 };
+export type ProductSuggestion = DbProductSuggestion;
 
 // --- 3. TIPOS PARA PANEL ADMIN (PHASE 3A) ---
 

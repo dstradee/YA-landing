@@ -208,9 +208,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       quantity = 1
     ) => {
       setLines((old) => {
-        // Generar una clave determinista basada en el pack y las selecciones
+        // Generar una clave determinista basada en el pack y las selecciones con cantidades
         const selKey = selections
-          .map((s) => `${s.groupId}:${s.productId}`)
+          .map((s) => `${s.groupId}:${s.productId}:${s.quantity || 1}`)
           .sort()
           .join('|');
         const lineId = `pack-${pack.id}-${selKey || 'fixed'}`;
@@ -225,6 +225,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
           return updated;
         }
 
+        const optionsSupplement = selections.reduce(
+          (acc, sel) => acc + ((Number(sel.priceSupplement) || 0) * Math.max(1, Number(sel.quantity) || 1)),
+          0
+        );
+        const finalUnitPrice = Number(pack.price) + optionsSupplement;
+
         return [
           ...old,
           {
@@ -235,8 +241,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
             packName: pack.name,
             packType: pack.pack_type,
             packImage: pack.image || '📦',
-            unitPrice: pack.price,
+            unitPrice: finalUnitPrice,
             packSelections: selections,
+            packFreeShipping: Boolean(pack.free_shipping),
+            packSkipMinOrder: Boolean(pack.skip_min_order),
             quantity,
           },
         ];

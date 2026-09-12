@@ -53,12 +53,25 @@ export function CartItem({ line }: { line: CartLine }) {
           {/* Selecciones de pack configurable */}
           {line.packSelections && line.packSelections.length > 0 && (
             <div className="mt-1 space-y-0.5">
-              {line.packSelections.map((sel, idx) => (
-                <div key={idx} className="text-[11px] text-gray-300 font-mono truncate">
-                  <span className="text-gray-400">{sel.groupName}:</span>{' '}
-                  <span className="text-ya-lime font-bold">{sel.productName}</span>
-                </div>
-              ))}
+              {line.packSelections.map((sel, idx) => {
+                const q = Math.max(1, Number(sel.quantity) || 1);
+                const supp = Number(sel.priceSupplement || 0);
+                return (
+                  <div key={idx} className="text-[11px] text-gray-300 font-mono flex items-center justify-between gap-1">
+                    <span className="truncate">
+                      <span className="text-gray-400">{sel.groupName}:</span>{' '}
+                      <span className="text-ya-lime font-bold">
+                        {q > 1 ? `${q}x ` : ''}{sel.productName}
+                      </span>
+                    </span>
+                    {supp > 0 && (
+                      <span className="text-amber-300 font-bold text-[10px] shrink-0 ml-1">
+                        +{euro(supp * q)}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 

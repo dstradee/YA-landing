@@ -115,17 +115,21 @@ export function AdminDiscountsPage() {
     setActionError(null);
     setActionSuccess(null);
 
-    const val = parseFloat(discountValue);
-    if (isNaN(val) || val <= 0) {
-      setActionError('El valor del descuento debe ser mayor que 0.');
-      setSubmitting(false);
-      return;
-    }
+    let val = parseFloat(discountValue);
+    if (discountType === 'two_for_one') {
+      val = 1;
+    } else {
+      if (isNaN(val) || val <= 0) {
+        setActionError('El valor del descuento debe ser mayor que 0.');
+        setSubmitting(false);
+        return;
+      }
 
-    if (discountType === 'percentage' && val > 90) {
-      setActionError('El porcentaje de descuento no puede ser superior al 90%.');
-      setSubmitting(false);
-      return;
+      if (discountType === 'percentage' && val > 90) {
+        setActionError('El porcentaje de descuento no puede ser superior al 90%.');
+        setSubmitting(false);
+        return;
+      }
     }
 
     if (scope === 'product' && !productId) {
@@ -359,11 +363,17 @@ export function AdminDiscountsPage() {
                   </td>
 
                   <td className="p-4">
-                    <span className="bg-ya-lime/20 text-ya-lime px-2.5 py-1 font-black text-sm border border-ya-lime/40">
-                      {d.discount_type === 'percentage'
-                        ? `-${d.discount_value}%`
-                        : `-${euro(d.discount_value)}`}
-                    </span>
+                    {d.discount_type === 'two_for_one' ? (
+                      <span className="bg-ya-lime text-ya-black px-2.5 py-1 font-black text-xs uppercase tracking-wider">
+                        ⚡ 2×1 (2ª gratis)
+                      </span>
+                    ) : (
+                      <span className="bg-ya-lime/20 text-ya-lime px-2.5 py-1 font-black text-sm border border-ya-lime/40">
+                        {d.discount_type === 'percentage'
+                          ? `-${d.discount_value}%`
+                          : `-${euro(d.discount_value)}`}
+                      </span>
+                    )}
                   </td>
 
                   <td className="p-4 text-gray-400 text-[11px]">
@@ -537,7 +547,7 @@ export function AdminDiscountsPage() {
               )}
 
               {/* Tipo y Valor */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-gray-300 uppercase font-bold mb-1">
                     Tipo de Descuento
@@ -549,24 +559,33 @@ export function AdminDiscountsPage() {
                   >
                     <option value="percentage" className="bg-ya-black">Porcentaje (%)</option>
                     <option value="fixed" className="bg-ya-black">Importe Fijo (€)</option>
+                    <option value="two_for_one" className="bg-ya-black">⚡ Promoción 2×1 (Lleva 2, paga 1)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-gray-300 uppercase font-bold mb-1">
-                    Valor del Descuento *
-                  </label>
-                  <input
-                    type="number"
-                    step={discountType === 'percentage' ? '1' : '0.10'}
-                    min="0"
-                    max={discountType === 'percentage' ? '90' : undefined}
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(e.target.value)}
-                    className="w-full bg-ya-gray/30 border-2 border-ya-gray px-3 py-2 text-white focus:border-ya-lime focus:outline-none font-bold"
-                    placeholder="10"
-                    required
-                  />
+                  {discountType === 'two_for_one' ? (
+                    <div className="h-full flex items-center p-3 bg-ya-lime/10 border-2 border-ya-lime/40 text-ya-lime text-[11px] font-bold">
+                      ⚡ Automático: 2×1 (la 2ª unidad sale al 100% de descuento)
+                    </div>
+                  ) : (
+                    <>
+                      <label className="block text-gray-300 uppercase font-bold mb-1">
+                        Valor del Descuento *
+                      </label>
+                      <input
+                        type="number"
+                        step={discountType === 'percentage' ? '1' : '0.10'}
+                        min="0"
+                        max={discountType === 'percentage' ? '90' : undefined}
+                        value={discountValue}
+                        onChange={(e) => setDiscountValue(e.target.value)}
+                        className="w-full bg-ya-gray/30 border-2 border-ya-gray px-3 py-2 text-white focus:border-ya-lime focus:outline-none font-bold"
+                        placeholder="10"
+                        required
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 

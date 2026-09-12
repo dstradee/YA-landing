@@ -575,7 +575,19 @@ export function CheckoutPage() {
           quantity: l.quantity,
           isPack: l.isPack,
           packId: l.packId,
-          selections: l.packSelections,
+          selections: (l.packSelections || []).map((s) => ({
+            groupId: s.groupId,
+            group_id: s.groupId,
+            groupName: s.groupName,
+            group_name: s.groupName,
+            productId: s.productId,
+            product_id: s.productId,
+            productName: s.productName,
+            product_name: s.productName,
+            priceSupplement: Number(s.priceSupplement || 0),
+            price_supplement: Number(s.priceSupplement || 0),
+            quantity: Math.max(1, Number(s.quantity) || 1),
+          })),
         })),
         notes: courierNotes.trim() || newAddress.notes || undefined,
       });
@@ -602,7 +614,19 @@ export function CheckoutPage() {
         quantity: l.quantity,
         isPack: l.isPack,
         packId: l.packId,
-        selections: l.packSelections,
+        selections: (l.packSelections || []).map((s) => ({
+          groupId: s.groupId,
+          group_id: s.groupId,
+          groupName: s.groupName,
+          group_name: s.groupName,
+          productId: s.productId,
+          product_id: s.productId,
+          productName: s.productName,
+          product_name: s.productName,
+          priceSupplement: Number(s.priceSupplement || 0),
+          price_supplement: Number(s.priceSupplement || 0),
+          quantity: Math.max(1, Number(s.quantity) || 1),
+        })),
       })),
       notes: courierNotes.trim() || newAddress.notes || undefined,
       paymentMethod: payment,
@@ -1683,12 +1707,25 @@ export function OrderPage() {
                           {/* Selecciones de pack si existen */}
                           {isPack && selections.length > 0 && (
                             <div className="mt-1 space-y-0.5 pl-1">
-                              {selections.map((sel, sIdx) => (
-                                <p key={sIdx} className="text-xs text-gray-400 font-mono">
-                                  · {sel.group_name || sel.groupName}:{' '}
-                                  <span className="text-gray-200">{sel.product_name || sel.productName}</span>
-                                </p>
-                              ))}
+                              {selections.map((sel, sIdx) => {
+                                const q = Math.max(1, Number(sel.quantity) || 1);
+                                const supp = Number(sel.price_supplement ?? sel.priceSupplement ?? 0);
+                                return (
+                                  <p key={sIdx} className="text-xs text-gray-400 font-mono flex items-center justify-between gap-2">
+                                    <span>
+                                      · {sel.group_name || sel.groupName}:{' '}
+                                      <span className="text-gray-200">
+                                        {q > 1 ? `${q}x ` : ''}{sel.product_name || sel.productName}
+                                      </span>
+                                    </span>
+                                    {supp > 0 && (
+                                      <span className="text-amber-300 font-mono text-[10px] shrink-0">
+                                        +{euro(supp * q)}
+                                      </span>
+                                    )}
+                                  </p>
+                                );
+                              })}
                             </div>
                           )}
 

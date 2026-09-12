@@ -220,13 +220,15 @@ export function calculateCartPricing(params: {
         hasPackSkipMinOrder = true;
       }
 
-      // Sumar suplementos de opciones seleccionadas
+      // Sumar suplementos de opciones seleccionadas ponderados por la cantidad elegida
       const optionsSupplement = (line.packSelections || []).reduce(
-        (acc, sel) => acc + (Number(sel.priceSupplement) || 0),
+        (acc, sel) => acc + ((Number(sel.priceSupplement) || 0) * Math.max(1, Number(sel.quantity) || 1)),
         0
       );
 
-      const basePackPrice = foundPack ? Number(foundPack.price) : Number(line.unitPrice || 0);
+      const basePackPrice = foundPack
+        ? Number(foundPack.price)
+        : Math.max(0, Number(line.unitPrice || 0) - optionsSupplement);
       const unitPrice = round2(basePackPrice + optionsSupplement);
       const originalPrice = foundPack?.reference_price
         ? round2(Number(foundPack.reference_price) + optionsSupplement)
@@ -242,8 +244,11 @@ export function calculateCartPricing(params: {
       const selectionsSummary: string[] = [];
       if (line.packSelections && line.packSelections.length > 0) {
         for (const s of line.packSelections) {
-          const suppText = s.priceSupplement && s.priceSupplement > 0 ? ` (+${round2(s.priceSupplement)} €)` : '';
-          selectionsSummary.push(`${s.groupName}: ${s.productName}${suppText}`);
+          const optQty = Math.max(1, Number(s.quantity) || 1);
+          const unitSupp = Number(s.priceSupplement) || 0;
+          const suppText = unitSupp > 0 ? ` (+${round2(unitSupp * optQty)} €)` : '';
+          const qtyText = optQty > 1 ? `${optQty}x ` : '';
+          selectionsSummary.push(`${s.groupName}: ${qtyText}${s.productName}${suppText}`);
         }
       }
 
