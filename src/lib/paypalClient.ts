@@ -55,7 +55,9 @@ export async function fetchPayPalConfig(): Promise<PayPalConfig> {
   // En producción, no forzar sandbox si el backend tuvo un problema momentáneo
   const isProductionHost =
     typeof window !== 'undefined' &&
-    (window.location.hostname === 'ya-delivery.es' ||
+    (window.location.hostname === 'yadelivery.es' ||
+      window.location.hostname === 'www.yadelivery.es' ||
+      window.location.hostname === 'ya-delivery.es' ||
       window.location.hostname === 'www.ya-delivery.es' ||
       window.location.hostname.includes('vercel.app'));
 

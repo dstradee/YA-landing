@@ -8,7 +8,7 @@ import { isRealImageUrl, formatImageUrl } from './cloudinary';
 
 /**
  * Resuelve la URL base canónica del proyecto.
- * Prioriza variable de entorno VITE_SITE_URL o VITE_APP_URL, origen de ventana o fallback seguro ya-delivery.es
+ * Prioriza variable de entorno VITE_SITE_URL o VITE_APP_URL, origen de ventana o fallback seguro yadelivery.es
  */
 export function getCanonicalBaseUrl(): string {
   const envUrl = (import.meta.env.VITE_SITE_URL || import.meta.env.VITE_APP_URL || '').trim();
@@ -22,7 +22,7 @@ export function getCanonicalBaseUrl(): string {
       return origin.replace(/\/+$/, '');
     }
   }
-  return 'https://ya-delivery.es';
+  return 'https://yadelivery.es';
 }
 
 /**
@@ -50,7 +50,7 @@ export interface SeoMetaConfig {
 export const DEFAULT_SEO: SeoMetaConfig = {
   title: 'YA Delivery Jerez — Lo necesitas. Lo tienes.',
   description: 'Servicio de delivery a domicilio en Jerez de la Frontera. Bebidas frías, energéticas, snacks y hielo directos a tu puerta en minutos.',
-  image: 'https://ya-delivery.es/og-image-jerez.jpg',
+  image: 'https://yadelivery.es/og-image-jerez.jpg',
   type: 'website',
   robots: 'index, follow',
 };

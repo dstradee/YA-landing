@@ -1,0 +1,34 @@
+# YA Delivery Jerez — robots.txt
+# https://yadelivery.es
+
+User-agent: *
+Allow: /
+Allow: /delivery-jerez
+Allow: /app
+Allow: /app/
+Allow: /app/categoria/
+Allow: /app/producto/
+Allow: /categoria/
+Allow: /producto/
+
+# Rutas privadas, proceso de compra y administración
+Disallow: /admin
+Disallow: /admin/
+Disallow: /repartidor
+Disallow: /repartidor/
+Disallow: /app/checkout
+Disallow: /app/checkout/
+Disallow: /app/carrito
+Disallow: /app/perfil
+Disallow: /app/pedidos
+Disallow: /app/pedido/
+Disallow: /app/buscar
+Disallow: /buscar
+Disallow: /app/notificaciones
+Disallow: /app/juntos
+Disallow: /app/ya-plus
+Disallow: /login
+Disallow: /register
+Disallow: /api/
+
+Sitemap: https://yadelivery.es/sitemap.xml

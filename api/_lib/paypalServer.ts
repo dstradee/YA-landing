@@ -79,7 +79,7 @@ export function getBaseAppUrl(): string {
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL.replace(/\/+$/, '')}`;
   }
-  return 'https://ya-delivery.es';
+  return 'https://yadelivery.es';
 }
 
 /**
@@ -94,6 +94,8 @@ export function sanitizeReturnUrl(url: string | undefined, defaultPath: string):
     const parsed = new URL(url);
     if (!isPayPalSandboxMode()) {
       const allowedHosts = [
+        'yadelivery.es',
+        'www.yadelivery.es',
         'ya-delivery.es',
         'www.ya-delivery.es',
         'ya-landing-nine.vercel.app',
