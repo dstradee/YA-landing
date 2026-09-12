@@ -197,15 +197,17 @@ export function ProductCard({ product }: { product: Product }) {
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      id={`product-card-${product.id}`}
+      id={`product-card-${product.slug || product.id}`}
       className="bg-ya-gray border-2 border-ya-gray hover:border-ya-lime flex flex-col justify-between transition-colors"
     >
-      <Link to={'/app/producto/' + product.id} className="block p-4 flex-1">
+      <Link to={'/app/producto/' + (product.slug || product.id)} className="block p-4 flex-1">
         <div className="h-28 bg-ya-black border border-ya-gray flex items-center justify-center mb-3 relative overflow-hidden">
           {isImg ? (
             <img
               src={formatImageUrl(product.image, 300)}
-              alt={product.name}
+              alt={`${product.name} - YA Delivery Jerez`}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />

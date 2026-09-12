@@ -44,6 +44,14 @@ export function CustomerRoutes() {
         }
       />
       <Route
+        path="/categoria/:slug"
+        element={
+          <AppFrame>
+            <CategoryPage />
+          </AppFrame>
+        }
+      />
+      <Route
         path="/app/producto/:id"
         element={
           <AppFrame>
@@ -52,7 +60,23 @@ export function CustomerRoutes() {
         }
       />
       <Route
+        path="/producto/:id"
+        element={
+          <AppFrame>
+            <ProductPage />
+          </AppFrame>
+        }
+      />
+      <Route
         path="/app/buscar"
+        element={
+          <AppFrame>
+            <SearchPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/buscar"
         element={
           <AppFrame>
             <SearchPage />

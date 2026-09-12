@@ -8,6 +8,16 @@ import { useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
 import { PackCard } from './PackCard';
 import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
+import { SeoHead } from '../components/seo/SeoHead';
+import { Breadcrumbs } from '../components/seo/Breadcrumbs';
+import {
+  getProductSchema,
+  getItemListSchema,
+  getBreadcrumbSchema,
+  getWebSiteSchema,
+  getOrganizationSchema,
+  getCanonicalUrl,
+} from '../lib/seo';
 
 export function AppHome() {
   const { categories, products } = useCatalog();
@@ -26,8 +36,15 @@ export function AppHome() {
 
   return (
     <>
+      <SeoHead
+        title="Tienda Online YA Delivery Jerez — Bebidas, Snacks y Hielo"
+        description="Pide bebidas frías, energéticas, aperitivos, dulces y bolsas de hielo con entrega urgente en Jerez de la Frontera. Lo necesitas. Lo tienes."
+        path="/app"
+        structuredData={[getWebSiteSchema(), getOrganizationSchema()]}
+      />
       <AppHeader />
       <main id="app-home-page" className="max-w-5xl mx-auto px-4 pt-6 pb-28">
+        <Breadcrumbs items={[{ name: 'Tienda Jerez', url: '/app' }]} className="mb-3" />
         {/* Banner Superior & Saludo */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b-2 border-ya-gray pb-4">
           <div>
@@ -227,6 +244,11 @@ export function CategoryPage() {
   if (!category) {
     return (
       <>
+        <SeoHead
+          title="Categoría no encontrada | YA Delivery Jerez"
+          description="La categoría seleccionada no existe o no está activa en Jerez de la Frontera."
+          robots="noindex, follow"
+        />
         <AppHeader back />
         <main className="p-4 pb-28 max-w-5xl mx-auto">
           <EmptyState
@@ -244,10 +266,34 @@ export function CategoryPage() {
     );
   }
 
+  const breadcrumbs = [
+    { name: 'Catálogo', url: '/app' },
+    { name: category.name, url: `/app/categoria/${category.slug}` },
+  ];
+
+  const structuredData = [
+    getItemListSchema(
+      `${category.name} en Jerez`,
+      items.map((p) => ({
+        name: p.name,
+        url: `/app/producto/${p.slug || p.id}`,
+        price: p.price,
+      }))
+    ),
+    getBreadcrumbSchema(breadcrumbs),
+  ];
+
   return (
     <>
+      <SeoHead
+        title={`Comprar ${category.name} a Domicilio en Jerez | YA Delivery`}
+        description={`${category.description} Pide ${category.name.toLowerCase()} a domicilio en Jerez de la Frontera con entrega inmediata.`}
+        path={`/app/categoria/${category.slug}`}
+        structuredData={structuredData}
+      />
       <AppHeader back />
       <main id={`category-page-${category.slug}`} className="max-w-5xl mx-auto px-4 pt-6 pb-28">
+        <Breadcrumbs items={breadcrumbs} className="mb-4" />
         <div className="border-b-2 border-ya-gray pb-4">
           <span className="text-5xl block mb-2">{category.icon}</span>
           <h1 className="font-black text-4xl sm:text-5xl tracking-tighter uppercase">
@@ -257,7 +303,7 @@ export function CategoryPage() {
         </div>
 
         <div className="mt-6 flex justify-between items-center text-xs font-bold text-gray-400">
-          <span>{items.length} PRODUCTOS DISPONIBLES</span>
+          <span>{items.length} PRODUCTOS DISPONIBLES EN JEREZ</span>
           <span className="text-ya-lime">ENTREGA INMEDIATA</span>
         </div>
 
@@ -293,13 +339,25 @@ export function SearchPage() {
     );
   }, [query, products]);
 
+  const breadcrumbs = [
+    { name: 'Catálogo', url: '/app' },
+    { name: 'Buscador', url: '/app/buscar' },
+  ];
+
   return (
     <>
+      <SeoHead
+        title="Buscar Productos | YA Delivery Jerez"
+        description="Encuentra bebidas frías, energéticas, aperitivos y hielo a domicilio en Jerez de la Frontera."
+        path="/app/buscar"
+        robots="noindex, follow"
+      />
       <AppHeader back />
       <main id="search-page" className="max-w-5xl mx-auto px-4 pt-6 pb-28">
-        <h1 className="font-black text-4xl uppercase tracking-tight">Buscar</h1>
+        <Breadcrumbs items={breadcrumbs} className="mb-4" />
+        <h1 className="font-black text-4xl uppercase tracking-tight">Buscar Productos</h1>
         <p className="text-gray-400 font-bold text-xs uppercase tracking-wider mt-1">
-          Encuentra cualquier producto de la app
+          Encuentra cualquier producto en el catálogo de Jerez
         </p>
 
         <div className="mt-4">
@@ -339,14 +397,19 @@ export function SearchPage() {
 
 export function ProductPage() {
   const { id } = useParams();
-  const { getProductById } = useCatalog();
-  const product = getProductById(id ?? '');
+  const { products, categories, getProductById } = useCatalog();
+  const product = products.find((p) => p.id === id || p.slug === id) || getProductById(id ?? '');
   const { lines, addToCart, increaseQuantity, decreaseQuantity } = useCart();
   const [addedNotice, setAddedNotice] = useState(false);
 
   if (!product) {
     return (
       <>
+        <SeoHead
+          title="Producto no encontrado | YA Delivery Jerez"
+          description="El producto solicitado no está disponible actualmente en Jerez de la Frontera."
+          robots="noindex, follow"
+        />
         <AppHeader back />
         <main className="p-4 pb-28 max-w-2xl mx-auto">
           <EmptyState
@@ -363,6 +426,23 @@ export function ProductPage() {
       </>
     );
   }
+
+  const category = categories.find((c) => c.slug === product.category);
+  const canonicalPath = `/app/producto/${product.slug || product.id}`;
+  const breadcrumbs = [
+    { name: 'Catálogo', url: '/app' },
+    { name: category?.name ?? product.category, url: `/app/categoria/${product.category}` },
+    { name: product.name, url: canonicalPath },
+  ];
+
+  const structuredData = [
+    getProductSchema(product, getCanonicalUrl(canonicalPath)),
+    getBreadcrumbSchema(breadcrumbs),
+  ];
+
+  const relatedProducts = products
+    .filter((p) => p.category === product.category && p.id !== product.id && p.active)
+    .slice(0, 4);
 
   const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
 
@@ -385,8 +465,18 @@ export function ProductPage() {
 
   return (
     <>
+      <SeoHead
+        title={`${product.name} a Domicilio en Jerez (${euro(product.price)}) | YA Delivery`}
+        description={`${product.name} disponible por ${euro(product.price)} en Jerez de la Frontera. ${product.description} ${
+          product.inStock ? 'En stock con entrega inmediata a domicilio.' : 'Temporalmente sin stock.'
+        }`}
+        path={canonicalPath}
+        type="product"
+        structuredData={structuredData}
+      />
       <AppHeader back />
-      <main id={`product-page-${product.id}`} className="max-w-2xl mx-auto px-4 pt-6 pb-28">
+      <main id={`product-page-${product.slug || product.id}`} className="max-w-2xl mx-auto px-4 pt-6 pb-28">
+        <Breadcrumbs items={breadcrumbs} className="mb-4" />
         {/* Visual Box */}
         <div className="h-64 sm:h-80 bg-ya-gray border-2 border-ya-gray grid place-items-center text-8xl sm:text-9xl relative overflow-hidden">
           {isImageEmoji ? (
@@ -394,13 +484,15 @@ export function ProductPage() {
           ) : (
             <img
               src={formatImageUrl(currentImage, 800)}
-              alt={product.name}
+              alt={`${product.name} - Reparto a domicilio en Jerez YA Delivery`}
+              loading="eager"
+              decoding="async"
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
           )}
           <span className="absolute top-3 left-3 bg-ya-black border border-ya-gray px-2 py-1 text-[10px] font-black text-ya-lime uppercase tracking-widest">
-            {product.category}
+            {category?.name ?? product.category}
           </span>
           {!product.inStock ? (
             <span className="absolute top-3 right-3 bg-red-600 text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border border-red-400">
@@ -436,7 +528,8 @@ export function ProductPage() {
                   {isImg ? (
                     <img
                       src={formatImageUrl(img, 120)}
-                      alt=""
+                      alt={`${product.name} detalle ${idx + 1}`}
+                      loading="lazy"
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -519,6 +612,33 @@ export function ProductPage() {
           >
             Ver carrito con {quantity} {quantity === 1 ? 'unidad' : 'unidades'} →
           </Link>
+        )}
+
+        {/* Productos relacionados de la misma categoría */}
+        {relatedProducts.length > 0 && (
+          <section className="mt-14 border-t-2 border-ya-gray pt-8">
+            <div className="flex justify-between items-baseline mb-4">
+              <div>
+                <h2 className="font-black text-2xl uppercase tracking-tight text-white">
+                  Más de {category?.name ?? product.category}
+                </h2>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                  Otros productos disponibles en Jerez
+                </p>
+              </div>
+              <Link
+                to={`/app/categoria/${product.category}`}
+                className="text-xs font-mono font-bold text-ya-lime hover:underline"
+              >
+                Ver categoría →
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {relatedProducts.map((rp) => (
+                <ProductCard key={rp.id} product={rp} />
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </>

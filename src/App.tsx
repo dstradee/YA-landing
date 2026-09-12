@@ -17,14 +17,48 @@ import {
   NotificationToast,
   NotificationPreferencesModal,
 } from './components/notifications/NotificationComponents';
+import { SeoHead } from './components/seo/SeoHead';
+import { DeliveryJerezPage } from './app/DeliveryJerezPage';
+import {
+  getOrganizationSchema,
+  getLocalBusinessSchema,
+  getWebSiteSchema,
+} from './lib/seo';
 
-function Landing() { return <div className="min-h-screen flex flex-col font-sans"><Navbar/><main className="flex-grow"><Hero/><Problem/><HowItWorks/><Categories/><Waitlist/><Local/></main><Footer/></div>; }
+function Landing() {
+  return (
+    <div className="min-h-screen flex flex-col font-sans">
+      <SeoHead
+        title="YA Delivery Jerez — Lo necesitas. Lo tienes."
+        description="Servicio de delivery bajo demanda en Jerez de la Frontera. Bebidas frías, energéticas, snacks y hielo directo a tu puerta en minutos."
+        path="/"
+        structuredData={[
+          getOrganizationSchema(),
+          getLocalBusinessSchema(),
+          getWebSiteSchema(),
+        ]}
+      />
+      <Navbar />
+      <main className="flex-grow">
+        <Hero />
+        <Problem />
+        <HowItWorks />
+        <Categories />
+        <Waitlist />
+        <Local />
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
 function App() {
   return (
     <AuthProvider>
       <NotificationsProvider>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/delivery-jerez" element={<DeliveryJerezPage />} />
           <Route path="/admin/*" element={<AdminRoutes />} />
           <Route path="/repartidor/*" element={<CourierRoutes />} />
         </Routes>
