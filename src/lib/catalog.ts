@@ -406,37 +406,129 @@ export async function adminUpdateProduct(
   }
 }
 
-export async function adminDeleteProduct(id: string): Promise<{ success: boolean; error: string | null }> {
+export async function adminDeleteProduct(id: string): Promise<{
+  success: boolean;
+  error: string | null;
+  message?: string;
+  deactivated?: boolean;
+}> {
   try {
-    // Para no romper órdenes históricas que referencien este producto, comprobamos order_items
-    const { count, error: countErr } = await supabase
-      .from('order_items')
-      .select('id', { count: 'exact', head: true })
+    const packNames: string[] = [];
+
+    // 1. Comprobar si el producto está en packs cerrados/fijos (pack_items)
+    const { data: packItems, error: piErr } = await supabase
+      .from('pack_items')
+      .select('pack_id, packs(name)')
       .eq('product_id', id);
 
-    if (countErr) return { success: false, error: countErr.message };
+    if (!piErr && packItems && packItems.length > 0) {
+      for (const item of packItems as any[]) {
+        const pName = item?.packs?.name;
+        if (pName && !packNames.includes(pName)) {
+          packNames.push(pName);
+        }
+      }
+    }
 
-    if (count && count > 0) {
-      // Si tiene pedidos, procedemos a desactivarlo con aviso seguro
+    // 2. Comprobar si el producto está en opciones de packs configurables (pack_group_options)
+    const { data: groupOptions, error: goErr } = await supabase
+      .from('pack_group_options')
+      .select('group_id, pack_groups(packs(name))')
+      .eq('product_id', id);
+
+    if (!goErr && groupOptions && groupOptions.length > 0) {
+      for (const opt of groupOptions as any[]) {
+        const pName = opt?.pack_groups?.packs?.name;
+        if (pName && !packNames.includes(pName)) {
+          packNames.push(pName);
+        }
+      }
+    }
+
+    // Si el producto está asociado a uno o más packs: NO eliminar físicamente, sino DESACTIVAR
+    if (packNames.length > 0) {
       const { error: deactErr } = await supabase
         .from('products')
         .update({ active: false, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       if (deactErr) return { success: false, error: deactErr.message };
+
+      window.dispatchEvent(new CustomEvent('ya-inventory-updated'));
+
+      const packsList = packNames.map((n) => `"${n}"`).join(', ');
+      const msg = `El producto forma parte de los packs (${packsList}). Para no romper dichos packs, se ha desactivado del catálogo en lugar de eliminarse físicamente.`;
+
       return {
         success: true,
-        error: 'El producto ha sido desactivado en lugar de borrado para preservar el historial de pedidos anteriores.',
+        deactivated: true,
+        message: msg,
+        error: null,
       };
     }
 
-    const { error } = await supabase
+    // 3. Comprobar historial de pedidos (order_items) para no romper pedidos anteriores
+    const { count: orderCount, error: countErr } = await supabase
+      .from('order_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('product_id', id);
+
+    if (!countErr && orderCount && orderCount > 0) {
+      const { error: deactErr } = await supabase
+        .from('products')
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (deactErr) return { success: false, error: deactErr.message };
+
+      window.dispatchEvent(new CustomEvent('ya-inventory-updated'));
+
+      const msg = 'El producto ha sido desactivado en lugar de borrado para preservar el historial de pedidos anteriores.';
+      return {
+        success: true,
+        deactivated: true,
+        message: msg,
+        error: null,
+      };
+    }
+
+    // 4. Si no tiene referencias detectadas, procedemos a la eliminación física
+    const { error: delErr } = await supabase
       .from('products')
       .delete()
       .eq('id', id);
 
-    if (error) return { success: false, error: error.message };
-    return { success: true, error: null };
+    if (delErr) {
+      // 5. Red de seguridad: si PostgreSQL devuelve error de clave foránea (código 23503)
+      if (
+        delErr.code === '23503' ||
+        delErr.message?.includes('foreign key constraint') ||
+        delErr.message?.includes('pack_items') ||
+        delErr.message?.includes('pack_group_options')
+      ) {
+        const { error: fallbackDeactErr } = await supabase
+          .from('products')
+          .update({ active: false, updated_at: new Date().toISOString() })
+          .eq('id', id);
+
+        if (fallbackDeactErr) return { success: false, error: fallbackDeactErr.message };
+
+        window.dispatchEvent(new CustomEvent('ya-inventory-updated'));
+
+        const msg = 'El producto está vinculado a un pack o registro activo. Se ha desactivado del catálogo en lugar de eliminarse físicamente para proteger la integridad.';
+        return {
+          success: true,
+          deactivated: true,
+          message: msg,
+          error: null,
+        };
+      }
+
+      return { success: false, error: delErr.message };
+    }
+
+    window.dispatchEvent(new CustomEvent('ya-inventory-updated'));
+    return { success: true, error: null, message: 'Producto eliminado permanentemente.' };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Error al eliminar producto' };
   }

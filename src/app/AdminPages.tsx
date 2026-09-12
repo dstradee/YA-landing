@@ -641,7 +641,7 @@ export function AdminProductsPage() {
     if (!res.success) {
       setActionError(res.error);
     } else {
-      setActionSuccess(res.error || `Producto "${prod.name}" eliminado.`);
+      setActionSuccess(res.message || res.error || `Producto "${prod.name}" procesado con éxito.`);
       loadData();
     }
   };
