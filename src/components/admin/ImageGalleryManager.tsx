@@ -231,13 +231,12 @@ export function ImageGalleryManager({
           );
         })}
 
-        {/* Upload Button Box */}
+        {/* Upload Button Box with dual choice (PC or URL) */}
         {images.length < maxImages && (
           <div
-            onClick={() => !uploading && fileInputRef.current?.click()}
             className={`aspect-square border-2 border-dashed ${
-              uploading ? 'border-ya-lime bg-ya-lime/5 cursor-wait' : 'border-ya-gray hover:border-ya-lime bg-ya-black cursor-pointer'
-            } flex flex-col items-center justify-center p-3 text-center transition-colors`}
+              uploading ? 'border-ya-lime bg-ya-lime/5' : 'border-ya-gray bg-ya-black'
+            } flex flex-col items-center justify-center p-2 text-center transition-colors`}
           >
             <input
               ref={fileInputRef}
@@ -251,13 +250,29 @@ export function ImageGalleryManager({
             {uploading ? (
               <div className="flex flex-col items-center gap-2 text-ya-lime">
                 <Loader2 size={24} className="animate-spin" />
-                <span className="text-[10px] font-mono uppercase tracking-wider">Subiendo...</span>
+                <span className="text-[10px] font-mono uppercase tracking-wider">Subiendo a Cloudinary...</span>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-1.5 text-gray-400 hover:text-white transition-colors">
-                <Upload size={20} className="text-ya-lime" />
-                <span className="text-[10px] font-black uppercase tracking-wider">Subir foto</span>
-                <span className="text-[9px] font-mono text-gray-500">Cloudinary</span>
+              <div className="w-full flex flex-col items-center justify-center gap-2 h-full">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-2 px-1 bg-ya-gray/60 hover:bg-ya-lime hover:text-ya-black text-white text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 border border-ya-gray"
+                  title="Subir archivo desde el ordenador mediante Cloudinary"
+                >
+                  <Upload size={13} className="text-ya-lime group-hover:text-ya-black" />
+                  <span>Subir desde PC</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowManualInput(true)}
+                  className="w-full py-1.5 px-1 bg-ya-gray/30 hover:bg-white hover:text-ya-black text-gray-300 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1 border border-ya-gray/60"
+                  title="Introducir una URL directa de imagen o Cloudinary"
+                >
+                  <LinkIcon size={12} />
+                  <span>Pegar URL</span>
+                </button>
               </div>
             )}
           </div>

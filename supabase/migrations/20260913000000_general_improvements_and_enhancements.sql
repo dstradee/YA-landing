@@ -162,15 +162,18 @@ BEGIN
     END IF;
 
     -- 2. Limpieza de relaciones de forma ordenada y segura
+    -- Activar bypass temporal de bloqueo de auditoría para la eliminación administrativa
+    PERFORM set_config('ya.bypass_audit_lock', 'on', true);
+
     -- Notificaciones asociadas
     DELETE FROM public.notifications WHERE order_id = ANY(p_order_ids);
 
-    -- Tickets y líneas de aprovisionamiento/sourcing
+    -- Auditoría y líneas de aprovisionamiento/sourcing
+    DELETE FROM public.sourcing_audit_logs WHERE order_id = ANY(p_order_ids);
     DELETE FROM public.sourcing_items WHERE order_id = ANY(p_order_ids);
-    DELETE FROM public.sourcing_tickets WHERE order_id = ANY(p_order_ids);
 
-    -- Incidencias y eventos asociados
-    DELETE FROM public.incident_events WHERE order_id = ANY(p_order_ids);
+    -- Auditoría e incidencias asociadas
+    DELETE FROM public.incident_audit_logs WHERE order_id = ANY(p_order_ids);
     DELETE FROM public.incidents WHERE order_id = ANY(p_order_ids);
 
     -- Líneas de pedido
@@ -184,7 +187,7 @@ BEGIN
     UPDATE public.courier_incentive_rewards SET trigger_order_id = NULL WHERE trigger_order_id = ANY(p_order_ids);
     
     -- Grupos YA Juntos desvincular pedido si aplica
-    UPDATE public.shared_orders SET order_id = NULL WHERE order_id = ANY(p_order_ids);
+    UPDATE public.ya_juntos_groups SET order_id = NULL WHERE order_id = ANY(p_order_ids);
 
     -- 3. Eliminar los pedidos de la tabla orders
     DELETE FROM public.orders WHERE id = ANY(p_order_ids);
@@ -200,6 +203,19 @@ $$;
 REVOKE ALL ON FUNCTION public.admin_delete_orders(UUID[]) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.admin_delete_orders(UUID[]) TO authenticated;
 
+-- Helper para bypass seguro de bloqueo de auditoría al eliminar pedidos administrativamente
+CREATE OR REPLACE FUNCTION public.trg_prevent_incident_audit_mutation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF current_setting('ya.bypass_audit_lock', true) = 'on' THEN
+        RETURN OLD;
+    END IF;
+    RAISE EXCEPTION 'La tabla incident_audit_logs es inmutable (append-only). No se permiten modificaciones ni eliminaciones.';
+END;
+$$;
+
 -- ------------------------------------------------------------------------------
 -- 7. RECOMPENSAS / REPARTIDORES: VISTA Y SINTAXIS PL/pgSQL 100% SEGURA
 -- ------------------------------------------------------------------------------
@@ -208,7 +224,8 @@ CREATE OR REPLACE VIEW public.courier_reward_history AS
 SELECT 
     r.id,
     r.courier_id,
-    c.user_id,
+    c.profile_id,
+    c.profile_id AS user_id,
     p.full_name AS courier_name,
     p.email AS courier_email,
     r.incentive_id,
@@ -223,7 +240,7 @@ SELECT
     r.created_at
 FROM public.courier_incentive_rewards r
 JOIN public.couriers c ON c.id = r.courier_id
-JOIN public.profiles p ON p.id = c.user_id
+LEFT JOIN public.profiles p ON p.id = c.profile_id
 JOIN public.courier_incentives i ON i.id = r.incentive_id;
 
 GRANT SELECT ON public.courier_reward_history TO authenticated, service_role;
@@ -851,16 +868,21 @@ BEGIN
                     order_item_id,
                     product_id,
                     product_name,
-                    quantity_needed,
-                    status
+                    quantity,
+                    status,
+                    is_test,
+                    notes
                 ) VALUES (
                     v_order_id,
                     v_inserted_item_id,
                     (v_s_item->>'product_id')::UUID,
                     v_s_item->>'product_name',
                     (v_s_item->>'quantity')::INT,
-                    'pending'
-                );
+                    'pending'::public.sourcing_status,
+                    false,
+                    'Abastecimiento requerido para producto bajo demanda'
+                )
+                ON CONFLICT (order_id, product_id, COALESCE(order_item_id, '00000000-0000-0000-0000-000000000000'::uuid)) DO NOTHING;
             END IF;
         END LOOP;
     END LOOP;
@@ -889,39 +911,26 @@ BEGIN
 
         INSERT INTO public.stock_movements (
             product_id,
-            order_id,
             movement_type,
-            quantity_change,
-            quantity_after,
+            quantity,
+            previous_stock,
+            new_stock,
+            order_id,
             reason,
             created_by
         ) VALUES (
             v_deduct.prod_id,
-            v_order_id,
-            'sale',
+            'sale'::public.stock_movement_type,
             -v_deduct.total_qty,
+            v_cur_stock,
             v_new_stock,
+            v_order_id,
             COALESCE(v_deduct.reason, 'Venta en pedido ' || v_order_number),
             v_user_id
         );
     END LOOP;
 
-    -- 16. Sourcing ticket si hay items bajo demanda
-    IF jsonb_array_length(v_sourcing_queue) > 0 THEN
-        INSERT INTO public.sourcing_tickets (
-            order_id,
-            status,
-            total_items_needed,
-            notes
-        ) VALUES (
-            v_order_id,
-            'open',
-            (SELECT COUNT(*) FROM public.sourcing_items WHERE order_id = v_order_id),
-            'Ticket automático generado para el pedido ' || v_order_number
-        );
-    END IF;
-
-    -- 17. Retornar resumen completo
+    -- 16. Retornar resumen completo
     RETURN jsonb_build_object(
         'success', true,
         'order_id', v_order_id,
