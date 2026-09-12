@@ -317,9 +317,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           (p) => p.id === item.productId || p.slug === item.productId
         );
         return (
-          prod &&
-          (!prod.inStock ||
-            (prod.stockMode === 'in_stock' && (prod.stockQuantity ?? 0) < item.quantity))
+          !prod ||
+          !prod.inStock ||
+          (prod.stockMode === 'in_stock' && (prod.stockQuantity ?? 0) < item.quantity)
         );
       })
       .map((item) => item.lineId || item.productId);

@@ -99,7 +99,29 @@ export function CartItem({ line }: { line: CartLine }) {
 
   // Si es un producto estándar
   const product = getProductById(line.productId) || fallbackProductById(line.productId);
-  if (!product) return null;
+  if (!product) {
+    return (
+      <article
+        id={`cart-item-${lineKey}`}
+        className="flex gap-3 p-3 border-2 border-red-500/60 bg-red-950/30 items-center justify-between"
+      >
+        <div className="flex-1 min-w-0">
+          <h3 className="font-black text-sm text-white truncate">Producto no disponible</h3>
+          <p className="text-xs text-red-400 font-bold mt-0.5">
+            Este artículo ya no está disponible en el catálogo. Por favor, quítalo para continuar.
+          </p>
+        </div>
+        <button
+          id={`remove-${lineKey}`}
+          type="button"
+          onClick={() => removeFromCart(lineKey)}
+          className="text-xs font-black text-rose-300 hover:text-white uppercase tracking-wider px-3 py-1.5 border border-red-500/50 bg-red-950/60"
+        >
+          Quitar
+        </button>
+      </article>
+    );
+  }
 
   const isImg = isRealImageUrl(product.image);
   const unitPrice = detail ? detail.discountedUnitPrice : product.price;
@@ -167,7 +189,7 @@ export function CartItem({ line }: { line: CartLine }) {
         <div className="flex justify-between items-center mt-2">
           <QuantitySelector
             quantity={line.quantity}
-            max={product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
+            max={isOut ? 0 : product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
             onAdd={() => increaseQuantity(lineKey)}
             onRemove={() => decreaseQuantity(lineKey)}
           />

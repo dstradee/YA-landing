@@ -22,7 +22,8 @@ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN NULL;
     WHEN undefined_object THEN NULL;
-END $$;
+END;
+$$;
 
 ALTER TABLE public.promotions ADD COLUMN IF NOT EXISTS applicable_product_id UUID REFERENCES public.products(id) ON DELETE SET NULL;
 ALTER TABLE public.promotions ADD COLUMN IF NOT EXISTS is_two_for_one BOOLEAN NOT NULL DEFAULT false;
@@ -75,7 +76,8 @@ CREATE INDEX IF NOT EXISTS idx_product_suggestions_created ON public.product_sug
 
 ALTER TABLE public.product_suggestions ENABLE ROW LEVEL SECURITY;
 
-DO $$ BEGIN
+DO $$
+BEGIN
     DROP POLICY IF EXISTS "Users can view their own product suggestions" ON public.product_suggestions;
     CREATE POLICY "Users can view their own product suggestions"
         ON public.product_suggestions FOR SELECT
@@ -95,7 +97,8 @@ DO $$ BEGIN
         USING (public.is_admin())
         WITH CHECK (public.is_admin());
 EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
+END;
+$$;
 
 -- ------------------------------------------------------------------------------
 -- 5. DISPONIBILIDAD DE REPARTIDORES
@@ -154,7 +157,8 @@ BEGIN
     END IF;
 EXCEPTION WHEN OTHERS THEN
     NULL;
-END $$;
+END;
+$$;
 
 ALTER TABLE public.products REPLICA IDENTITY FULL;
 
@@ -289,7 +293,8 @@ BEGIN
     GET DIAGNOSTICS v_updated_incentives = ROW_COUNT;
 
     RAISE NOTICE 'Actualización de repartidores completada: % recompensas, % incentivos.', v_updated_rewards, v_updated_incentives;
-END $$;
+END;
+$$;
 
 -- ------------------------------------------------------------------------------
 -- 8. MOTOR COMERCIAL ATÓMICO: CREATE_ORDER

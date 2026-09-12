@@ -24,7 +24,7 @@ import {
   fetchStockMovements,
   adminAdjustStock,
 } from '../../lib/adminInventory';
-import { adminFetchProducts, type AdminProductItem } from '../../lib/catalog';
+import { adminFetchProducts, subscribeToCatalogChanges, type AdminProductItem } from '../../lib/catalog';
 import { isRealImageUrl, formatImageUrl } from '../../lib/cloudinary';
 import type { DbStockMovement, InventorySummary, StockMovementType } from '../../types/app';
 import { euro } from '../../data/products';
@@ -107,8 +107,14 @@ export function AdminInventoryPage() {
       loadData();
     };
     window.addEventListener('ya-inventory-updated', handleInventoryUpdated);
+
+    const unsubscribe = subscribeToCatalogChanges(() => {
+      loadData();
+    });
+
     return () => {
       window.removeEventListener('ya-inventory-updated', handleInventoryUpdated);
+      unsubscribe();
     };
   }, [loadData]);
 

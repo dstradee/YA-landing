@@ -62,14 +62,70 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadData();
 
-    const handleInventoryUpdated = () => {
+    const handleInventoryUpdated = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt?.detail?.product_id && customEvt.detail.new_stock !== undefined) {
+        const prodId = customEvt.detail.product_id;
+        const newStock = Number(customEvt.detail.new_stock);
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id === prodId || p.slug === prodId) {
+              const isAvailable =
+                p.active &&
+                (p.stockMode === 'on_demand' ||
+                  (p.stockMode === 'in_stock' && newStock > 0));
+              return {
+                ...p,
+                stockQuantity: newStock,
+                inStock: isAvailable,
+              };
+            }
+            return p;
+          })
+        );
+      }
       loadData();
     };
     window.addEventListener('ya-inventory-updated', handleInventoryUpdated);
 
-    // Supabase Realtime listener preparado para actualización sin recargar
-    const unsubscribe = subscribeToCatalogChanges(() => {
-      loadData();
+    // Supabase Realtime listener para actualización en tiempo real sin recargar
+    const unsubscribe = subscribeToCatalogChanges((payload) => {
+      if (payload?.table === 'products' && payload.eventType === 'UPDATE' && payload.new) {
+        const raw = payload.new;
+        setProducts((prev) => {
+          const index = prev.findIndex((p) => p.id === raw.id || p.slug === raw.slug);
+          if (index === -1) {
+            loadData();
+            return prev;
+          }
+          const existing = prev[index];
+          const isAvailable =
+            Boolean(raw.active) &&
+            (raw.stock_mode === 'on_demand' ||
+              (raw.stock_mode === 'in_stock' &&
+                (raw.stock_quantity === undefined || Number(raw.stock_quantity) > 0)));
+
+          const updated: Product = {
+            ...existing,
+            name: raw.name ?? existing.name,
+            price: raw.price !== undefined ? Number(raw.price) : existing.price,
+            active: raw.active !== undefined ? Boolean(raw.active) : existing.active,
+            image: raw.image || existing.image,
+            description: raw.description ?? existing.description,
+            stockMode: raw.stock_mode ?? existing.stockMode,
+            stockQuantity:
+              raw.stock_quantity !== undefined ? Number(raw.stock_quantity) : existing.stockQuantity,
+            minStock:
+              raw.min_stock !== undefined ? Number(raw.min_stock) : existing.minStock,
+            inStock: isAvailable,
+          };
+          const next = [...prev];
+          next[index] = updated;
+          return next;
+        });
+      } else {
+        loadData();
+      }
     });
 
     return () => {
