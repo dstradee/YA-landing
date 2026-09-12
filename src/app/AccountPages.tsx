@@ -22,9 +22,11 @@ import {
   RefreshCw,
   Truck,
   Bell,
+  Lightbulb,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { fetchUserOrders, type OrderWithDetails } from '../lib/orders';
+import { ProductSuggestionModal } from '../components/ProductSuggestionModal';
 
 export function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -261,6 +263,7 @@ export function ProfilePage() {
   const [editPhone, setEditPhone] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
 
   const startEditing = () => {
     setEditName(profile?.full_name || '');
@@ -569,7 +572,24 @@ export function ProfilePage() {
             </span>
             <span className="text-xs font-bold text-gray-400">Tarjeta / Bizum →</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsSuggestionModalOpen(true)}
+            className="w-full text-left p-4 font-black flex items-center justify-between hover:bg-ya-gray transition-colors text-white"
+          >
+            <span className="flex items-center gap-2">
+              <Lightbulb size={18} className="text-ya-lime" /> Sugerir productos / Mis sugerencias
+            </span>
+            <span className="text-xs font-mono text-gray-400">Ver estado →</span>
+          </button>
         </div>
+
+        {/* Modal de sugerencias integrado */}
+        <ProductSuggestionModal
+          isOpen={isSuggestionModalOpen}
+          onClose={() => setIsSuggestionModalOpen(false)}
+        />
 
         {/* Botón de Logout Real */}
         <button

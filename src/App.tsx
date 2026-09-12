@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useSearchParams } from 'react-router-dom';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { Hero } from './components/sections/Hero';
@@ -7,6 +7,7 @@ import { HowItWorks } from './components/sections/HowItWorks';
 import { Categories } from './components/sections/Categories';
 import { Waitlist } from './components/sections/Waitlist';
 import { Local } from './components/sections/Local';
+import { UnderConstructionLanding } from './components/sections/UnderConstructionLanding';
 import { CustomerRoutes } from './app/CustomerRoutes';
 import { AdminRoutes } from './app/AdminPages';
 import { CourierRoutes } from './app/courier/CourierRoutes';
@@ -25,7 +26,26 @@ import {
   getWebSiteSchema,
 } from './lib/seo';
 
+/**
+ * Estado de construcción de la landing pública.
+ * Por defecto está bloqueada al público en estado "En Construcción", mostrando la mini
+ * presentación oficial de pre-lanzamiento de YA Delivery en Jerez de la Frontera,
+ * y preservando intacto todo el código y secciones de la landing comercial para su posterior reactivación.
+ * Se puede previsualizar en cualquier momento con ?preview=landing o configurando VITE_LANDING_UNDER_CONSTRUCTION=false.
+ */
+export const IS_LANDING_UNDER_CONSTRUCTION =
+  import.meta.env.VITE_LANDING_UNDER_CONSTRUCTION !== 'false';
+
 function Landing() {
+  const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get('preview') === 'landing';
+
+  // Si la landing está en construcción y no se solicita preview explícito
+  if (IS_LANDING_UNDER_CONSTRUCTION && !isPreview) {
+    return <UnderConstructionLanding />;
+  }
+
+  // Si no está en construcción o se pasa ?preview=landing, se muestra la landing comercial completa
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <SeoHead

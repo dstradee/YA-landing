@@ -1333,20 +1333,28 @@ BEGIN
             FOR v_s_item IN SELECT * FROM jsonb_array_elements(v_sourcing_queue)
             LOOP
                 IF v_s_item->>'match_key' = v_item->>'match_key' THEN
-                    INSERT INTO public.order_sourcing_items (
+                    INSERT INTO public.sourcing_items (
                         order_id,
                         order_item_id,
                         product_id,
                         product_name,
-                        quantity_needed,
-                        status
+                        quantity,
+                        status,
+                        is_test,
+                        notes,
+                        created_at,
+                        updated_at
                     ) VALUES (
                         v_order_id,
                         v_inserted_item_id,
                         (v_s_item->>'product_id')::UUID,
                         v_s_item->>'product_name',
                         (v_s_item->>'quantity')::INT,
-                        'pending'::public.sourcing_status
+                        'pending'::public.sourcing_status,
+                        true,
+                        'Abastecimiento de prueba generado automáticamente',
+                        timezone('utc'::text, now()),
+                        timezone('utc'::text, now())
                     )
                     ON CONFLICT (order_id, product_id, COALESCE(order_item_id, '00000000-0000-0000-0000-000000000000'::uuid)) DO NOTHING;
                 END IF;

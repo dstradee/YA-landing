@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Sparkles, Lightbulb } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { euro } from '../data/products';
 import { AppHeader, CategoryCard, EmptyState, ProductCard, QuantitySelector } from './components';
@@ -10,6 +10,7 @@ import { PackCard } from './PackCard';
 import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 import { SeoHead } from '../components/seo/SeoHead';
 import { Breadcrumbs } from '../components/seo/Breadcrumbs';
+import { ProductSuggestionModal } from '../components/ProductSuggestionModal';
 import {
   getProductSchema,
   getItemListSchema,
@@ -22,6 +23,7 @@ import {
 export function AppHome() {
   const { categories, products } = useCatalog();
   const { packs } = useCart();
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   const currentHour = new Date().getHours();
   const greeting =
     currentHour >= 21 || currentHour < 6
@@ -230,6 +232,35 @@ export function AppHome() {
             ))}
           </div>
         </section>
+
+        {/* Banner CTA Sugerencias de productos */}
+        <section className="mt-12 border-2 border-ya-gray bg-zinc-900/60 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="p-3 bg-ya-lime/10 border border-ya-lime text-ya-lime shrink-0">
+              <Lightbulb size={24} />
+            </div>
+            <div>
+              <h3 className="font-black text-lg uppercase tracking-tight text-white">
+                ¿Echas en falta algún producto o marca?
+              </h3>
+              <p className="text-xs text-gray-400 mt-1 max-w-xl font-medium">
+                Dinos qué artículo necesitas en Jerez y nuestro equipo de abastecimiento lo conseguirá y añadirá al catálogo.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSuggestionOpen(true)}
+            className="shrink-0 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-xs px-5 py-3 hover:bg-white transition-colors flex items-center gap-2"
+          >
+            <Lightbulb size={16} /> Sugerir producto
+          </button>
+        </section>
+
+        <ProductSuggestionModal
+          isOpen={isSuggestionOpen}
+          onClose={() => setIsSuggestionOpen(false)}
+        />
       </main>
     </>
   );
@@ -238,6 +269,7 @@ export function AppHome() {
 export function CategoryPage() {
   const { slug } = useParams();
   const { categories, products } = useCatalog();
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   const category = categories.find((item) => item.slug === slug);
   const items = products.filter((item) => item.category === slug && item.active);
 
@@ -321,6 +353,35 @@ export function CategoryPage() {
             />
           </div>
         )}
+
+        {/* CTA Sugerir en categoría */}
+        <div className="mt-10 border-2 border-ya-gray bg-zinc-900/40 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-ya-lime/10 border border-ya-lime text-ya-lime shrink-0">
+              <Lightbulb size={20} />
+            </div>
+            <div>
+              <p className="font-black text-sm uppercase tracking-tight text-white">
+                ¿No ves tu producto o marca preferida en {category.name}?
+              </p>
+              <p className="text-xs text-gray-400">
+                Pídelo y lo buscaremos para abastecerlo en Jerez.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSuggestionOpen(true)}
+            className="bg-ya-lime text-ya-black font-black uppercase text-xs px-4 py-2.5 hover:bg-white transition-colors flex items-center gap-1.5 shrink-0"
+          >
+            <Lightbulb size={14} /> Sugerir artículo
+          </button>
+        </div>
+
+        <ProductSuggestionModal
+          isOpen={isSuggestionOpen}
+          onClose={() => setIsSuggestionOpen(false)}
+        />
       </main>
     </>
   );
@@ -329,6 +390,7 @@ export function CategoryPage() {
 export function SearchPage() {
   const { products } = useCatalog();
   const [query, setQuery] = useState('');
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
 
   const result = useMemo(() => {
     const term = query.toLowerCase().trim();
@@ -377,19 +439,68 @@ export function SearchPage() {
         </div>
 
         {result.length ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
-            {result.map((item) => (
-              <ProductCard key={item.id} product={item} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
+              {result.map((item) => (
+                <ProductCard key={item.id} product={item} />
+              ))}
+            </div>
+
+            {/* Banner permanente en buscador */}
+            <div className="mt-10 border-2 border-ya-gray bg-zinc-900/40 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-ya-lime/10 border border-ya-lime text-ya-lime shrink-0">
+                  <Lightbulb size={18} />
+                </div>
+                <div>
+                  <p className="font-black text-xs sm:text-sm uppercase tracking-tight text-white">
+                    ¿Echas en falta algún producto en YA Jerez?
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    Dinos qué necesitas y lo añadiremos al catálogo.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSuggestionOpen(true)}
+                className="bg-ya-lime text-ya-black font-black uppercase text-xs px-4 py-2 hover:bg-white transition-colors flex items-center gap-1.5 shrink-0"
+              >
+                <Lightbulb size={13} /> Sugerir producto
+              </button>
+            </div>
+          </>
         ) : (
-          <div className="mt-8">
+          <div className="mt-8 space-y-4">
             <EmptyState
               title="No encontramos ese producto"
               text={`No hay coincidencias para "${query}". Prueba con "Red Bull", "Coca-Cola", "hielo" o "patatas".`}
             />
+            <div className="border-2 border-ya-lime bg-ya-lime/10 p-5 text-center flex flex-col items-center">
+              <div className="p-2 bg-ya-lime text-ya-black mb-2">
+                <Lightbulb size={20} />
+              </div>
+              <p className="font-black text-sm uppercase text-white">
+                ¿Buscabas un producto que no está en el catálogo?
+              </p>
+              <p className="text-xs text-gray-300 mt-1 max-w-md">
+                Indícanoslo y el equipo de YA lo buscará en comercios locales de Jerez para incorporarlo.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsSuggestionOpen(true)}
+                className="mt-3 bg-ya-lime text-ya-black font-black uppercase text-xs px-6 py-2.5 hover:bg-white transition-colors inline-flex items-center gap-2"
+              >
+                <Lightbulb size={15} /> Sugerir producto
+              </button>
+            </div>
           </div>
         )}
+
+        <ProductSuggestionModal
+          isOpen={isSuggestionOpen}
+          onClose={() => setIsSuggestionOpen(false)}
+        />
       </main>
     </>
   );
