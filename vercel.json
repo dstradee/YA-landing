@@ -34,11 +34,50 @@
           "value": "public, max-age=86400, s-maxage=86400"
         }
       ]
+    },
+    {
+      "source": "/favicon.ico",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "image/x-icon"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, s-maxage=86400"
+        }
+      ]
+    },
+    {
+      "source": "/favicon.svg",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "image/svg+xml"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, s-maxage=86400"
+        }
+      ]
+    },
+    {
+      "source": "/site.webmanifest",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, s-maxage=86400"
+        }
+      ]
     }
   ],
   "rewrites": [
     {
-      "source": "/((?!api/|sitemap\\.xml|robots\\.txt).*)",
+      "source": "/((?!api/|sitemap\\.xml|robots\\.txt|favicon|apple-touch-icon|logo\\.png|site\\.webmanifest|.*\\.(?:ico|png|svg|webp|webmanifest|xml|txt|json)).*)",
       "destination": "/index.html"
     }
   ]
