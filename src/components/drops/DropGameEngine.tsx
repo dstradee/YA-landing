@@ -138,6 +138,34 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
     () => `drop_${drop?.id}_${orderId || 'free'}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
   );
 
+  // Manejo de scroll del body y cierre seguro restaurando interacción
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow || '';
+    };
+  }, []);
+
+  const handleClose = () => {
+    document.body.style.overflow = '';
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
   // 1. Validar elegibilidad al montar
   useEffect(() => {
     let isMounted = true;
@@ -288,16 +316,18 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
   };
 
   return (
-    <div className="relative bg-ya-black text-white p-6 border-4 border-ya-gray shadow-2xl max-w-lg w-full mx-auto">
-      {/* Botón de cerrar */}
+    <div className="relative bg-ya-black text-white p-6 border-4 border-ya-gray shadow-2xl max-w-lg w-full mx-auto max-h-[90vh] overflow-y-auto">
+      {/* Botón X claramente visible en la esquina superior derecha del modal */}
       {onClose && (
         <button
           type="button"
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white hover:bg-ya-gray transition-colors"
-          title="Cerrar ventana"
+          id="btn-close-drop-modal"
+          onClick={handleClose}
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 p-2 text-white bg-zinc-900 border-2 border-ya-gray hover:border-ya-lime hover:text-ya-lime hover:bg-zinc-800 transition-all shadow-lg cursor-pointer flex items-center justify-center min-w-[40px] min-h-[40px]"
+          title="Cerrar modal"
+          aria-label="Cerrar modal"
         >
-          <X size={20} />
+          <X size={22} className="stroke-[2.5]" />
         </button>
       )}
 
@@ -334,8 +364,8 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
           {onClose && (
             <button
               type="button"
-              onClick={onClose}
-              className="py-2.5 px-4 bg-ya-gray text-white font-black uppercase text-xs hover:bg-white hover:text-ya-black transition-colors"
+              onClick={handleClose}
+              className="py-2.5 px-4 bg-ya-gray text-white font-black uppercase text-xs hover:bg-white hover:text-ya-black transition-colors cursor-pointer"
             >
               Entendido
             </button>
@@ -358,7 +388,21 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
 
           {/* Tarjeta de Resultado revelado (mostrada tras la parada completa de los rodillos) */}
           {playResult && ((drop.game_type || 'jackpot') !== 'jackpot' || reelsFinished) && (
-            <div className="mt-6 transition-all duration-500 animate-fadeIn">
+            <div id="jackpot-results-modal-card" className="mt-6 transition-all duration-500 animate-fadeIn relative">
+              {/* Botón X claramente visible en la esquina superior derecha del modal de resultados */}
+              {onClose && (
+                <button
+                  type="button"
+                  id="btn-close-jackpot-results"
+                  onClick={handleClose}
+                  className="absolute -top-3 -right-2 z-30 p-1.5 text-white bg-ya-black border-2 border-ya-lime hover:bg-ya-lime hover:text-ya-black transition-all shadow-xl cursor-pointer flex items-center justify-center min-w-[36px] min-h-[36px]"
+                  title="Cerrar resultados del Jackpot"
+                  aria-label="Cerrar resultados del Jackpot"
+                >
+                  <X size={20} className="stroke-[2.5]" />
+                </button>
+              )}
+
               {playResult.outcome === 'won_prize' && playResult.prize ? (
                 // PREMIO GANADO
                 <div className="border-2 border-ya-lime bg-ya-lime/10 p-5 text-center">
@@ -433,8 +477,9 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
               {onClose && (
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="mt-5 w-full py-3 bg-white text-ya-black font-black uppercase tracking-wider text-xs hover:bg-ya-lime transition-colors"
+                  id="btn-continue-drop-modal"
+                  onClick={handleClose}
+                  className="mt-5 w-full py-3 bg-white text-ya-black font-black uppercase tracking-wider text-xs hover:bg-ya-lime transition-colors cursor-pointer"
                 >
                   Continuar
                 </button>

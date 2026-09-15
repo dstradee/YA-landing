@@ -351,18 +351,38 @@ export function DropsCustomerPage() {
 
       {/* Modal de juego Drop */}
       {showGameModal && hasActiveDrop && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-          <DropGameEngine
-            dropPayload={activeDrop}
-            onClose={() => setShowGameModal(false)}
-            onFinished={() => {
-              // Recargar premios tras jugar
-              if (user) {
-                fetchUserAwardedPrizes().then(setMyPrizes);
-                fetchActiveMonthlyDraw().then(setActiveDraw);
-              }
-            }}
-          />
+        <div
+          id="drop-game-backdrop"
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto cursor-pointer"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              document.body.style.overflow = '';
+              setShowGameModal(false);
+            }
+          }}
+        >
+          <div
+            id="drop-game-container"
+            className="w-full max-w-lg my-auto relative cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DropGameEngine
+              dropPayload={activeDrop}
+              onClose={() => {
+                document.body.style.overflow = '';
+                setShowGameModal(false);
+              }}
+              onFinished={() => {
+                // Recargar premios tras jugar
+                if (user) {
+                  fetchUserAwardedPrizes().then(setMyPrizes);
+                  fetchActiveMonthlyDraw().then(setActiveDraw);
+                }
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

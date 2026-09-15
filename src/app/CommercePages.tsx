@@ -1952,16 +1952,36 @@ export function OrderPage() {
 
           {/* Modal de Juego de Drop */}
           {showDropModal && activeDropPayload?.drop && (
-            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-              <DropGameEngine
-                dropPayload={activeDropPayload}
-                orderId={dbOrder.id}
-                onClose={() => setShowDropModal(false)}
-                onFinished={() => {
-                  setIsDropEligible(false);
-                  setDropPlayed(true);
-                }}
-              />
+            <div
+              id="drop-modal-backdrop"
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto cursor-pointer"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  document.body.style.overflow = '';
+                  setShowDropModal(false);
+                }
+              }}
+            >
+              <div
+                id="drop-modal-container"
+                className="w-full max-w-lg my-auto relative cursor-default"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DropGameEngine
+                  dropPayload={activeDropPayload}
+                  orderId={dbOrder.id}
+                  onClose={() => {
+                    document.body.style.overflow = '';
+                    setShowDropModal(false);
+                  }}
+                  onFinished={() => {
+                    setIsDropEligible(false);
+                    setDropPlayed(true);
+                  }}
+                />
+              </div>
             </div>
           )}
         </main>
