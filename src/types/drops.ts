@@ -199,6 +199,15 @@ export interface ActiveDropPayload {
     prize_config: Record<string, any>;
     sort_order: number;
   }>;
+  nextDrop?: {
+    id: string;
+    drop_number: number;
+    title: string;
+    description: string | null;
+    game_type?: DropGameType;
+    starts_at: string;
+    ends_at: string;
+  };
 }
 
 export interface CheckDropEligibilityResult {

@@ -14,11 +14,13 @@ import {
   Award,
   X,
   Search,
+  Edit2,
 } from 'lucide-react';
 import {
   adminFetchAllMonthlyDraws,
   adminFetchMonthlyDrawParticipants,
   adminCreateMonthlyDraw,
+  adminUpdateMonthlyDraw,
   adminCloseMonthlyDraw,
   formatMadridDate,
 } from '../../lib/drops';
@@ -64,6 +66,23 @@ export function AdminMonthlyDrawPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Modal Editar Sorteo Mensual (Activo o en curso)
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedDrawToEdit, setSelectedDrawToEdit] = useState<DbMonthlyDraw | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPrizeTitle, setEditPrizeTitle] = useState('');
+  const [editPrizeDescription, setEditPrizeDescription] = useState('');
+  const [editPrizeValue, setEditPrizeValue] = useState<number>(100);
+  const [editThemeKey, setEditThemeKey] = useState('standard');
+  const [editThemeUnitName, setEditThemeUnitName] = useState('participación');
+  const [editThemeUnitIcon, setEditThemeUnitIcon] = useState('ticket');
+  const [editStartsAt, setEditStartsAt] = useState('');
+  const [editEndsAt, setEditEndsAt] = useState('');
+  const [editStatus, setEditStatus] = useState<any>('open');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -151,6 +170,78 @@ export function AdminMonthlyDrawPage() {
       setModalError(err.message || 'Error al registrar el sorteo.');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  // Abrir modal en modo edición
+  const handleOpenEditModal = (draw: DbMonthlyDraw) => {
+    setSelectedDrawToEdit(draw);
+    setEditTitle(draw.title || '');
+    setEditDescription(draw.description || '');
+    setEditPrizeTitle(draw.prize_title || '');
+    setEditPrizeDescription(draw.prize_description || '');
+    setEditPrizeValue(draw.prize_value || 100);
+    setEditThemeKey(draw.theme_key || 'standard');
+    setEditThemeUnitName(draw.theme_unit_name || 'participación');
+    setEditThemeUnitIcon(draw.theme_unit_icon || 'ticket');
+    setEditStatus(draw.status || 'open');
+
+    if (draw.starts_at) {
+      try {
+        setEditStartsAt(new Date(draw.starts_at).toISOString().slice(0, 16));
+      } catch {
+        setEditStartsAt('');
+      }
+    }
+    if (draw.ends_at) {
+      try {
+        setEditEndsAt(new Date(draw.ends_at).toISOString().slice(0, 16));
+      } catch {
+        setEditEndsAt('');
+      }
+    }
+
+    setEditError(null);
+    setShowEditModal(true);
+  };
+
+  // Guardar edición del sorteo mensual (sin borrar participaciones)
+  const handleUpdateDraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDrawToEdit) return;
+    setEditError(null);
+
+    if (!editTitle.trim() || !editPrizeTitle.trim() || !editStartsAt || !editEndsAt) {
+      setEditError('Por favor completa todos los campos requeridos.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await adminUpdateMonthlyDraw(selectedDrawToEdit.id, {
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        prize_title: editPrizeTitle.trim(),
+        prize_description: editPrizeDescription.trim() || null,
+        prize_value: Number(editPrizeValue) || 0,
+        theme_key: editThemeKey,
+        theme_unit_name: editThemeUnitName,
+        theme_unit_icon: editThemeUnitIcon,
+        status: editStatus,
+        starts_at: new Date(editStartsAt).toISOString(),
+        ends_at: new Date(editEndsAt).toISOString(),
+      });
+
+      setNotice(
+        `Sorteo "${editTitle}" actualizado correctamente. Las participaciones registradas se mantienen intactas.`
+      );
+      setShowEditModal(false);
+      await loadData();
+    } catch (err: any) {
+      console.error('[AdminMonthlyDrawPage] Error updating draw:', err);
+      setEditError(err.message || 'Error al actualizar el sorteo mensual.');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -288,6 +379,16 @@ export function AdminMonthlyDrawPage() {
                   {totalTickets}
                 </span>
               </div>
+
+              <button
+                type="button"
+                onClick={() => handleOpenEditModal(activeDraw)}
+                className="py-3 px-4 border-2 border-amber-400/80 bg-amber-400/10 text-amber-300 hover:bg-amber-400 hover:text-ya-black font-black uppercase text-xs tracking-wider flex items-center gap-2 transition-all shadow-md"
+                title="Editar título, premio, fechas o estado de este sorteo"
+              >
+                <Edit2 size={16} />
+                <span>Editar Sorteo</span>
+              </button>
 
               <button
                 type="button"
@@ -549,6 +650,199 @@ export function AdminMonthlyDrawPage() {
                   className="py-2.5 px-6 bg-amber-400 text-ya-black font-black uppercase text-xs hover:bg-white transition-colors"
                 >
                   {isCreating ? 'Creando...' : 'Crear Sorteo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR SORTEO MENSUAL */}
+      {showEditModal && selectedDrawToEdit && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-ya-black border-4 border-amber-400 max-w-lg w-full p-6 text-white my-8 shadow-2xl">
+            <div className="flex items-center justify-between border-b-2 border-ya-gray pb-4 mb-4">
+              <div>
+                <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest block">
+                  EDICIÓN OFICIAL DE SORTEO
+                </span>
+                <h3 className="text-xl font-black uppercase">Editar Sorteo Mensual</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="p-2 text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 border border-amber-400/50 bg-amber-950/30 text-amber-200 text-xs font-mono">
+              ✓ Las participaciones de los usuarios ya registradas se mantienen intactas. La edición solo actualiza la información, fechas, premio y estado del sorteo.
+            </div>
+
+            {editError && (
+              <div className="mb-4 p-3 border-2 border-red-500 bg-red-950/40 text-red-300 text-xs flex items-center gap-2">
+                <AlertTriangle size={16} className="shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateDraw} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1">
+                  Título del Sorteo *
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  required
+                  placeholder="Gran Sorteo YA — Septiembre"
+                  className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-sm text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1">
+                  Descripción
+                </label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={2}
+                  placeholder="Participa automáticamente con tus pedidos..."
+                  className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1">
+                    Premio Principal *
+                  </label>
+                  <input
+                    type="text"
+                    value={editPrizeTitle}
+                    onChange={(e) => setEditPrizeTitle(e.target.value)}
+                    required
+                    placeholder="Pack Tech YA o 250 €"
+                    className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-sm text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1">
+                    Valor Estimado (€) *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editPrizeValue}
+                    onChange={(e) => setEditPrizeValue(Number(e.target.value))}
+                    required
+                    className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-sm text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1">
+                  Detalles del Premio
+                </label>
+                <input
+                  type="text"
+                  value={editPrizeDescription}
+                  onChange={(e) => setEditPrizeDescription(e.target.value)}
+                  placeholder="1 mes completo de pedidos gratis..."
+                  className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1">
+                    Tema
+                  </label>
+                  <select
+                    value={editThemeKey}
+                    onChange={(e) => setEditThemeKey(e.target.value)}
+                    className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white"
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="halloween">Halloween</option>
+                    <option value="christmas">Navidad</option>
+                    <option value="summer">Verano</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1">
+                    Unidad
+                  </label>
+                  <input
+                    type="text"
+                    value={editThemeUnitName}
+                    onChange={(e) => setEditThemeUnitName(e.target.value)}
+                    className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1">
+                    Estado *
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white font-bold"
+                  >
+                    <option value="open">Abierto (Activo)</option>
+                    <option value="closed">Pausado / Cerrado</option>
+                    <option value="draft">Borrador</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1">
+                    Fecha Inicio *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editStartsAt}
+                    onChange={(e) => setEditStartsAt(e.target.value)}
+                    required
+                    className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1">
+                    Fecha Cierre *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editEndsAt}
+                    onChange={(e) => setEditEndsAt(e.target.value)}
+                    required
+                    className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t-2 border-ya-gray">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="py-2.5 px-4 border border-ya-gray text-gray-300 hover:text-white font-bold text-xs uppercase"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="py-2.5 px-6 bg-amber-400 text-ya-black font-black uppercase text-xs hover:bg-white transition-colors"
+                >
+                  {isUpdating ? 'Guardando cambios...' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>

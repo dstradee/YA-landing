@@ -43,11 +43,58 @@ export async function handlePayPalDevRequest(
 ) {
   const url = req.url?.split('?')[0];
 
-  if (!url?.startsWith('/api/paypal/') && !url?.startsWith('/api/stripe/')) {
+  if (!url?.startsWith('/api/paypal/') && !url?.startsWith('/api/stripe/') && !url?.startsWith('/api/drops/')) {
     return next();
   }
 
   try {
+    // 0. /api/drops/record-entry
+    if (url === '/api/drops/record-entry' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const { drawId, userId, dropId, orderId, entriesCount = 1 } = body || {};
+
+      if (!drawId || !userId) {
+        return sendJson(res, 400, { error: 'Faltan drawId o userId' });
+      }
+
+      const supabase = getSupabaseServerClient();
+      const count = Math.max(1, Math.min(10, Number(entriesCount) || 1));
+      const entries = Array.from({ length: count }, () => ({
+        draw_id: drawId,
+        user_id: userId,
+        source: 'drop',
+        drop_id: dropId || null,
+        order_id: orderId || null,
+      }));
+
+      const { error: insertErr } = await supabase
+        .from('monthly_draw_entries')
+        .insert(entries);
+
+      if (insertErr) {
+        console.error('[Drops Dev Middleware] Error al insertar participación:', insertErr);
+        return sendJson(res, 500, { error: insertErr.message });
+      }
+
+      const { count: userTotal } = await supabase
+        .from('monthly_draw_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('draw_id', drawId)
+        .eq('user_id', userId);
+
+      const { count: globalTotal } = await supabase
+        .from('monthly_draw_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('draw_id', drawId);
+
+      return sendJson(res, 200, {
+        success: true,
+        draw_id: drawId,
+        entries_awarded: count,
+        user_entries_count: userTotal || count,
+        total_entries_count: globalTotal || count,
+      });
+    }
     // 1. /api/paypal/config
     if (url === '/api/paypal/config' && req.method === 'GET') {
       const hasRealCredentials = Boolean(process.env.STRIPE_SECRET_KEY);

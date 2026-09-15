@@ -25,6 +25,7 @@ import {
   adminFetchAwardedPrizes,
   adminRunDataCleanup,
   formatMadridDate,
+  getDropTimingStatus,
 } from '../../lib/drops';
 import type { DbDrop, DropGameType, DropPrizeType } from '../../types/drops';
 
@@ -332,10 +333,11 @@ export function AdminDropsPage() {
     }
   };
 
-  // Filtrado de Drops
+  // Filtrado de Drops por estado temporal en tiempo real
   const filteredDrops = drops.filter((d) => {
     if (selectedFilter === 'all') return true;
-    return d.status === selectedFilter;
+    const timing = getDropTimingStatus(d);
+    return timing === selectedFilter;
   });
 
   const totalProb = prizes.reduce(
@@ -531,10 +533,10 @@ export function AdminDropsPage() {
                 {tab === 'all'
                   ? `Todos (${drops.length})`
                   : tab === 'active'
-                  ? `Activos (${drops.filter((d) => d.status === 'active').length})`
+                  ? `Activos Ahora (${drops.filter((d) => getDropTimingStatus(d) === 'active').length})`
                   : tab === 'scheduled'
-                  ? `Programados (${drops.filter((d) => d.status === 'scheduled').length})`
-                  : `Finalizados (${drops.filter((d) => d.status === 'finished').length})`}
+                  ? `Programados (${drops.filter((d) => getDropTimingStatus(d) === 'scheduled').length})`
+                  : `Finalizados (${drops.filter((d) => getDropTimingStatus(d) === 'finished').length})`}
               </button>
             ))}
           </div>
@@ -554,27 +556,37 @@ export function AdminDropsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
-              {filteredDrops.map((drop) => (
+              {filteredDrops.map((drop) => {
+                const timing = getDropTimingStatus(drop);
+                return (
                 <div
                   key={drop.id}
-                  className="border-2 border-ya-gray bg-ya-black p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  className={`border-2 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${
+                    timing === 'active'
+                      ? 'border-ya-lime bg-ya-black shadow-lg shadow-ya-lime/5'
+                      : 'border-ya-gray bg-ya-black'
+                  }`}
                 >
                   <div>
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-xs font-black font-mono text-ya-lime">
                         DROP #{drop.drop_number}
                       </span>
-                      <span
-                        className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 ${
-                          drop.status === 'active'
-                            ? 'bg-ya-lime text-ya-black'
-                            : drop.status === 'scheduled'
-                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                            : 'bg-ya-gray text-gray-400'
-                        }`}
-                      >
-                        {drop.status}
-                      </span>
+                      {timing === 'active' ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-black uppercase px-2.5 py-0.5 bg-ya-lime text-ya-black">
+                          <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
+                          ACTIVO AHORA
+                        </span>
+                      ) : timing === 'scheduled' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold uppercase px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                          <Clock size={10} />
+                          PROGRAMADO
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 bg-zinc-800 text-gray-400 border border-zinc-700">
+                          FINALIZADO
+                        </span>
+                      )}
                       <span className="text-[10px] font-mono text-gray-400 uppercase bg-ya-gray/40 px-2 py-0.5">
                         Juego: {drop.game_type}
                       </span>
@@ -625,7 +637,8 @@ export function AdminDropsPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           )}
         </>

@@ -42,20 +42,119 @@ export function formatMadridDate(dateStr: string | Date, includeTime = true): st
 }
 
 // ------------------------------------------------------------------------------
-// 1. CLIENTE: OBTENER DROP ACTIVO
+// ESTADO TEMPORAL REAL DE UN DROP (ZONA HORARIA ESPAÑA / UTC)
+// ------------------------------------------------------------------------------
+export function getDropTimingStatus(drop: {
+  starts_at: string;
+  ends_at: string;
+  status: string;
+}): 'active' | 'scheduled' | 'finished' | 'draft' | 'cancelled' {
+  if (drop.status === 'draft' || drop.status === 'cancelled') {
+    return drop.status as any;
+  }
+  const now = Date.now();
+  const start = new Date(drop.starts_at).getTime();
+  const end = new Date(drop.ends_at).getTime();
+  if (now < start) return 'scheduled';
+  if (now >= start && now < end) return 'active';
+  return 'finished';
+}
+
+// ------------------------------------------------------------------------------
+// 1. CLIENTE: OBTENER DROP ACTIVO (Activación automática por fechas)
 // ------------------------------------------------------------------------------
 export async function fetchActiveDrop(): Promise<ActiveDropPayload> {
   try {
+    const nowMs = Date.now();
+
+    // 1. Intentar primero con la función RPC de base de datos
+    let payload: ActiveDropPayload = { active: false };
     const { data, error } = await supabase.rpc('get_active_drop');
-    if (error) {
-      console.warn('[Drops] Error en get_active_drop RPC, fallback local:', error.message);
-      return { active: false };
+    if (!error && data && (data as any).active) {
+      payload = data as ActiveDropPayload;
     }
-    const payload = data as ActiveDropPayload;
+
+    // 2. Si el RPC no detectó o dio error, evaluar autoritativamente por fechas en tabla drops
+    if (!payload?.active || !payload?.drop) {
+      const { data: allDrops } = await supabase
+        .from('drops')
+        .select('*')
+        .neq('status', 'draft')
+        .neq('status', 'cancelled')
+        .order('starts_at', { ascending: true });
+
+      if (allDrops && allDrops.length > 0) {
+        // Encontrar el Drop que cae dentro del rango de fechas en este instante
+        const currentDrop = allDrops.find((d) => {
+          const s = new Date(d.starts_at).getTime();
+          const e = new Date(d.ends_at).getTime();
+          return nowMs >= s && nowMs < e;
+        });
+
+        if (currentDrop) {
+          // Sincronizar estado en BD si estaba como 'scheduled'
+          if (currentDrop.status !== 'active') {
+            supabase.from('drops').update({ status: 'active' }).eq('id', currentDrop.id).then();
+            currentDrop.status = 'active';
+          }
+
+          // Cargar premios activos
+          const { data: prizes } = await supabase
+            .from('drop_prizes')
+            .select('*')
+            .eq('drop_id', currentDrop.id)
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true });
+
+          payload = {
+            active: true,
+            drop: {
+              ...currentDrop,
+              game_key:
+                currentDrop.game_key ||
+                currentDrop.game_config?.game_key ||
+                currentDrop.game_type ||
+                'jackpot',
+            },
+            prizes: (prizes || []).map((p) => ({
+              id: p.id,
+              name: p.name,
+              description: p.description,
+              prize_type: p.prize_type,
+              prize_value: p.prize_value,
+              prize_config: p.prize_config || {},
+              sort_order: p.sort_order,
+            })),
+          };
+        } else {
+          // No hay ninguno activo ahora: encontrar el PRÓXIMO programado
+          const upcoming = allDrops.find((d) => new Date(d.starts_at).getTime() > nowMs);
+          if (upcoming) {
+            payload = {
+              active: false,
+              nextDrop: {
+                id: upcoming.id,
+                drop_number: upcoming.drop_number,
+                title: upcoming.title,
+                description: upcoming.description,
+                game_type: upcoming.game_type,
+                starts_at: upcoming.starts_at,
+                ends_at: upcoming.ends_at,
+              },
+            };
+          }
+        }
+      }
+    }
+
     if (payload?.drop) {
       payload.drop.game_key =
-        payload.drop.game_key || payload.drop.game_config?.game_key || payload.drop.game_type || 'jackpot';
+        payload.drop.game_key ||
+        payload.drop.game_config?.game_key ||
+        payload.drop.game_type ||
+        'jackpot';
     }
+
     return payload || { active: false };
   } catch (err: any) {
     console.error('[Drops] Error al obtener drop activo:', err);
@@ -294,8 +393,6 @@ export async function playDrop(
     }
   }
 
-  const now = new Date();
-
   if (wonPrize) {
     // Incrementar stock consumido
     await supabase
@@ -364,32 +461,53 @@ export async function playDrop(
   } else {
     // Premio de consolación (+1 participación en el sorteo mensual)
     const entriesCount = drop.consolation_config?.entries_count || 1;
+    let awardedDraw: any = null;
 
-    // Intentar registrar en el sorteo mensual activo si existe
+    // 1. Obtener sorteo mensual activo en la base de datos
     try {
       const { data: activeDraws } = await supabase
         .from('monthly_draws')
         .select('*')
-        .eq('status', 'open')
-        .lte('starts_at', now.toISOString())
-        .gt('ends_at', now.toISOString())
+        .in('status', ['open', 'active'])
         .order('starts_at', { ascending: false })
         .limit(1);
 
       if (activeDraws && activeDraws.length > 0) {
-        await supabase.from('monthly_draw_entries').insert({
-          draw_id: activeDraws[0].id,
+        awardedDraw = activeDraws[0];
+
+        // Guardar vía API server-side garantizada
+        try {
+          await fetch('/api/drops/record-entry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              drawId: awardedDraw.id,
+              userId: user.id,
+              dropId,
+              orderId: targetOrderId,
+              entriesCount,
+            }),
+          });
+        } catch (apiErr) {
+          console.warn('[Drops] Server API entry record notice:', apiErr);
+        }
+
+        // Guardar directamente en monthly_draw_entries (source: 'drop')
+        const entriesToInsert = Array.from({ length: entriesCount }, () => ({
+          draw_id: awardedDraw.id,
           user_id: user.id,
-          source: 'drop_consolation',
-          entries_count: entriesCount,
-          metadata: { drop_id: dropId, order_id: targetOrderId },
-        });
+          source: 'drop',
+          drop_id: dropId,
+          order_id: targetOrderId || null,
+        }));
+
+        await supabase.from('monthly_draw_entries').insert(entriesToInsert);
       }
     } catch (dErr) {
       console.warn('[Drops] Notice awarding monthly draw entries:', dErr);
     }
 
-    // Registrar intento de consolación
+    // 2. Registrar intento de consolación en drop_attempts
     const { data: att } = await supabase
       .from('drop_attempts')
       .insert({
@@ -397,6 +515,13 @@ export async function playDrop(
         user_id: user.id,
         order_id: targetOrderId || null,
         outcome: 'consolation',
+        consolation_details: awardedDraw
+          ? {
+              draw_id: awardedDraw.id,
+              draw_title: awardedDraw.title,
+              entries_awarded: entriesCount,
+            }
+          : { entries_awarded: entriesCount },
         idempotency_key: key,
       })
       .select();
@@ -408,7 +533,20 @@ export async function playDrop(
       outcome: 'consolation',
       attempt_id: attemptId,
       consolation_entries: entriesCount,
-      message: `¡Has ganado +${entriesCount} participación en el Gran Sorteo Mensual!`,
+      consolation: awardedDraw
+        ? {
+            draw_id: awardedDraw.id,
+            draw_title: awardedDraw.title,
+            theme_unit_name: awardedDraw.theme_unit_name || 'participación',
+            theme_unit_icon: awardedDraw.theme_unit_icon || 'ticket',
+            entries_awarded: entriesCount,
+          }
+        : {
+            entries_awarded: entriesCount,
+          },
+      message: awardedDraw
+        ? `¡Has ganado +${entriesCount} participación en el Gran Sorteo Mensual (${awardedDraw.title})!`
+        : `¡Has ganado +${entriesCount} participación en el Gran Sorteo Mensual!`,
     };
   }
 }
@@ -431,20 +569,98 @@ export async function fetchUserAwardedPrizes(): Promise<DbUserAwardedPrize[]> {
 }
 
 // ------------------------------------------------------------------------------
-// 5. CLIENTE: SORTEO MENSUAL ACTIVO
+// 5. CLIENTE: SORTEO MENSUAL ACTIVO (Recuento autoritativo en tiempo real)
 // ------------------------------------------------------------------------------
 export async function fetchActiveMonthlyDraw(): Promise<ActiveMonthlyDrawPayload> {
   try {
-    const { data, error } = await supabase.rpc('get_active_monthly_draw');
-    if (error) {
-      console.warn('[Drops] Error en get_active_monthly_draw RPC:', error.message);
-      return { active: false, user_entries_count: 0, total_entries_count: 0 };
-    }
-    return (data as ActiveMonthlyDrawPayload) || {
+    // 1. Intentar primero con la función RPC existente
+    let payload: ActiveMonthlyDrawPayload = {
       active: false,
       user_entries_count: 0,
       total_entries_count: 0,
     };
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_active_monthly_draw');
+    if (!rpcError && rpcData && (rpcData as any).active) {
+      payload = rpcData as ActiveMonthlyDrawPayload;
+    }
+
+    // 2. Si el RPC dio false o falló, buscar directamente en tabla monthly_draws
+    if (!payload?.active || !payload?.draw) {
+      const nowIso = new Date().toISOString();
+      // Priorizar el sorteo abierto dentro del rango de fechas
+      const { data: openDraws } = await supabase
+        .from('monthly_draws')
+        .select('*')
+        .in('status', ['open', 'active'])
+        .lte('starts_at', nowIso)
+        .gt('ends_at', nowIso)
+        .order('starts_at', { ascending: false })
+        .limit(1);
+
+      let fallbackDraw = openDraws?.[0];
+
+      // Si ninguno coincide exactamente con fecha, tomar cualquier sorteo abierto
+      if (!fallbackDraw) {
+        const { data: anyOpen } = await supabase
+          .from('monthly_draws')
+          .select('*')
+          .in('status', ['open', 'active'])
+          .order('starts_at', { ascending: false })
+          .limit(1);
+        fallbackDraw = anyOpen?.[0];
+      }
+
+      if (fallbackDraw) {
+        payload = {
+          active: true,
+          draw: {
+            id: fallbackDraw.id,
+            month_identifier: fallbackDraw.month_identifier,
+            title: fallbackDraw.title,
+            description: fallbackDraw.description,
+            theme_key: fallbackDraw.theme_key,
+            theme_unit_name: fallbackDraw.theme_unit_name,
+            theme_unit_icon: fallbackDraw.theme_unit_icon,
+            prize_title: fallbackDraw.prize_title,
+            prize_description: fallbackDraw.prize_description,
+            prize_value: fallbackDraw.prize_value,
+            starts_at: fallbackDraw.starts_at,
+            ends_at: fallbackDraw.ends_at,
+          },
+          user_entries_count: 0,
+          total_entries_count: 0,
+        };
+      }
+    }
+
+    // 3. RECUENTO EXACTO AUTORITATIVO DE PARTICIPACIONES
+    if (payload?.draw?.id) {
+      const drawId = payload.draw.id;
+
+      // Recuento global de boletos
+      const { count: totalCount } = await supabase
+        .from('monthly_draw_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('draw_id', drawId);
+
+      payload.total_entries_count = totalCount ?? 0;
+
+      // Recuento de participaciones del usuario actual autenticado
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id;
+      if (currentUserId) {
+        const { count: userCount } = await supabase
+          .from('monthly_draw_entries')
+          .select('*', { count: 'exact', head: true })
+          .eq('draw_id', drawId)
+          .eq('user_id', currentUserId);
+
+        payload.user_entries_count = userCount ?? 0;
+      }
+    }
+
+    return payload;
   } catch (err) {
     console.error('[Drops] Error al obtener sorteo mensual activo:', err);
     return { active: false, user_entries_count: 0, total_entries_count: 0 };
@@ -464,10 +680,29 @@ export async function adminFetchAllDrops(): Promise<DbDrop[]> {
     console.warn('[Drops] adminFetchAllDrops error:', error.message);
     return [];
   }
-  return (data || []).map((drop: any) => ({
-    ...drop,
-    game_key: drop.game_key || drop.game_config?.game_key || drop.game_type || 'jackpot',
-  }));
+
+  const drops = (data || []).map((drop: any) => {
+    // Calcular timing status en tiempo real
+    const timingStatus = getDropTimingStatus(drop);
+
+    // Si hay discrepancia entre timing y estado en BD (ej. terminó o empezó), actualizar en segundo plano
+    if (drop.status !== 'draft' && drop.status !== 'cancelled') {
+      if (timingStatus === 'active' && drop.status !== 'active') {
+        supabase.from('drops').update({ status: 'active' }).eq('id', drop.id).then();
+        drop.status = 'active';
+      } else if (timingStatus === 'finished' && drop.status !== 'finished') {
+        supabase.from('drops').update({ status: 'finished' }).eq('id', drop.id).then();
+        drop.status = 'finished';
+      }
+    }
+
+    return {
+      ...drop,
+      game_key: drop.game_key || drop.game_config?.game_key || drop.game_type || 'jackpot',
+    };
+  });
+
+  return drops;
 }
 
 export async function adminFetchDropWithPrizes(dropId: string): Promise<{
@@ -750,6 +985,28 @@ export async function adminCreateMonthlyDraw(
 
   if (error || !data) {
     throw new Error(error?.message || 'Error al crear el sorteo mensual');
+  }
+  return data;
+}
+
+export async function adminUpdateMonthlyDraw(
+  drawId: string,
+  drawData: Partial<Omit<DbMonthlyDraw, 'id' | 'created_at' | 'updated_at'>>
+): Promise<DbMonthlyDraw> {
+  const updatePayload: Record<string, any> = {
+    ...drawData,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('monthly_draws')
+    .update(updatePayload)
+    .eq('id', drawId)
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || 'Error al actualizar el sorteo mensual');
   }
   return data;
 }
