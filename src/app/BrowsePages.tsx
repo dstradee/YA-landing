@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, Sparkles, Lightbulb } from 'lucide-react';
+import { ArrowRight, Sparkles, Lightbulb, Gift } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { euro } from '../data/products';
 import { AppHeader, CategoryCard, EmptyState, ProductCard, QuantitySelector } from './components';
@@ -87,55 +87,6 @@ export function AppHome() {
           </div>
         </section>
 
-        {/* Banners FASE 9: YA+ y YA JUNTOS */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Link
-            to="/app/ya-plus"
-            className="border-3 border-ya-lime bg-zinc-950 p-5 hover:bg-zinc-900 transition flex flex-col justify-between group shadow-[4px_4px_0px_0px_#B6FF00]"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="bg-ya-lime text-ya-black font-mono text-[10px] font-black px-2 py-0.5 uppercase">
-                  MEMBRESÍA EXCLUSIVA
-                </span>
-                <span className="text-ya-lime font-black text-sm font-mono">DESDE 4,99 €</span>
-              </div>
-              <h3 className="mt-3 text-xl font-black uppercase text-white group-hover:text-ya-lime transition">
-                YA+ · ENVÍOS GRATIS ILIMITADOS
-              </h3>
-              <p className="mt-1 text-xs text-zinc-400">
-                Ahorra en cada pedido en Jerez. Descuentos en productos y entrega prioritaria sin cuotas ocultas.
-              </p>
-            </div>
-            <div className="mt-4 flex items-center gap-1 font-mono text-xs font-bold text-ya-lime">
-              DESCUBRIR PLANES YA+ →
-            </div>
-          </Link>
-
-          <Link
-            to="/app/juntos"
-            className="border-3 border-white bg-zinc-950 p-5 hover:bg-zinc-900 transition flex flex-col justify-between group shadow-[4px_4px_0px_0px_#FFFFFF]"
-          >
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="bg-white text-ya-black font-mono text-[10px] font-black px-2 py-0.5 uppercase">
-                  NUEVO · TIPO TRICOUNT
-                </span>
-                <span className="text-white font-black text-sm font-mono">COMPARTIDO</span>
-              </div>
-              <h3 className="mt-3 text-xl font-black uppercase text-white group-hover:text-ya-lime transition">
-                YA JUNTOS · PEDIDOS EN GRUPO
-              </h3>
-              <p className="mt-1 text-xs text-zinc-400">
-                Pide con amigos compartiendo un solo carrito y dividid los costes al céntimo. Cada uno paga lo suyo.
-              </p>
-            </div>
-            <div className="mt-4 flex items-center gap-1 font-mono text-xs font-bold text-white group-hover:text-ya-lime">
-              CREAR PEDIDO EN GRUPO →
-            </div>
-          </Link>
-        </div>
-
         {/* Productos Destacados */}
         <section id="featured-section" className="mt-10">
           <div className="flex justify-between items-baseline mb-4">
@@ -156,6 +107,36 @@ export function AppHome() {
             {featured.map((item) => (
               <ProductCard key={item.id} product={item} />
             ))}
+          </div>
+        </section>
+
+        {/* Sección Integrada: Drops semanales / Sorteo mensual */}
+        <section id="home-drops-section" className="mt-10">
+          <div className="bg-ya-gray/30 border-2 border-ya-gray p-5 hover:border-ya-lime transition-colors">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 bg-ya-lime text-ya-black shrink-0 font-black">
+                  <Gift size={22} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-ya-lime">
+                    RECOMPENSAS CON TUS PEDIDOS
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-black uppercase text-white tracking-tight">
+                    Drops semanales / Sorteo mensual
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Gana premios directos en cada pedido y acumula participaciones en el sorteo de cada mes.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/app/drops"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-ya-lime text-ya-black font-black text-xs uppercase tracking-wider hover:bg-white transition-colors shrink-0"
+              >
+                VER DROPS Y PREMIOS <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
         </section>
 

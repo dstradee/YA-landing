@@ -9,6 +9,7 @@ import { LoginPage, OrdersPage, ProfilePage, RegisterPage } from './AccountPages
 import NotificationsPage from './NotificationsPage';
 import YaPlusPage from './YaPlusPage';
 import YaJuntosPage from './YaJuntosPage';
+import { DropsCustomerPage } from './drops/DropsCustomerPage';
 import { BottomNav } from './components';
 
 function AppFrame({ children }: { children: ReactNode }) {
@@ -168,6 +169,14 @@ export function CustomerRoutes() {
         element={
           <AppFrame>
             <YaJuntosPage />
+          </AppFrame>
+        }
+      />
+      <Route
+        path="/app/drops"
+        element={
+          <AppFrame>
+            <DropsCustomerPage />
           </AppFrame>
         }
       />

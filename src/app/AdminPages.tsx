@@ -45,6 +45,8 @@ import { AdminIncidentsPage } from './admin/AdminIncidentsPage';
 import AdminYaPlusPage from './admin/AdminYaPlusPage';
 import AdminYaJuntosPage from './admin/AdminYaJuntosPage';
 import { AdminSuggestionsPage } from './admin/AdminSuggestionsPage';
+import { AdminDropsPage } from './admin/AdminDropsPage';
+import { AdminMonthlyDrawPage } from './admin/AdminMonthlyDrawPage';
 
 // ==============================================================================
 // 1. COMPONENTE DE ACCESO / SEGURIDAD
@@ -1097,6 +1099,8 @@ export function AdminRoutes() {
         <Route path="/comercial" element={<AdminCommercialPage />} />
         <Route path="/ya-plus" element={<AdminYaPlusPage />} />
         <Route path="/ya-juntos" element={<AdminYaJuntosPage />} />
+        <Route path="/drops" element={<AdminDropsPage />} />
+        <Route path="/sorteo-mensual" element={<AdminMonthlyDrawPage />} />
         <Route path="/configuracion" element={<AdminSettingsPage />} />
         {/* Fallback para cualquier ruta desconocida dentro de /admin */}
         <Route path="*" element={<AdminDashboardPage />} />

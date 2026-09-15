@@ -21,6 +21,8 @@ import {
   AlertOctagon,
   Zap,
   MessageSquarePlus,
+  Gift,
+  Trophy,
   ChevronLeft,
   ChevronRight,
   type LucideIcon,
@@ -71,6 +73,8 @@ const navSections: NavSection[] = [
   {
     title: 'Programas',
     items: [
+      { to: '/admin/drops', label: 'Drops Semanales', icon: Gift, badge: 'DROP' },
+      { to: '/admin/sorteo-mensual', label: 'Sorteo Mensual', icon: Trophy },
       { to: '/admin/ya-plus', label: 'YA+ Membresías', icon: Zap },
       { to: '/admin/ya-juntos', label: 'YA Juntos', icon: Users },
       { to: '/admin/incentivos', label: 'Incentivos', icon: Award },

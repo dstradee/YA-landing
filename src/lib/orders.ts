@@ -132,6 +132,7 @@ export type CreateOrderInput = {
   }>;
   notes?: string;
   paymentMethod?: string;
+  userAwardedPrizeId?: string | null;
 };
 
 export type CreateOrderResult = {
@@ -186,6 +187,7 @@ export async function createOrderViaRpc(input: CreateOrderInput): Promise<Create
       }),
       p_notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
       p_payment_method: paymentMethodType,
+      p_user_awarded_prize_id: input.userAwardedPrizeId || null,
     };
 
     const { data, error } = await supabase.rpc('create_order', rpcPayload);

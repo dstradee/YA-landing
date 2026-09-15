@@ -31,9 +31,14 @@ import {
   Zap,
   Users,
   RefreshCw,
+  Gift,
 } from 'lucide-react';
 import { PayPalPaymentSection } from '../components/PayPalPaymentSection';
 import { requestCapturePayPalOrder } from '../lib/paypalClient';
+import { fetchActiveDrop, checkDropEligibility, fetchUserAwardedPrizes } from '../lib/drops';
+import type { DbUserAwardedPrize } from '../types/drops';
+import { DropGameEngine } from '../components/drops/DropGameEngine';
+import type { ActiveDropPayload } from '../types/drops';
 
 export function CartPage() {
   const { lines, clearCart, pricing, hasOutOfStockItems, activeSubscription } = useCart();
@@ -325,6 +330,10 @@ export function CheckoutPage() {
   const [couriersAvailable, setCouriersAvailable] = useState<boolean | null>(null);
   const [checkingCouriers, setCheckingCouriers] = useState(false);
 
+  // Premios Drop V2 disponibles
+  const [availablePrizes, setAvailablePrizes] = useState<DbUserAwardedPrize[]>([]);
+  const [selectedPrizeId, setSelectedPrizeId] = useState<string | null>(null);
+
   // Comprobar disponibilidad de repartidores al cargar el checkout
   useEffect(() => {
     let isMounted = true;
@@ -335,10 +344,24 @@ export function CheckoutPage() {
         setCheckingCouriers(false);
       }
     });
+
+    // Cargar premios si está logueado
+    if (user) {
+      fetchUserAwardedPrizes().then((prizes) => {
+        if (isMounted) {
+          const pending = prizes.filter((p) => p.status === 'pending' && new Date(p.expires_at) >= new Date());
+          setAvailablePrizes(pending);
+          if (pending.length > 0) {
+            setSelectedPrizeId(pending[0].id);
+          }
+        }
+      });
+    }
+
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user]);
 
   // 1. Cargar direcciones del usuario autenticado y pre-rellenar datos de contacto
   useEffect(() => {
@@ -630,6 +653,7 @@ export function CheckoutPage() {
       })),
       notes: courierNotes.trim() || newAddress.notes || undefined,
       paymentMethod: payment,
+      userAwardedPrizeId: selectedPrizeId,
     });
 
     if (!rpcResult.success || !rpcResult.orderId) {
@@ -1028,6 +1052,68 @@ export function CheckoutPage() {
             </div>
           )}
 
+          {/* SELECCIÓN DE PREMIOS DROPS V2 */}
+          {availablePrizes.length > 0 && (
+            <div className="border-2 border-ya-lime bg-ya-lime/10 p-4 mb-4 font-bold">
+              <div className="flex items-center gap-2 mb-3 text-ya-lime">
+                <Gift size={20} />
+                <h3 className="uppercase tracking-wider font-black">Premios de Drops Disponibles</h3>
+              </div>
+              <p className="text-xs text-gray-300 mb-3">
+                Tienes premios pendientes. Selecciona uno para aplicarlo a este pedido:
+              </p>
+              <div className="space-y-2">
+                {availablePrizes.map((prize) => (
+                  <label
+                    key={prize.id}
+                    className={`flex items-start gap-3 p-3 border-2 cursor-pointer transition-colors ${
+                      selectedPrizeId === prize.id
+                        ? 'border-ya-lime bg-ya-lime/20'
+                        : 'border-ya-gray hover:border-gray-500 bg-ya-black'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="dropPrize"
+                      value={prize.id}
+                      checked={selectedPrizeId === prize.id}
+                      onChange={() => setSelectedPrizeId(prize.id)}
+                      className="mt-1 text-ya-lime focus:ring-ya-lime"
+                    />
+                    <div>
+                      <div className="text-white font-black">{prize.prize_name}</div>
+                      <div className="text-xs text-ya-lime mt-0.5">
+                        {prize.prize_type === 'percentage_discount' && `${prize.prize_value}% de descuento`}
+                        {prize.prize_type === 'fixed_discount' && `${prize.prize_value} € de descuento`}
+                        {prize.prize_type === 'free_order' && `Pedido gratis`}
+                        {prize.prize_type === 'free_shipping' && `Envío gratis`}
+                        {prize.prize_type === 'product' && `Producto gratis`}
+                        {prize.prize_type === 'monthly_draw_entry' && `+1 Participación`}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+                <label
+                  className={`flex items-center gap-3 p-3 border-2 cursor-pointer transition-colors ${
+                    selectedPrizeId === null
+                      ? 'border-ya-lime bg-ya-lime/20'
+                      : 'border-ya-gray hover:border-gray-500 bg-ya-black'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="dropPrize"
+                    value="none"
+                    checked={selectedPrizeId === null}
+                    onChange={() => setSelectedPrizeId(null)}
+                    className="text-ya-lime focus:ring-ya-lime"
+                  />
+                  <span className="text-white font-bold text-sm">No usar premio ahora</span>
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* DESGLOSE SEGURO DEL MOTOR COMERCIAL */}
           {checkoutMode === 'test_free' ? (
             <div className="border-2 border-purple-500/60 p-4 bg-ya-black space-y-2 font-bold font-mono">
@@ -1216,6 +1302,7 @@ export function OrderPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const isPaymentSuccessNotice = searchParams.get('payment') === 'success';
+  const isTestOrderNotice = searchParams.get('test_order') === 'true';
   const { getProductById } = useCatalog();
 
   // Estados de carga de pedido
@@ -1226,6 +1313,12 @@ export function OrderPage() {
   const [showOrderPayment, setShowOrderPayment] = useState(false);
   const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [verifyMsg, setVerifyMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Estados de Drop semanal para el pedido
+  const [activeDropPayload, setActiveDropPayload] = useState<ActiveDropPayload | null>(null);
+  const [isDropEligible, setIsDropEligible] = useState(false);
+  const [showDropModal, setShowDropModal] = useState(false);
+  const [dropPlayed, setDropPlayed] = useState(false);
 
   // Función para verificar y reconciliar cobros completados en PayPal
   const handleVerifyExistingPayment = async () => {
@@ -1310,6 +1403,35 @@ export function OrderPage() {
       }
     };
   }, [id]);
+
+  // Comprobar elegibilidad de Drop para este pedido
+  useEffect(() => {
+    if (!dbOrder?.id) return;
+    const currentOrderId = dbOrder.id;
+    let isMounted = true;
+    async function checkOrderDrop() {
+      try {
+        const dropRes = await fetchActiveDrop();
+        if (dropRes.active && dropRes.drop) {
+          const elig = await checkDropEligibility(dropRes.drop.id, currentOrderId);
+          if (isMounted) {
+            setActiveDropPayload(dropRes);
+            setIsDropEligible(elig.eligible);
+            // El Jackpot aparece inmediatamente tras confirmarse el pago (pago real o pedido de prueba de admin)
+            if (elig.eligible && (isPaymentSuccessNotice || isTestOrderNotice)) {
+              setShowDropModal(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[OrderPage] Could not check drop:', err);
+      }
+    }
+    checkOrderDrop();
+    return () => {
+      isMounted = false;
+    };
+  }, [dbOrder?.id, dbOrder?.payment_status, isPaymentSuccessNotice, isTestOrderNotice]);
 
   if (loading) {
     return (
@@ -1422,6 +1544,33 @@ export function OrderPage() {
               <span className="text-[11px] text-purple-300/90 font-normal">
                 Total cobrado: 0,00 € · Pago registrado · Operativo en Jerez
               </span>
+            </div>
+          )}
+
+          {/* Banner de Drop Activo disponible para este pedido */}
+          {isDropEligible && activeDropPayload?.drop && !dropPlayed && (
+            <div className="border-4 border-ya-lime bg-ya-black p-5 mt-4 relative overflow-hidden shadow-lg shadow-ya-lime/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-ya-lime text-ya-black font-black font-mono text-[10px] uppercase tracking-wider mb-1">
+                    <Gift size={12} />
+                    <span>DROP DISPONIBLE CON ESTE PEDIDO</span>
+                  </div>
+                  <h3 className="text-xl font-black uppercase text-white">
+                    {activeDropPayload.drop.title}
+                  </h3>
+                  <p className="text-xs text-gray-300 mt-1 max-w-md">
+                    Tu pedido te otorga 1 tirada en el Drop de la semana. ¡Premios directos o participaciones en el Gran Sorteo Mensual!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDropModal(true)}
+                  className="py-3 px-6 bg-ya-lime text-ya-black font-black uppercase text-xs hover:bg-white tracking-wider shrink-0 transition-colors shadow-md"
+                >
+                  ¡Jugar Drop YA!
+                </button>
+              </div>
             </div>
           )}
 
@@ -1800,6 +1949,21 @@ export function OrderPage() {
               Volver a mis pedidos
             </Link>
           </div>
+
+          {/* Modal de Juego de Drop */}
+          {showDropModal && activeDropPayload?.drop && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+              <DropGameEngine
+                dropPayload={activeDropPayload}
+                orderId={dbOrder.id}
+                onClose={() => setShowDropModal(false)}
+                onFinished={() => {
+                  setIsDropEligible(false);
+                  setDropPlayed(true);
+                }}
+              />
+            </div>
+          )}
         </main>
       </>
     );

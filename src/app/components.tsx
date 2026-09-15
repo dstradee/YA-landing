@@ -12,6 +12,7 @@ import {
   PackageOpen,
   Zap,
   Users,
+  Gift,
 } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 import { euro } from '../data/products';
@@ -60,7 +61,7 @@ export function AppHeader({ back }: { back?: boolean }) {
             className="flex items-center gap-1 border border-zinc-700 sm:border-2 bg-zinc-900 px-2 sm:px-2.5 py-1 sm:py-1.5 font-mono text-[10px] sm:text-[11px] font-bold text-zinc-300 hover:border-white hover:text-white transition shrink-0 whitespace-nowrap"
           >
             <Users size={12} className="sm:w-3.5 sm:h-3.5" />
-            JUNTOS
+            YA Juntos
           </Link>
         </div>
 
@@ -99,7 +100,8 @@ export function BottomNav() {
     [Home, 'Inicio', '/app', 'bottom-nav-home'],
     [Search, 'Buscar', '/app/buscar', 'bottom-nav-search'],
     [ShoppingBag, 'Carrito', '/app/carrito', 'bottom-nav-cart'],
-    [ClipboardList, 'Pedidos', '/app/pedidos', 'bottom-nav-orders'],
+    [ClipboardList, 'Pedido', '/app/pedidos', 'bottom-nav-orders'],
+    [Gift, 'Drops', '/app/drops', 'bottom-nav-drops'],
     [UserRound, 'Perfil', '/app/perfil', 'bottom-nav-profile'],
   ] as const;
 
@@ -110,7 +112,7 @@ export function BottomNav() {
       id="bottom-app-nav"
       className="fixed bottom-0 inset-x-0 z-40 bg-ya-black border-t-2 border-ya-gray pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="max-w-md mx-auto grid grid-cols-5">
+      <div className="max-w-md mx-auto grid grid-cols-6">
         {nav.map(([Icon, label, to, elementId]) => (
           <NavLink
             id={elementId}

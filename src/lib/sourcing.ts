@@ -151,7 +151,7 @@ export async function adminFetchSourcingItems(
  */
 export async function adminUpdateSourcingItem(params: {
   sourcingItemId: string;
-  status: SourcingStatus;
+  status: SourcingStatus | string;
   notes?: string;
   supplierName?: string;
   sourceCost?: number;
@@ -160,17 +160,45 @@ export async function adminUpdateSourcingItem(params: {
     return { success: false, error: 'Supabase no está configurado.' };
   }
 
+  // Normalizar el estado: si viene 'failed', convertirlo a 'unavailable' (valor real del enum)
+  let safeStatus: SourcingStatus = 'unavailable';
+  const rawStatus = (params.status as string).toLowerCase().trim();
+  if (rawStatus === 'pending' || rawStatus === 'sourcing' || rawStatus === 'sourced' || rawStatus === 'cancelled') {
+    safeStatus = rawStatus as SourcingStatus;
+  } else {
+    // Si viene 'failed', 'unavailable' o cualquier otro valor no reconocido
+    safeStatus = 'unavailable';
+  }
+
   try {
     const { data, error } = await supabase.rpc('admin_update_sourcing_item_status', {
       p_sourcing_item_id: params.sourcingItemId,
-      p_status: params.status,
+      p_status: safeStatus,
       p_notes: params.notes || null,
       p_supplier_name: params.supplierName || null,
       p_source_cost: typeof params.sourceCost === 'number' ? params.sourceCost : null,
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      console.warn('[Sourcing] admin_update_sourcing_item_status RPC error, applying fallback update:', error.message);
+      
+      const updatePayload: Record<string, any> = {
+        status: safeStatus,
+        updated_at: new Date().toISOString(),
+      };
+      if (params.notes) updatePayload.notes = params.notes;
+      if (params.supplierName) updatePayload.supplier_name = params.supplierName;
+      if (typeof params.sourceCost === 'number') updatePayload.source_cost = params.sourceCost;
+      if (safeStatus === 'sourced') updatePayload.sourced_at = new Date().toISOString();
+
+      const { error: directErr } = await supabase
+        .from('sourcing_items')
+        .update(updatePayload)
+        .eq('id', params.sourcingItemId);
+
+      if (directErr) {
+        return { success: false, error: error.message || directErr.message };
+      }
     }
 
     // Notificar al sistema para refresco en tiempo real
