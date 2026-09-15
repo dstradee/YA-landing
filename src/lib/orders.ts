@@ -255,6 +255,47 @@ export async function createAdminTestOrderViaRpc(
   }
 
   try {
+    // 1. Intentar endpoint server-side administrativo oficial con service_role
+    // Garantiza: provider_capture_id único por pedido, idempotencia y compatibilidad con idx_payments_provider_capture_uniq
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (token) {
+        const res = await fetch('/api/admin/create-test-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            addressId: input.addressId || null,
+            lines: input.lines,
+            notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
+            idempotencyKey: `admin_test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          }),
+        });
+
+        if (res.ok) {
+          const apiJson = await res.json();
+          if (apiJson && apiJson.success) {
+            return {
+              success: true,
+              orderId: apiJson.order_id,
+              orderNumber: apiJson.order_number,
+              subtotal: Number(apiJson.nominal_subtotal || 0),
+              deliveryFee: 0,
+              total: 0,
+              discountTotal: Number(apiJson.nominal_subtotal || 0),
+            };
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[Orders] Fallback a RPC tras error en endpoint /api/admin/create-test-order:', apiErr);
+    }
+
+    // 2. Fallback a función RPC en Supabase
     const rpcPayload = {
       p_address_id: input.addressId || null,
       p_items: input.lines.map((l) => {

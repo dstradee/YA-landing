@@ -4,6 +4,7 @@
 // ==============================================================================
 
 import type { IncomingMessage, ServerResponse } from 'http';
+import handleAdminTestOrder from '../../api/admin/create-test-order';
 import {
   createPayPalOrderOnGateway,
   capturePayPalOrderOnGateway,
@@ -43,12 +44,22 @@ export async function handlePayPalDevRequest(
 ) {
   const url = req.url?.split('?')[0];
 
-  if (!url?.startsWith('/api/paypal/') && !url?.startsWith('/api/stripe/') && !url?.startsWith('/api/drops/')) {
+  if (
+    !url?.startsWith('/api/paypal/') &&
+    !url?.startsWith('/api/stripe/') &&
+    !url?.startsWith('/api/drops/') &&
+    !url?.startsWith('/api/admin/')
+  ) {
     return next();
   }
 
   try {
-    // 0. /api/drops/record-entry
+    // 0a. /api/admin/create-test-order
+    if (url === '/api/admin/create-test-order') {
+      return await handleAdminTestOrder(req as any, res as any);
+    }
+
+    // 0b. /api/drops/record-entry
     if (url === '/api/drops/record-entry' && req.method === 'POST') {
       const body = await parseJsonBody(req);
       const { drawId, userId, dropId, orderId, entriesCount = 1 } = body || {};
