@@ -252,6 +252,9 @@ export function AdminDropsPage() {
       0
     );
 
+    console.log(`Premios directos: ${totalProbability}%`);
+    console.log(`Consolación: ${Math.max(0, 100 - totalProbability)}%`);
+
     if (totalProbability > 100) {
       setFormError(
         `La suma de probabilidades (${totalProbability.toFixed(1)}%) supera el 100%. Ajústalas para continuar.`
@@ -279,6 +282,7 @@ export function AdminDropsPage() {
       };
 
       const prizesPayload: any = prizes.map((p) => ({
+        id: (p as any).id,
         name: p.name.trim(),
         description: p.description.trim() || null,
         prize_type: p.prize_type,
@@ -344,6 +348,13 @@ export function AdminDropsPage() {
     (sum, p) => sum + (p.is_active ? Number(p.probability_pct || 0) : 0),
     0
   );
+
+  useEffect(() => {
+    if (showModal) {
+      console.log(`Premios directos: ${totalProb}%`);
+      console.log(`Consolación: ${Math.max(0, 100 - totalProb)}%`);
+    }
+  }, [totalProb, showModal]);
 
   return (
     <div className="space-y-6">

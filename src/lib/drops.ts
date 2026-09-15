@@ -724,28 +724,62 @@ export async function adminFetchDropWithPrizes(dropId: string): Promise<{
     game_key: rawDrop.game_key || rawDrop.game_config?.game_key || rawDrop.game_type || 'jackpot',
   };
 
-  const { data: prizes, error: prizesErr } = await supabase
+  const { data: rawPrizes, error: prizesErr } = await supabase
     .from('drop_prizes')
     .select('*')
     .eq('drop_id', dropId)
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
 
   if (prizesErr) {
     throw new Error(prizesErr.message);
   }
 
-  return { drop, prizes: prizes || [] };
+  // Deduplicación defensiva en lectura para asegurar que cada premio tenga una única entrada
+  const seenIdentities = new Map<string, DbDropPrize>();
+  for (const raw of rawPrizes || []) {
+    const p: DbDropPrize = {
+      ...raw,
+      prize_type:
+        raw.prize_config?.subtype === 'free_shipping' ? 'free_shipping' : raw.prize_type,
+    };
+    const key = `${p.name.trim().toLowerCase()}::${p.prize_type}`;
+    if (!seenIdentities.has(key)) {
+      seenIdentities.set(key, p);
+    } else {
+      // Priorizar el que tenga consumo de inventario registrado
+      const existing = seenIdentities.get(key)!;
+      if ((p.inventory_consumed || 0) > (existing.inventory_consumed || 0)) {
+        seenIdentities.set(key, p);
+      }
+    }
+  }
+
+  const prizes = Array.from(seenIdentities.values());
+
+  const totalProb = prizes.reduce(
+    (sum, p) => sum + (p.is_active ? Number(p.probability_pct || 0) : 0),
+    0
+  );
+  console.log(`Premios directos: ${totalProb}%`);
+  console.log(`Consolación: ${Math.max(0, 100 - totalProb)}%`);
+
+  return { drop, prizes };
 }
 
 export async function adminCreateDrop(
   dropData: Omit<DbDrop, 'id' | 'created_at' | 'updated_at'>,
   prizesData: Array<Omit<DbDropPrize, 'id' | 'drop_id' | 'created_at' | 'updated_at' | 'inventory_consumed'>>
 ): Promise<DbDrop> {
-  // 1. Validar probabilidades totales
-  const totalProb = prizesData.reduce((sum, p) => sum + Number(p.probability_pct), 0);
+  // 1. Validar probabilidades totales (solo premios activos)
+  const activePrizes = prizesData.filter((p) => p.is_active !== false);
+  const totalProb = activePrizes.reduce((sum, p) => sum + Number(p.probability_pct || 0), 0);
   if (totalProb > 100) {
     throw new Error(`La suma de probabilidades de los premios (${totalProb}%) supera el 100%`);
   }
+
+  console.log(`Premios directos: ${totalProb}%`);
+  console.log(`Consolación: ${Math.max(0, 100 - totalProb)}%`);
 
   // 2. Normalizar payload para el esquema real de Supabase
   // Mapeamos game_key -> game_type y guardamos game_key en game_config para total compatibilidad
@@ -773,11 +807,20 @@ export async function adminCreateDrop(
 
   // 3. Insertar premios asociados
   if (prizesData.length > 0) {
-    const formattedPrizes = prizesData.map((p, idx) => ({
-      ...p,
-      drop_id: newDrop.id,
-      sort_order: idx + 1,
-    }));
+    const formattedPrizes = prizesData.map((p, idx) => {
+      const isShipping = (p.prize_type as string) === 'free_shipping';
+      return {
+        ...p,
+        name: p.name.trim(),
+        description: p.description ? p.description.trim() : null,
+        prize_type: isShipping ? 'custom' : p.prize_type,
+        prize_config: isShipping
+          ? { ...(p.prize_config || {}), subtype: 'free_shipping' }
+          : p.prize_config || {},
+        drop_id: newDrop.id,
+        sort_order: idx + 1,
+      };
+    });
 
     const { error: prizesErr } = await supabase.from('drop_prizes').insert(formattedPrizes);
     if (prizesErr) {
@@ -831,43 +874,134 @@ export async function adminUpdateDrop(
 
   // Si se envían premios para actualizar o reemplazar
   if (prizesData) {
-    // Validar suma de probabilidades
-    const totalProb = prizesData.reduce((sum, p) => sum + Number(p.probability_pct), 0);
+    // Validar suma de probabilidades (solo activos)
+    const activePrizes = prizesData.filter((p) => p.is_active !== false);
+    const totalProb = activePrizes.reduce((sum, p) => sum + Number(p.probability_pct || 0), 0);
     if (totalProb > 100) {
       throw new Error(`La suma de probabilidades (${totalProb}%) supera el 100%`);
     }
 
-    // Actualizar premios existentes por ID o insertar nuevos de forma segura sin romper referencias
+    console.log(`Premios directos: ${totalProb}%`);
+    console.log(`Consolación: ${Math.max(0, 100 - totalProb)}%`);
+
+    // 1. Obtener los premios actualmente en base de datos para este Drop
+    const { data: rawDbPrizes, error: fetchErr } = await supabase
+      .from('drop_prizes')
+      .select('*')
+      .eq('drop_id', dropId);
+
+    if (fetchErr) {
+      console.warn('[Drops] Error consultando premios existentes:', fetchErr.message);
+    }
+
+    const unmatchedExisting = [...(rawDbPrizes || [])];
+
+    // 2. Procesar cada premio: UPDATE si ya existe (por ID o por identidad), INSERT si es nuevo
     for (const [idx, p] of prizesData.entries()) {
-      const prizePayload = {
-        name: p.name,
-        description: p.description,
-        prize_type: p.prize_type,
-        prize_value: p.prize_value,
-        prize_config: p.prize_config || {},
-        probability_pct: p.probability_pct,
-        max_inventory: p.max_inventory,
-        validity_days: p.validity_days,
-        is_active: p.is_active,
+      const isShipping = (p.prize_type as string) === 'free_shipping';
+      const actualType = isShipping ? 'custom' : p.prize_type;
+      const actualConfig = isShipping
+        ? { ...((p as any).prize_config || {}), subtype: 'free_shipping' }
+        : ((p as any).prize_config || {});
+
+      const prizePayload: Record<string, any> = {
+        name: p.name.trim(),
+        description: p.description ? p.description.trim() : null,
+        prize_type: actualType,
+        prize_value: Number(p.prize_value) || 0,
+        prize_config: actualConfig,
+        probability_pct: Number(p.probability_pct) || 0,
+        max_inventory:
+          p.max_inventory != null && (p.max_inventory as any) !== ''
+            ? Number(p.max_inventory)
+            : null,
+        validity_days:
+          p.validity_days != null && (p.validity_days as any) !== ''
+            ? Number(p.validity_days)
+            : null,
+        is_active: p.is_active !== false,
         drop_id: dropId,
         sort_order: idx + 1,
+        updated_at: new Date().toISOString(),
       };
 
+      let matchedExistingId: string | null = null;
+
+      // A. Coincidencia por ID explícito enviado desde el formulario
       if ((p as any).id) {
+        const foundIdx = unmatchedExisting.findIndex((e) => e.id === (p as any).id);
+        if (foundIdx !== -1) {
+          matchedExistingId = unmatchedExisting[foundIdx].id;
+          unmatchedExisting.splice(foundIdx, 1);
+        }
+      }
+
+      // B. Si no se especificó ID o no se encontró, buscar coincidencia por nombre y tipo de premio
+      if (!matchedExistingId) {
+        const normName = p.name.trim().toLowerCase();
+        let foundIdx = unmatchedExisting.findIndex(
+          (e) => e.name.trim().toLowerCase() === normName && e.prize_type === p.prize_type
+        );
+        // Si no coincide exactamente por tipo, buscar solo por nombre normalizado
+        if (foundIdx === -1) {
+          foundIdx = unmatchedExisting.findIndex(
+            (e) => e.name.trim().toLowerCase() === normName
+          );
+        }
+
+        if (foundIdx !== -1) {
+          matchedExistingId = unmatchedExisting[foundIdx].id;
+          unmatchedExisting.splice(foundIdx, 1);
+        }
+      }
+
+      // C. UPDATE del premio existente o INSERT de premio nuevo
+      if (matchedExistingId) {
         const { error: updErr } = await supabase
           .from('drop_prizes')
           .update(prizePayload)
-          .eq('id', (p as any).id);
+          .eq('id', matchedExistingId);
+
         if (updErr) {
-          console.warn('[Drops] Notice updating prize by id:', updErr.message);
+          console.error('[Drops] Error actualizando premio existente:', updErr.message);
+          throw new Error(`Error actualizando premio "${p.name}": ${updErr.message}`);
         }
       } else {
         const { error: insErr } = await supabase
           .from('drop_prizes')
-          .insert(prizePayload);
+          .insert([prizePayload]);
+
         if (insErr) {
-          console.warn('[Drops] Notice inserting prize:', insErr.message);
+          console.error('[Drops] Error insertando nuevo premio:', insErr.message);
+          throw new Error(`Error registrando nuevo premio "${p.name}": ${insErr.message}`);
         }
+      }
+    }
+
+    // 3. Limpiar duplicados o premios desvinculados que no estaban en prizesData
+    for (const orphan of unmatchedExisting) {
+      // Verificar si algún usuario ya tiene este premio otorgado
+      const { count, error: countErr } = await supabase
+        .from('user_awarded_prizes')
+        .select('id', { count: 'exact', head: true })
+        .eq('prize_id', orphan.id);
+
+      if (!countErr && count && count > 0) {
+        // Preservar la fila para integridad referencial histórica, pero desactivar y fijar probabilidad a 0
+        await supabase
+          .from('drop_prizes')
+          .update({
+            is_active: false,
+            probability_pct: 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', orphan.id);
+      } else {
+        // Duplicado o premio descartado sin usuarios asignados: eliminar de forma segura
+        await supabase
+          .from('drop_prizes')
+          .delete()
+          .eq('id', orphan.id);
       }
     }
   }

@@ -6,10 +6,13 @@ const env =
   {};
 const supabaseUrl = env.VITE_SUPABASE_URL;
 const supabaseAnonKey = env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const effectiveKey =
+  (typeof process !== 'undefined' && process.env?.SUPABASE_SERVICE_ROLE_KEY) ||
+  supabaseAnonKey;
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
-  supabaseAnonKey &&
+  effectiveKey &&
   typeof supabaseUrl === 'string' &&
   supabaseUrl.startsWith('http')
 );
@@ -134,6 +137,6 @@ function createMockSupabaseClient(): SupabaseClient {
 }
 
 export const supabase: SupabaseClient = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, effectiveKey)
   : createMockSupabaseClient();
 
