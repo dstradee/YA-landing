@@ -299,6 +299,28 @@ export function AdminDropsPage() {
     ]);
   };
 
+  // Función para aplicar Preset DROP 003 — El Cara o Cruz (10% Físico / 90% Consolación +2)
+  const handleApplyCaraCruzPreset = () => {
+    setTitle(`DROP 003 — EL CARA O CRUZ`);
+    setDescription('Elige cara o cruz y haz girar la moneda exclusiva de YA. Si aciertas te llevas el premio físico exclusivo; si no, ganas +2 participaciones para el Gran Sorteo Mensual.');
+    setGameType('cara_cruz');
+    setActivationTrigger('after_payment');
+    setPrizeValidityDays(14);
+    setConsolationEntries(2);
+    setPrizes([
+      {
+        name: 'Gorra Exclusiva YA — Edición Limitada',
+        description: 'Premio físico oficial Drop 003: Gorra bordada YA Neo-Brutalist de alta calidad. Te contactaremos para el envío directo a tu dirección.',
+        prize_type: 'custom',
+        prize_value: 30,
+        probability_pct: 10,
+        max_inventory: 50,
+        validity_days: 14,
+        is_active: true,
+      },
+    ]);
+  };
+
   // Función para importar configuración JSON de IA
   const handleImportAiJson = () => {
     try {
@@ -803,6 +825,14 @@ export function AdminDropsPage() {
                     </button>
                     <button
                       type="button"
+                      onClick={handleApplyCaraCruzPreset}
+                      className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-white text-white text-[11px] font-black uppercase tracking-wider transition"
+                      title="Cargar preset Cara o Cruz (Drop 003: 10% Físico / 90% Consolación +2)"
+                    >
+                      Preset Cara o Cruz
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setShowAiModal(true)}
                       className="px-2.5 py-1.5 bg-ya-lime text-ya-black hover:bg-white text-[11px] font-black uppercase tracking-wider transition"
                       title="Pegar JSON creado por IA"
@@ -887,10 +917,11 @@ export function AdminDropsPage() {
                     className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white font-mono"
                   />
                   <datalist id="game-keys-datalist">
+                    <option value="cara_cruz">Drop 003 — El Cara o Cruz (Moneda YA)</option>
                     <option value="jackpot">Jackpot YA (Rodillos)</option>
+                    <option value="scratch">Rascar Tarjeta (Rasca y Gana)</option>
                     <option value="coin_flip">Moneda YA (Cara o Cruz)</option>
                     <option value="mystery_box">Cajas Misteriosas (Paquetes)</option>
-                    <option value="scratch">Rascar Tarjeta</option>
                     <option value="wheel">Ruleta Urbana</option>
                     <option value="pick_one">Elegir Carta</option>
                   </datalist>

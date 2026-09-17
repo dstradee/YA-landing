@@ -8,6 +8,7 @@ export type DropStatus = 'draft' | 'scheduled' | 'active' | 'finished' | 'cancel
 export type DropGameType =
   | 'jackpot'
   | 'coin_flip'
+  | 'cara_cruz'
   | 'scratch'
   | 'mystery_box'
   | 'wheel'
@@ -170,6 +171,16 @@ export interface DbDropAttempt {
 // RESPUESTAS Y MODELOS DE API / RPC
 // ------------------------------------------------------------------------------
 
+export interface ActiveDropPrize {
+  id: string;
+  name: string;
+  description: string | null;
+  prize_type: DropPrizeType;
+  prize_value: number;
+  prize_config: Record<string, any>;
+  sort_order?: number;
+}
+
 export interface ActiveDropPayload {
   active: boolean;
   drop?: {
@@ -190,15 +201,7 @@ export interface ActiveDropPayload {
     ends_at: string;
     prize_validity_days: number;
   };
-  prizes?: Array<{
-    id: string;
-    name: string;
-    description: string | null;
-    prize_type: DropPrizeType;
-    prize_value: number;
-    prize_config: Record<string, any>;
-    sort_order: number;
-  }>;
+  prizes?: ActiveDropPrize[];
   nextDrop?: {
     id: string;
     drop_number: number;
@@ -220,6 +223,10 @@ export interface CheckDropEligibilityResult {
   game_key?: string;
   attempt_id?: string;
   outcome?: DropAttemptOutcome;
+  prize_id?: string | null;
+  awarded_prize_id?: string | null;
+  prize?: any;
+  consolation?: any;
 }
 
 export interface PlayDropResult {
@@ -234,7 +241,7 @@ export interface PlayDropResult {
   message?: string;
   prize?: {
     id?: string;
-    awarded_prize_id: string;
+    awarded_prize_id?: string;
     name: string;
     description: string | null;
     prize_type: DropPrizeType;

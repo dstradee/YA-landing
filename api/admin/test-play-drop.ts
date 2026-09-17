@@ -148,9 +148,10 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
     const result = {
       success: true,
       is_test_mode: true,
-      outcome: wonPrize ? 'won_prize' : 'consolation_reward',
+      outcome: wonPrize ? 'won_prize' : 'consolation',
       attempt_id: `test_sim_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
       prize_id: wonPrize?.id || null,
+      consolation_entries: Number(drop.consolation_config?.entries_count || 1),
       prize: wonPrize
         ? {
             id: wonPrize.id,

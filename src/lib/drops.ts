@@ -266,18 +266,32 @@ export async function checkDropEligibility(
     // Comprobar si ya se jugó con este pedido
     const { data: attempts } = await supabase
       .from('drop_attempts')
-      .select('id, outcome')
+      .select('id, outcome, prize_id, awarded_prize_id, consolation_details')
       .eq('drop_id', dropId)
       .eq('order_id', resolvedOrderId)
       .limit(1);
 
     if (attempts && attempts.length > 0) {
+      let prizeData: any = null;
+      if (attempts[0].prize_id) {
+        const { data: pz } = await supabase
+          .from('drop_prizes')
+          .select('*')
+          .eq('id', attempts[0].prize_id)
+          .maybeSingle();
+        if (pz) prizeData = pz;
+      }
+
       return {
         eligible: false,
         reason: 'already_played',
         order_id: resolvedOrderId,
         attempt_id: attempts[0].id,
         outcome: attempts[0].outcome,
+        prize_id: attempts[0].prize_id,
+        awarded_prize_id: attempts[0].awarded_prize_id,
+        prize: prizeData,
+        consolation: attempts[0].consolation_details,
       };
     }
 

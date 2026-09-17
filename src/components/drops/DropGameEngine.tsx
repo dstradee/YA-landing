@@ -154,6 +154,13 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
   const [playResult, setPlayResult] = useState<PlayDropResult | null>(null);
   const [reelsFinished, setReelsFinished] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [coinChoice, setCoinChoice] = useState<'cara' | 'cruz' | null>(() => {
+    try {
+      return (localStorage.getItem(`ya_drop_${drop?.id}_choice_${orderId || 'user'}`) as 'cara' | 'cruz') || null;
+    } catch (_) {
+      return null;
+    }
+  });
 
   // Clave de idempotencia única para esta sesión de tirada
   const [idempotencyKey] = useState<string>(
@@ -213,6 +220,33 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
           const trigger = drop.activation_trigger || 'after_payment';
           if (res.reason === 'already_played') {
             setIneligibleReason('Ya has participado en este Drop con tu pedido actual.');
+            // Si ya ha participado, restauramos su intento previo para mantener resultado inamovible tras refresh
+            if (res.attempt_id) {
+              const restoredResult: PlayDropResult = {
+                success: true,
+                outcome: (res.outcome || 'consolation') as any,
+                attempt_id: res.attempt_id,
+                prize_id: res.prize_id || undefined,
+                awarded_prize_id: res.awarded_prize_id || undefined,
+                prize: res.prize
+                  ? {
+                      id: res.prize.id,
+                      awarded_prize_id: res.awarded_prize_id || res.attempt_id,
+                      name: res.prize.name,
+                      description: res.prize.description,
+                      prize_type: res.prize.prize_type,
+                      prize_value: res.prize.prize_value,
+                      validity_days: res.prize.validity_days || drop.prize_validity_days || 7,
+                      expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+                    }
+                  : undefined,
+                consolation_entries:
+                  res.consolation?.entries_awarded || drop.consolation_config?.entries_count || 2,
+                consolation: res.consolation,
+              };
+              setPlayResult(restoredResult);
+              setReelsFinished(true);
+            }
           } else if (res.reason === 'authentication_required') {
             setIneligibleReason('Debes iniciar sesión para desbloquear tu Drop.');
           } else if (res.reason === 'order_required') {
@@ -243,8 +277,15 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
   const activeGameKey = drop?.game_key || drop?.game_type || 'jackpot';
 
   // 2. Disparar tirada autoritativa en el servidor
-  const handlePlay = async () => {
+  const handlePlay = async (playerChoice?: 'cara' | 'cruz') => {
     if (!drop || isPlaying || playResult || !isEligible) return;
+
+    if (playerChoice) {
+      setCoinChoice(playerChoice);
+      try {
+        localStorage.setItem(`ya_drop_${drop.id}_choice_${orderId || 'user'}`, playerChoice);
+      } catch (_) {}
+    }
 
     setIsPlaying(true);
     setReelsFinished(false);
@@ -264,9 +305,14 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
       // Entregar el resultado al juego para que coordine la desaceleración mecánica o el billete de rascado
       setPlayResult(result);
 
-      // Si no es jackpot ni scratch, finalizar tras timeout estándar
+      // Si no es jackpot, scratch, cara_cruz ni coin_flip, finalizar tras timeout estándar
       const gameKey = drop.game_key || drop.game_type || 'jackpot';
-      if (gameKey !== 'jackpot' && gameKey !== 'scratch') {
+      if (
+        gameKey !== 'jackpot' &&
+        gameKey !== 'scratch' &&
+        gameKey !== 'cara_cruz' &&
+        gameKey !== 'coin_flip'
+      ) {
         setTimeout(() => {
           setReelsFinished(true);
           if (onFinished) {
@@ -305,13 +351,23 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
   const renderGame = () => {
     const gameType = drop.game_key || drop.game_type || 'jackpot';
     switch (gameType) {
+      case 'cara_cruz':
       case 'coin_flip':
         return (
           <CoinFlipGame
             isFlipping={isPlaying}
             result={playResult}
-            onFlip={handlePlay}
+            prizes={dropPayload?.prizes}
+            initialChoice={coinChoice}
+            onFlip={(choice) => handlePlay(choice)}
+            onAnimationFinished={() => {
+              setReelsFinished(true);
+              if (onFinished && playResult) {
+                onFinished(playResult);
+              }
+            }}
             disabled={!isEligible}
+            isTestMode={isTestMode}
           />
         );
       case 'mystery_box':
@@ -319,7 +375,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
           <MysteryBoxGame
             isOpening={isPlaying}
             result={playResult}
-            onSelectBox={handlePlay}
+            onSelectBox={() => handlePlay()}
             disabled={!isEligible}
           />
         );
@@ -329,7 +385,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
             isScratching={isPlaying}
             result={playResult}
             prizes={dropPayload?.prizes}
-            onScratch={handlePlay}
+            onScratch={() => handlePlay()}
             onScratchFinished={() => {
               setReelsFinished(true);
               if (onFinished && playResult) {
@@ -344,7 +400,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
           <WheelGame
             isSpinning={isPlaying}
             result={playResult}
-            onSpin={handlePlay}
+            onSpin={() => handlePlay()}
             disabled={!isEligible}
           />
         );
@@ -353,7 +409,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
           <PickOneGame
             isPicking={isPlaying}
             result={playResult}
-            onPick={handlePlay}
+            onPick={() => handlePlay()}
             disabled={!isEligible}
           />
         );
@@ -363,7 +419,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
           <JackpotGame
             isSpinning={isPlaying}
             result={playResult}
-            onSpin={handlePlay}
+            onSpin={() => handlePlay()}
             disabled={!isEligible}
             onReelsFinished={() => {
               setReelsFinished(true);
@@ -492,11 +548,20 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
                     <Gift size={26} />
                   </div>
                   <span className="text-[10px] font-black uppercase font-mono tracking-widest text-ya-lime">
-                    ¡ENHORABUENA! HAS GANADO
+                    {activeGameKey === 'cara_cruz' || activeGameKey === 'coin_flip'
+                      ? '¡HAS ACERTADO!'
+                      : '¡ENHORABUENA! HAS GANADO'}
                   </span>
                   <h3 className="text-2xl font-black uppercase text-white mt-1 mb-2">
-                    {playResult.prize.name}
+                    {activeGameKey === 'cara_cruz' || activeGameKey === 'coin_flip'
+                      ? 'HAS GANADO'
+                      : playResult.prize.name}
                   </h3>
+                  {(activeGameKey === 'cara_cruz' || activeGameKey === 'coin_flip') && (
+                    <div className="text-xl font-bold uppercase text-ya-lime font-mono mb-2">
+                      {playResult.prize.name}
+                    </div>
+                  )}
                   {playResult.prize.description && (
                     <p className="text-xs text-gray-300 mb-3">
                       {playResult.prize.description}
@@ -534,10 +599,12 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
                     <Trophy size={26} />
                   </div>
                   <span className="text-[10px] font-black uppercase font-mono tracking-widest text-amber-400">
-                    RECOMPENSA DE DROP
+                    {activeGameKey === 'cara_cruz' || activeGameKey === 'coin_flip'
+                      ? 'NO ESTA VEZ'
+                      : 'RECOMPENSA DE DROP'}
                   </span>
                   <h3 className="text-xl font-black uppercase text-white mt-1 mb-2">
-                    +1 PARTICIPACIÓN EN EL SORTEO MENSUAL
+                    +{playResult.consolation_entries || playResult.consolation?.entries_awarded || drop.consolation_config?.entries_count || 1} PARTICIPACIONES PARA EL SORTEO MENSUAL
                   </h3>
                   <p className="text-xs text-gray-300 mb-4">
                     {playResult.consolation?.draw_title ? (
@@ -568,6 +635,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
                     setPlayResult(null);
                     setReelsFinished(false);
                     setErrorMessage(null);
+                    setCoinChoice(null);
                     if (activeGameKey === 'scratch') {
                       setTimeout(() => {
                         handlePlay();
