@@ -145,6 +145,8 @@ export type CreateOrderResult = {
   discountTotal?: number;
   promotionDiscount?: number;
   promotionCode?: string;
+  prizeDiscount?: number;
+  isFullyPaid?: boolean;
   error?: string;
 };
 
@@ -233,6 +235,8 @@ export async function createOrderViaRpc(input: CreateOrderInput): Promise<Create
       discountTotal: Number(data.discount_total || 0),
       promotionDiscount: Number(data.promotion_discount || 0),
       promotionCode: data.promotion_code || undefined,
+      prizeDiscount: Number(data.prize_discount || 0),
+      isFullyPaid: Boolean(data.is_fully_paid || Number(data.total) <= 0),
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado de comunicación con la base de datos.';

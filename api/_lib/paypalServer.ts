@@ -533,6 +533,18 @@ export async function confirmOrderInDatabase(params: {
     throw new Error(`Error en base de datos al actualizar pedido: ${orderUpdateErr.message}`);
   }
 
+  // 3.1. Deducir stock real tras confirmar pago (idempotente)
+  try {
+    const { error: stockDeductErr } = await supabase.rpc('deduct_stock_for_order', {
+      p_order_id: order.id,
+    });
+    if (stockDeductErr) {
+      console.warn('[confirmOrderInDatabase] Aviso al ejecutar deduct_stock_for_order:', stockDeductErr.message);
+    }
+  } catch (stockErr: any) {
+    console.warn('[confirmOrderInDatabase] Error no bloqueante al deducir stock tras pago:', stockErr?.message || stockErr);
+  }
+
   // 4. Registro opcional de auditoría en order_status_history
   try {
     await supabase.from('order_status_history').insert({

@@ -22,6 +22,7 @@ import { useYaJuntos } from './YaJuntosContext';
 import { useCatalog } from './CatalogContext';
 import { NotificationBell } from '../components/notifications/NotificationComponents';
 import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
+import { getProductDiscount } from '../lib/pricing';
 
 export function AppHeader({ back }: { back?: boolean }) {
   const { count } = useCart();
@@ -192,7 +193,7 @@ export function QuantitySelector({
 }
 
 export function ProductCard({ product }: { product: Product }) {
-  const { lines, addToCart, increaseQuantity, decreaseQuantity } = useCart();
+  const { lines, addToCart, increaseQuantity, decreaseQuantity, activeDiscounts } = useCart();
   const { categories } = useCatalog();
   const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
   const category = categories.find((item) => item.slug === product.category);
@@ -201,9 +202,45 @@ export function ProductCard({ product }: { product: Product }) {
   // Comprobar variantes
   const hasVariants = Boolean(product.hasVariants && product.variants && product.variants.length > 0);
   const activeVariants = product.variants?.filter((v) => v.active) || [];
-  const minVariantPrice = activeVariants.length > 0
-    ? Math.min(...activeVariants.map((v) => Number(v.price)))
-    : product.price;
+
+  // Reutilizar exactamente el mismo motor de descuentos del carrito (getProductDiscount)
+  let basePrice = Number(product.price);
+  let discountedPrice = Number(product.price);
+  let discountAmount = 0;
+  let hasDiscount = false;
+  let discountPercent = 0;
+
+  if (hasVariants && activeVariants.length > 0) {
+    const variantCalculations = activeVariants.map((v) => {
+      const vBase = Number(v.price);
+      const vDisc = getProductDiscount(product.id, category?.id, vBase, activeDiscounts);
+      return {
+        basePrice: vBase,
+        discountedPrice: vDisc.discountedPrice,
+        discountAmount: vDisc.discountAmount,
+        hasDiscount: vDisc.discountAmount > 0,
+      };
+    });
+
+    variantCalculations.sort((a, b) => a.discountedPrice - b.discountedPrice);
+    const best = variantCalculations[0];
+    basePrice = best.basePrice;
+    discountedPrice = best.discountedPrice;
+    discountAmount = best.discountAmount;
+    hasDiscount = best.hasDiscount;
+    if (hasDiscount && basePrice > 0) {
+      discountPercent = Math.round((discountAmount / basePrice) * 100);
+    }
+  } else {
+    const disc = getProductDiscount(product.id, category?.id, Number(product.price), activeDiscounts);
+    basePrice = Number(product.price);
+    discountedPrice = disc.discountedPrice;
+    discountAmount = disc.discountAmount;
+    hasDiscount = disc.discountAmount > 0;
+    if (hasDiscount && basePrice > 0) {
+      discountPercent = Math.round((discountAmount / basePrice) * 100);
+    }
+  }
 
   const isLowStock =
     product.inStock &&
@@ -232,6 +269,11 @@ export function ProductCard({ product }: { product: Product }) {
           ) : (
             <span className="text-5xl">{product.image}</span>
           )}
+          {hasDiscount && (
+            <span className="absolute top-2 left-2 text-[10px] font-black uppercase tracking-wider text-ya-black bg-ya-lime px-2 py-0.5 border border-ya-lime shadow-sm z-10">
+              -{discountPercent}%
+            </span>
+          )}
           {!product.inStock ? (
             <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-red-400 bg-ya-black/90 px-2 py-0.5 border border-red-500/50 z-10">
               AGOTADO
@@ -256,16 +298,28 @@ export function ProductCard({ product }: { product: Product }) {
         <h3 className="font-black text-base leading-tight mt-1 min-h-10 line-clamp-2 text-white">
           {product.name}
         </h3>
-        <p className="font-black text-lg mt-2 text-ya-white">
-          {hasVariants ? (
-            <span>
-              <span className="text-xs text-gray-400 font-normal mr-1">Desde</span>
-              {euro(minVariantPrice)}
+        {hasDiscount ? (
+          <div className="flex items-baseline gap-2 flex-wrap mt-2">
+            <span className="font-black text-lg text-ya-lime">
+              {hasVariants && <span className="text-xs text-gray-400 font-normal mr-1">Desde</span>}
+              {euro(discountedPrice)}
             </span>
-          ) : (
-            euro(product.price)
-          )}
-        </p>
+            <span className="text-xs text-gray-400 line-through font-bold">
+              {euro(basePrice)}
+            </span>
+          </div>
+        ) : (
+          <p className="font-black text-lg mt-2 text-ya-white">
+            {hasVariants ? (
+              <span>
+                <span className="text-xs text-gray-400 font-normal mr-1">Desde</span>
+                {euro(basePrice)}
+              </span>
+            ) : (
+              euro(product.price)
+            )}
+          </p>
+        )}
       </Link>
 
       {!product.inStock ? (

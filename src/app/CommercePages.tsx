@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { euro } from '../data/products';
+import { round2 } from '../lib/pricing';
 import type { Address, DbAddress, LocalOrder, OrderStatus } from '../types/app';
 import { AppHeader, EmptyState, OrderTimeline } from './components';
 import { CartItem } from './CartItem';
@@ -446,6 +447,45 @@ export function CheckoutPage() {
     };
   }, [user]);
 
+  // Cálculo dinámico del premio Drops V2 seleccionado
+  const selectedPrize = useMemo(() => {
+    return availablePrizes.find((p) => p.id === selectedPrizeId) || null;
+  }, [availablePrizes, selectedPrizeId]);
+
+  const prizeDiscount = useMemo(() => {
+    if (!selectedPrize) return 0;
+    if (selectedPrize.prize_type === 'percentage_discount') {
+      return round2(pricing.subtotalAfterPromotion * (Number(selectedPrize.prize_value) / 100));
+    }
+    if (selectedPrize.prize_type === 'fixed_discount') {
+      return Math.min(pricing.subtotalAfterPromotion, Number(selectedPrize.prize_value));
+    }
+    if (selectedPrize.prize_type === 'free_order') {
+      if (selectedPrize.prize_value > 0 && pricing.subtotalAfterPromotion > selectedPrize.prize_value) {
+        return Number(selectedPrize.prize_value);
+      }
+      return pricing.subtotalAfterPromotion;
+    }
+    return 0;
+  }, [selectedPrize, pricing.subtotalAfterPromotion]);
+
+  const effectiveDeliveryFee = useMemo(() => {
+    if (pricing.isFreeShipping) return 0;
+    if (selectedPrize?.prize_type === 'free_shipping') return 0;
+    if (
+      selectedPrize?.prize_type === 'free_order' &&
+      (!selectedPrize.prize_value || pricing.subtotalAfterPromotion <= selectedPrize.prize_value)
+    ) {
+      return 0;
+    }
+    return pricing.deliveryFee;
+  }, [selectedPrize, pricing.isFreeShipping, pricing.deliveryFee, pricing.subtotalAfterPromotion]);
+
+  const checkoutTotal = useMemo(() => {
+    const afterPrize = Math.max(0, round2(pricing.subtotalAfterPromotion - prizeDiscount));
+    return round2(afterPrize + effectiveDeliveryFee);
+  }, [pricing.subtotalAfterPromotion, prizeDiscount, effectiveDeliveryFee]);
+
   // 1. Cargar direcciones del usuario autenticado y pre-rellenar datos de contacto
   useEffect(() => {
     if (!user) return;
@@ -745,12 +785,22 @@ export function CheckoutPage() {
       return;
     }
 
-    // 3. Pasar al paso de pago interactivo PayPal Sandbox con pedido reservado en DB
+    const orderFinalTotal = Number(rpcResult.total !== undefined ? rpcResult.total : checkoutTotal);
+
+    // Si el pedido quedó en 0 € gracias al premio (ej. Pedido gratis 100%), ya está pagado
+    if (orderFinalTotal <= 0 || rpcResult.isFullyPaid) {
+      clearCart();
+      setIsSubmitting(false);
+      navigate(`/app/pedido/${rpcResult.orderNumber || rpcResult.orderId}?prize_free=true`);
+      return;
+    }
+
+    // 3. Pasar al paso de pago con el total real descontado
     setIsSubmitting(false);
     setPendingOrder({
       id: rpcResult.orderId,
       number: rpcResult.orderNumber || rpcResult.orderId,
-      total: pricing.total,
+      total: orderFinalTotal,
     });
   };
 
@@ -1240,13 +1290,27 @@ export function CheckoutPage() {
                 </div>
               )}
 
+              {selectedPrize && prizeDiscount > 0 && (
+                <div className="flex justify-between text-sm text-ya-lime bg-ya-lime/10 p-2 border border-ya-lime/40">
+                  <span className="truncate pr-2">Premio Drops ({selectedPrize.prize_name})</span>
+                  <span>-{euro(prizeDiscount)}</span>
+                </div>
+              )}
+
+              {selectedPrize && (selectedPrize.prize_type === 'free_shipping' || (selectedPrize.prize_type === 'free_order' && (!selectedPrize.prize_value || pricing.subtotalAfterPromotion <= selectedPrize.prize_value))) && !pricing.isFreeShipping && (
+                <div className="flex justify-between text-sm text-ya-lime bg-ya-lime/10 p-2 border border-ya-lime/40">
+                  <span className="truncate pr-2">Premio Drops (Envío gratis)</span>
+                  <span>-{euro(pricing.deliveryFee)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between text-sm text-gray-300">
                 <span>Coste de entrega (Jerez)</span>
                 <span>
-                  {pricing.isFreeShipping ? (
+                  {effectiveDeliveryFee === 0 ? (
                     <span className="text-ya-lime uppercase">GRATIS</span>
                   ) : (
-                    euro(pricing.deliveryFee)
+                    euro(effectiveDeliveryFee)
                   )}
                 </span>
               </div>
@@ -1254,13 +1318,13 @@ export function CheckoutPage() {
               <div className="flex justify-between text-xl font-black pt-2 border-t border-ya-gray">
                 <div>
                   <span className="text-white block">Total a pagar</span>
-                  {pricing.totalSavings > 0 && (
+                  {(pricing.totalSavings > 0 || prizeDiscount > 0 || (pricing.deliveryFee - effectiveDeliveryFee) > 0) && (
                     <span className="text-[11px] text-ya-lime font-bold">
-                      Ahorro total de {euro(pricing.totalSavings)}
+                      Ahorro total de {euro(pricing.totalSavings + prizeDiscount + (pricing.deliveryFee - effectiveDeliveryFee))}
                     </span>
                   )}
                 </div>
-                <span className="text-ya-lime">{euro(pricing.total)}</span>
+                <span className="text-ya-lime text-2xl font-black">{euro(checkoutTotal)}</span>
               </div>
             </div>
           )}

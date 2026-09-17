@@ -7,6 +7,7 @@ import { SearchBar } from './SearchBar';
 import { useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
 import { PackCard } from './PackCard';
+import { getProductDiscount } from '../lib/pricing';
 import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 import { SeoHead } from '../components/seo/SeoHead';
 import { Breadcrumbs } from '../components/seo/Breadcrumbs';
@@ -491,7 +492,7 @@ export function ProductPage() {
   const { id } = useParams();
   const { products, categories, getProductById } = useCatalog();
   const product = products.find((p) => p.id === id || p.slug === id) || getProductById(id ?? '');
-  const { lines, addToCart, increaseQuantity, decreaseQuantity } = useCart();
+  const { lines, addToCart, increaseQuantity, decreaseQuantity, activeDiscounts } = useCart();
   const [addedNotice, setAddedNotice] = useState(false);
 
   if (!product) {
@@ -548,7 +549,12 @@ export function ProductPage() {
   const selectedVariant = variantsList.find((v) => v.id === selectedVariantId) || null;
 
   // Si tiene variante seleccionada, el precio y stock provienen de ella
-  const currentPrice = selectedVariant ? Number(selectedVariant.price) : product.price;
+  const basePrice = selectedVariant ? Number(selectedVariant.price) : Number(product.price);
+  const discountResult = getProductDiscount(product.id, category?.id, basePrice, activeDiscounts);
+  const hasDiscount = discountResult.discountAmount > 0;
+  const discountedPrice = discountResult.discountedPrice;
+  const discountPercent = hasDiscount && basePrice > 0 ? Math.round((discountResult.discountAmount / basePrice) * 100) : 0;
+
   const isVariantOutOfStock = selectedVariant ? (!selectedVariant.active || selectedVariant.stock <= 0) : false;
   const isProductOutOfStock = !product.inStock || (product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) <= 0);
   const isEffectiveOutOfStock = hasVariants ? isVariantOutOfStock : isProductOutOfStock;
@@ -630,6 +636,11 @@ export function ProductPage() {
           <span className="absolute top-3 left-3 bg-ya-black border border-ya-gray px-2 py-1 text-[10px] font-black text-ya-lime uppercase tracking-widest z-10">
             {category?.name ?? product.category}
           </span>
+          {hasDiscount && (
+            <span className="absolute top-11 left-3 bg-ya-lime text-ya-black px-2 py-0.5 text-[10px] font-black uppercase tracking-widest border border-ya-lime z-10">
+              -{discountPercent}% DTO
+            </span>
+          )}
           {!product.inStock ? (
             <span className="absolute top-3 right-3 bg-red-600 text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border border-red-400 z-10">
               Agotado
@@ -682,7 +693,21 @@ export function ProductPage() {
           {!isEffectiveOutOfStock ? 'Disponible para entrega inmediata en Jerez' : 'Temporalmente fuera de inventario'}
         </p>
         <h1 className="font-black text-3xl sm:text-5xl tracking-tighter mt-2">{product.name}</h1>
-        <p className="font-black text-3xl mt-4 text-ya-lime">{euro(currentPrice)}</p>
+        {hasDiscount ? (
+          <div className="mt-4 flex items-baseline gap-3 flex-wrap">
+            <span className="font-black text-3xl sm:text-5xl text-ya-lime">
+              {euro(discountedPrice)}
+            </span>
+            <span className="font-bold text-xl sm:text-2xl text-gray-400 line-through">
+              {euro(basePrice)}
+            </span>
+            <span className="font-black text-xs uppercase px-2.5 py-1 bg-ya-lime text-ya-black border border-ya-lime tracking-wider">
+              -{discountPercent}% DTO
+            </span>
+          </div>
+        ) : (
+          <p className="font-black text-3xl mt-4 text-ya-lime">{euro(basePrice)}</p>
+        )}
         <p className="text-gray-300 text-base sm:text-lg mt-4 leading-relaxed">
           {product.description}
         </p>
@@ -706,6 +731,9 @@ export function ProductPage() {
                 const isSelected = variant.id === selectedVariantId;
                 const isVarOut = !variant.active || variant.stock <= 0;
                 const isVarLow = variant.active && variant.stock > 0 && variant.stock <= 5;
+                const vBase = Number(variant.price);
+                const vDisc = getProductDiscount(product.id, category?.id, vBase, activeDiscounts);
+                const vHasDisc = vDisc.discountAmount > 0;
 
                 return (
                   <button
@@ -742,9 +770,20 @@ export function ProductPage() {
                         <span className="font-black text-xs sm:text-sm text-white block break-words whitespace-normal leading-snug">
                           {variant.name}
                         </span>
-                        <span className="font-black text-xs text-ya-lime font-mono mt-1 block">
-                          {euro(variant.price)}
-                        </span>
+                        {vHasDisc ? (
+                          <div className="flex items-baseline gap-1.5 mt-1">
+                            <span className="font-black text-xs text-ya-lime font-mono">
+                              {euro(vDisc.discountedPrice)}
+                            </span>
+                            <span className="text-[10px] text-gray-400 line-through font-mono">
+                              {euro(vBase)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="font-black text-xs text-ya-lime font-mono mt-1 block">
+                            {euro(variant.price)}
+                          </span>
+                        )}
                       </div>
                     </div>
 
