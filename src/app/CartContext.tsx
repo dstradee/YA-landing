@@ -32,6 +32,8 @@ type CartApi = {
       variantName?: string;
       variantImage?: string | null;
       variantPrice?: number;
+      categoryId?: string;
+      categorySlug?: string;
     }
   ) => void;
   addPackToCart: (pack: PackWithDetails, selections?: CartPackSelection[], quantity?: number) => void;
@@ -88,7 +90,7 @@ const INITIAL_MOCK_ORDERS: LocalOrder[] = [
 ];
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { products } = useCatalog();
+  const { products, categories } = useCatalog();
   const [lines, setLines] = useState<CartLine[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(CART_KEY) ?? '[]') as CartLine[];
@@ -174,9 +176,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
         variantName?: string;
         variantImage?: string | null;
         variantPrice?: number;
+        categoryId?: string;
+        categorySlug?: string;
       }
     ) => {
       const prod = products.find((p) => p.id === id || p.slug === id);
+      const matchedCategory = categories.find(
+        (c) => c.slug === prod?.category || c.id === prod?.category
+      );
+      const targetCategoryId =
+        variantOption?.categoryId ||
+        matchedCategory?.id ||
+        (prod as any)?.categoryId ||
+        (prod as any)?.category_id ||
+        prod?.category;
+      const targetCategorySlug =
+        variantOption?.categorySlug ||
+        matchedCategory?.slug ||
+        prod?.category;
 
       // Si se especificó variante, comprobar stock de la variante
       const matchedVariant = variantOption?.variantId && prod?.variants
@@ -220,6 +237,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
           updated[existingIdx] = {
             ...updated[existingIdx],
             quantity: targetQty,
+            categoryId: updated[existingIdx].categoryId || targetCategoryId,
+            categorySlug: updated[existingIdx].categorySlug || targetCategorySlug,
           };
           return updated;
         }
@@ -234,6 +253,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             variantName: variantOption?.variantName || matchedVariant?.name,
             variantImage: variantOption?.variantImage ?? matchedVariant?.image,
             variantPrice: variantOption?.variantPrice ?? (matchedVariant ? Number(matchedVariant.price) : undefined),
+            categoryId: targetCategoryId,
+            categorySlug: targetCategorySlug,
           },
         ];
       });
@@ -357,6 +378,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const pricing = calculateCartPricing({
       cartLines: lines,
       products,
+      categories,
       packs: activePacks,
       discounts: activeDiscounts,
       promotions: activePromotions,
@@ -416,6 +438,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [
     lines,
     products,
+    categories,
     activePacks,
     activeDiscounts,
     activePromotions,

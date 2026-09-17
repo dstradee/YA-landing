@@ -597,9 +597,14 @@ export function ProductPage() {
         variantName: selectedVariant.name,
         variantImage: selectedVariant.image || product.image,
         variantPrice: Number(selectedVariant.price),
+        categoryId: category?.id,
+        categorySlug: category?.slug || product.category,
       });
     } else {
-      addToCart(product.id);
+      addToCart(product.id, 1, {
+        categoryId: category?.id,
+        categorySlug: category?.slug || product.category,
+      });
     }
     setAddedNotice(true);
     setTimeout(() => setAddedNotice(false), 2000);

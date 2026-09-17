@@ -370,6 +370,75 @@ assert(pPack.deliveryFee === 2.9, 'Aplica envío estándar de 2.90€');
 assert(pPack.total === 14.7, 'Total final es 11.80 + 2.90 = 14.70€', `Obtenido: ${pPack.total}`);
 
 // ------------------------------------------------------------------------------
+// TEST 10: MONSTER ENERGY MANGO LOCO - VARIANTE CON 10% DE DESCUENTO (8 U.)
+// ------------------------------------------------------------------------------
+console.log('\n--- TEST 10: VARIANTE CON DESCUENTO DE PRODUCTO (8 UNIDADES) ---');
+const monsterProduct: Product = {
+  id: 'monster',
+  slug: 'monster-energy',
+  name: 'Monster Energy 500 ml',
+  price: 3.15,
+  estimatedCost: 1.89,
+  category: 'energeticas' as any,
+  image: '🟢',
+  description: 'Bebida energética',
+  active: true,
+  inStock: true,
+  internalInstructions: '',
+  hasVariants: true,
+  variantsTitle: 'Sabor',
+  variants: [
+    {
+      id: 'v-monster-mango',
+      name: 'Mango Loco',
+      price: 3.15,
+      stock: 20,
+      active: true,
+    },
+  ],
+};
+
+const monsterDiscount: DbDiscount = {
+  id: 'disc-monster-10',
+  name: '10% en Monster',
+  scope: 'product',
+  product_id: 'monster',
+  category_id: null,
+  discount_type: 'percentage',
+  discount_value: 10,
+  active: true,
+  created_at: new Date().toISOString(),
+  description: null,
+  starts_at: null,
+  expires_at: null,
+  updated_at: new Date().toISOString(),
+};
+
+// 8 unidades de la variante Mango Loco con precio base 3.15€
+const monsterCartLine: CartLine = {
+  lineId: 'prod-monster-var-v-monster-mango',
+  productId: 'monster',
+  quantity: 8,
+  variantId: 'v-monster-mango',
+  variantName: 'Mango Loco',
+  variantPrice: 3.15,
+  categoryId: 'energeticas',
+  categorySlug: 'energeticas',
+};
+
+const pMonster = calculateCartPricing({
+  lines: [monsterCartLine],
+  products: [monsterProduct],
+  discounts: [monsterDiscount],
+  settings: testSettings,
+});
+
+assert(pMonster.rawSubtotal === 25.2, 'Raw subtotal es 8 * 3.15€ = 25.20€', `Obtenido: ${pMonster.rawSubtotal}`);
+assert(pMonster.lines[0].discountedUnitPrice === 2.83, 'Precio unitario con 10% descuento es 2.83€', `Obtenido: ${pMonster.lines[0].discountedUnitPrice}`);
+assert(pMonster.subtotal === 22.64, 'Subtotal es 8 * 2.83€ = 22.64€', `Obtenido: ${pMonster.subtotal}`);
+assert(pMonster.totalSavings === 2.56, 'Ahorro total es 2.56€', `Obtenido: ${pMonster.totalSavings}`);
+
+// ------------------------------------------------------------------------------
 // RESUMEN FINAL
 // ------------------------------------------------------------------------------
 console.log('\n======================================================');

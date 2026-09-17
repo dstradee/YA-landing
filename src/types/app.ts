@@ -23,6 +23,8 @@ export type Product = {
   price: number;
   estimatedCost: number;
   category: CategorySlug;
+  categoryId?: string;
+  category_id?: string;
   image: string;
   images?: string[];
   description: string;
@@ -65,6 +67,9 @@ export type CartLine = {
   variantName?: string;
   variantImage?: string | null;
   variantPrice?: number;
+  // Categoría para motor de pricing / descuentos
+  categoryId?: string;
+  categorySlug?: string;
 };
 
 export type Address = {

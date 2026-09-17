@@ -352,7 +352,12 @@ export function ProductCard({ product }: { product: Product }) {
         <button
           id={`add-btn-${product.id}`}
           type="button"
-          onClick={() => addToCart(product.id)}
+          onClick={() =>
+            addToCart(product.id, 1, {
+              categoryId: category?.id,
+              categorySlug: category?.slug || product.category,
+            })
+          }
           className="m-4 mt-0 w-[calc(100%-2rem)] min-h-11 bg-ya-lime text-ya-black font-black uppercase text-xs tracking-wider hover:bg-white transition-colors"
         >
           Añadir

@@ -43,6 +43,8 @@ export function adaptProduct(db: DbProduct, categorySlugMap?: Map<string, string
     price: Number(db.price),
     estimatedCost: db.estimated_cost ? Number(db.estimated_cost) : Number(db.price) * 0.6,
     category: categorySlug,
+    categoryId: db.category_id,
+    category_id: db.category_id,
     image: db.image || '📦',
     images: db.images,
     description: db.description || '',

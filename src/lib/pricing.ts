@@ -116,13 +116,20 @@ export function getProductDiscount(
   productId: string,
   categoryId: string | null | undefined,
   basePrice: number,
-  discounts: DbDiscount[] = []
+  discounts: DbDiscount[] = [],
+  options?: {
+    productSlug?: string;
+    variantId?: string;
+    categorySlug?: string;
+  }
 ): { discountedPrice: number; discountAmount: number; reason?: string } {
-  // 1. Buscar descuento específico de producto
+  // 1. Buscar descuento específico de producto (por id, slug o variante)
   const productDiscount = discounts.find(
     (d) =>
       d.scope === 'product' &&
-      d.product_id === productId &&
+      (d.product_id === productId ||
+        (options?.productSlug && d.product_id === options.productSlug) ||
+        (options?.variantId && d.product_id === options.variantId)) &&
       isDiscountActiveNow(d.active, d.starts_at, d.expires_at)
   );
 
@@ -141,12 +148,13 @@ export function getProductDiscount(
     };
   }
 
-  // 2. Si no hay de producto, buscar descuento por categoría
-  if (categoryId) {
+  // 2. Si no hay de producto, buscar descuento por categoría (por id o slug)
+  if (categoryId || options?.categorySlug) {
     const categoryDiscount = discounts.find(
       (d) =>
         d.scope === 'category' &&
-        d.category_id === categoryId &&
+        ((categoryId && d.category_id === categoryId) ||
+          (options?.categorySlug && d.category_id === options.categorySlug)) &&
         isDiscountActiveNow(d.active, d.starts_at, d.expires_at)
     );
 
@@ -180,6 +188,7 @@ export function calculateCartPricing(params: {
   cartLines?: CartLine[];
   lines?: CartLine[];
   products: (Product | DbProduct)[];
+  categories?: any[];
   packs?: (DbPack | PackWithDetails)[];
   discounts?: DbDiscount[];
   promotions?: DbPromotion[];
@@ -189,6 +198,7 @@ export function calculateCartPricing(params: {
   const cartLines = params.cartLines || params.lines || [];
   const {
     products,
+    categories = [],
     packs = [],
     discounts = [],
     promotions = [],
@@ -284,18 +294,35 @@ export function calculateCartPricing(params: {
         ? Number(product.price)
         : Number(line.unitPrice || 0);
 
+      const matchedCat = categories.find(
+        (c: any) =>
+          c.id === line.categoryId ||
+          c.slug === line.categorySlug ||
+          ('category' in (product || {}) && (c.slug === (product as Product).category || c.id === (product as Product).category))
+      );
+
       const categoryId =
-        product && 'category_id' in product
-          ? (product as DbProduct).category_id
-          : product && 'category' in product
-          ? (product as Product).category
-          : null;
+        line.categoryId ||
+        matchedCat?.id ||
+        (product && 'category_id' in product ? (product as DbProduct).category_id : null) ||
+        (product && 'categoryId' in product ? (product as any).categoryId : null) ||
+        (product && 'category' in product ? (product as Product).category : null);
+
+      const categorySlug =
+        line.categorySlug ||
+        matchedCat?.slug ||
+        (product && 'category' in product ? (product as Product).category : null);
 
       const discountResult = getProductDiscount(
         product?.id || line.productId,
         categoryId,
         basePrice,
-        discounts
+        discounts,
+        {
+          productSlug: product && 'slug' in product ? product.slug : undefined,
+          variantId: line.variantId,
+          categorySlug,
+        }
       );
 
       const unitPrice = discountResult.discountedPrice;
