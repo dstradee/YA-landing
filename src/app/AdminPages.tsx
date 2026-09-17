@@ -749,12 +749,12 @@ export function AdminProductsPage() {
                 return (
                   <tr key={prod.id} className="hover:bg-ya-gray/30 transition-colors">
                     <td className="p-4">
-                      <div className="w-12 h-12 bg-ya-gray border border-ya-gray grid place-items-center text-2xl overflow-hidden">
+                      <div className="w-12 h-12 bg-zinc-950 border border-ya-gray flex items-center justify-center text-2xl overflow-hidden p-0.5">
                         {isImg ? (
                           <img
                             src={formatImageUrl(prod.image, 100)}
                             alt={prod.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain object-center"
                             referrerPolicy="no-referrer"
                           />
                         ) : (
@@ -895,13 +895,19 @@ export function AdminProductsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block uppercase tracking-wider text-gray-300 mb-1.5">
+                  <label className="block uppercase tracking-wider text-gray-300 mb-1.5 font-bold text-xs">
                     Imagen Principal / Icono
                   </label>
                   <input
                     type="text"
                     value={image}
-                    onChange={(e) => setImage(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setImage(val);
+                      if (val) {
+                        setImages([val, ...images.slice(1)]);
+                      }
+                    }}
                     placeholder="⚡ o https://..."
                     className="w-full bg-ya-gray border-2 border-ya-gray focus:border-ya-lime p-3 text-white outline-none"
                   />
@@ -919,7 +925,10 @@ export function AdminProductsPage() {
                     }
                   }}
                   maxImages={5}
-                  label="Galería de imágenes del producto (1 a 5 con Cloudinary)"
+                  label="Imagen del producto"
+                  productName={name}
+                  productPrice={price}
+                  productCategory={categories.find((c) => c.id === categoryId)?.name || 'Producto'}
                 />
               </div>
 

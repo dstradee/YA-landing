@@ -218,34 +218,34 @@ export function ProductCard({ product }: { product: Product }) {
       id={`product-card-${product.slug || product.id}`}
       className="bg-ya-gray border-2 border-ya-gray hover:border-ya-lime flex flex-col justify-between transition-colors"
     >
-      <Link to={'/app/producto/' + (product.slug || product.id)} className="block p-4 flex-1">
-        <div className="h-28 bg-ya-black border border-ya-gray flex items-center justify-center mb-3 relative overflow-hidden">
+      <Link to={'/app/producto/' + (product.slug || product.id)} className="block p-4 flex-1 group">
+        <div className="h-36 sm:h-40 bg-zinc-950 border border-ya-gray flex items-center justify-center mb-3 relative overflow-hidden p-2.5">
           {isImg ? (
             <img
               src={formatImageUrl(product.image, 300)}
               alt={`${product.name} - YA Delivery Jerez`}
               loading="lazy"
               decoding="async"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain object-center transition-transform duration-200 group-hover:scale-105"
               referrerPolicy="no-referrer"
             />
           ) : (
             <span className="text-5xl">{product.image}</span>
           )}
           {!product.inStock ? (
-            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-red-400 bg-ya-black/90 px-2 py-0.5 border border-red-500/50">
+            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-red-400 bg-ya-black/90 px-2 py-0.5 border border-red-500/50 z-10">
               AGOTADO
             </span>
           ) : hasVariants ? (
-            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-ya-lime bg-ya-black/90 px-1.5 py-0.5 border border-ya-lime/50">
+            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-ya-lime bg-ya-black/90 px-1.5 py-0.5 border border-ya-lime/50 z-10">
               {activeVariants.length} {product.variantsTitle ? product.variantsTitle.toLowerCase() : 'opciones'}
             </span>
           ) : isLowStock ? (
-            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-amber-400 bg-ya-black/90 px-1.5 py-0.5 border border-amber-500/50">
+            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-amber-400 bg-ya-black/90 px-1.5 py-0.5 border border-amber-500/50 z-10">
               Últimas {product.stockQuantity} u.
             </span>
           ) : (
-            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-ya-lime bg-ya-black/80 px-1.5 py-0.5 border border-ya-lime/30">
+            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-ya-lime bg-ya-black/80 px-1.5 py-0.5 border border-ya-lime/30 z-10">
               Stock
             </span>
           )}
@@ -281,7 +281,7 @@ export function ProductCard({ product }: { product: Product }) {
         <Link
           id={`choose-option-btn-${product.id}`}
           to={'/app/producto/' + (product.slug || product.id)}
-          className="m-4 mt-0 w-[calc(100%-2rem)] min-h-11 border-2 border-ya-lime bg-ya-lime/10 text-ya-lime hover:bg-ya-lime hover:text-ya-black font-black uppercase text-xs tracking-wider transition-colors flex items-center justify-center text-center"
+          className="m-4 mt-0 w-[calc(100%-2rem)] min-h-11 border-2 border-ya-lime bg-ya-lime/10 text-ya-lime hover:bg-ya-lime hover:text-ya-black font-black uppercase text-xs tracking-wider transition-colors flex items-center justify-center text-center px-2 py-1 leading-snug break-words"
         >
           Elegir {product.variantsTitle ? product.variantsTitle.toLowerCase() : 'opción'}
         </Link>

@@ -439,12 +439,12 @@ export function AdminInventoryPage() {
                     <tr key={prod.id} className="hover:bg-ya-gray/30 transition-colors">
                       <td className="p-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 bg-ya-black border border-ya-gray grid place-items-center text-lg overflow-hidden shrink-0">
+                          <div className="w-9 h-9 bg-zinc-950 border border-ya-gray flex items-center justify-center text-lg overflow-hidden shrink-0 p-0.5">
                             {isRealImageUrl(prod.image) ? (
                               <img
                                 src={formatImageUrl(prod.image, 100)}
                                 alt={prod.name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain object-center"
                                 referrerPolicy="no-referrer"
                               />
                             ) : (

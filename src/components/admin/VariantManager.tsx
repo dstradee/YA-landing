@@ -135,6 +135,9 @@ export function VariantManager({
                 </button>
               ))}
             </div>
+            <p className="text-[10px] font-mono text-gray-400 mt-2">
+              ✓ Nombres de variantes: se adaptan en móvil con salto de línea fluido. Los nombres largos (ej. &quot;66 Cherry Chupa Chups&quot;) se muestran íntegros y legibles.
+            </p>
           </div>
 
           {/* Lista de variantes */}
@@ -169,12 +172,12 @@ export function VariantManager({
                   >
                     {/* Imagen / Subida Cloudinary */}
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className="w-12 h-12 bg-ya-black border border-zinc-700 grid place-items-center text-xl overflow-hidden relative group">
+                      <div className="w-12 h-12 bg-zinc-950 border border-zinc-700 flex items-center justify-center text-xl overflow-hidden relative group p-0.5">
                         {isImg ? (
                           <img
                             src={formatImageUrl(effectiveImg, 100)}
                             alt={variant.name || 'Variante'}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain object-center"
                             referrerPolicy="no-referrer"
                           />
                         ) : (

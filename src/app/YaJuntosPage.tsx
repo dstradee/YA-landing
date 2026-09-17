@@ -22,6 +22,7 @@ import { AppHeader } from './components';
 import { useAuth } from '../lib/auth';
 import { useYaJuntos } from './YaJuntosContext';
 import { products, euro } from '../data/products';
+import { formatImageUrl, isRealImageUrl } from '../lib/cloudinary';
 import {
   createYaJuntosGroup,
   fetchYaJuntosGroupByCode,
@@ -617,27 +618,36 @@ export default function YaJuntosPage() {
 
                   return (
                     <div key={item.id} className="py-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded bg-zinc-900 text-lg border border-zinc-800">
-                          {item.product_image || '🛒'}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="flex h-10 w-10 items-center justify-center rounded bg-zinc-900 text-lg border border-zinc-800 shrink-0 overflow-hidden p-0.5">
+                          {isRealImageUrl(item.product_image) ? (
+                            <img
+                              src={formatImageUrl(item.product_image, 80)}
+                              alt={item.product_name}
+                              className="w-full h-full object-contain"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            item.product_image || '🛒'
+                          )}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-white text-sm">{item.product_name}</h4>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <h4 className="font-bold text-white text-sm break-words">{item.product_name}</h4>
                             {item.variant_name && (
-                              <span className="text-[9px] bg-ya-lime/20 text-ya-lime border border-ya-lime/40 px-1.5 py-0.2 font-mono font-bold uppercase">
+                              <span className="text-[9px] bg-ya-lime/20 text-ya-lime border border-ya-lime/40 px-1.5 py-0.2 font-mono font-bold uppercase break-words">
                                 {item.variant_name}
                               </span>
                             )}
                           </div>
-                          <p className="font-mono text-[11px] text-zinc-400">
+                          <p className="font-mono text-[11px] text-zinc-400 truncate">
                             {item.quantity} x {euro(item.unit_price)} · Añadido por{' '}
                             <span className="text-zinc-200 font-bold">{item.added_by_name}</span>
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 shrink-0">
                         <span className="font-mono text-sm font-black text-white">{euro(item.line_subtotal)}</span>
                         {canRemove && (
                           <button
@@ -747,7 +757,7 @@ export default function YaJuntosPage() {
                 </button>
               </div>
 
-              <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pr-1">
+              <div className="mt-4 space-y-2 max-h-[60vh] overflow-y-auto pr-1">
                 {variantProductModal.variants?.map((v) => {
                   const isSelected = selectedVariantId === v.id;
                   const isOutOfStock = v.stock <= 0;
@@ -759,28 +769,28 @@ export default function YaJuntosPage() {
                       type="button"
                       disabled={isDisabled}
                       onClick={() => setSelectedVariantId(v.id)}
-                      className={`w-full flex items-center justify-between p-3 border text-left transition-colors cursor-pointer ${
+                      className={`w-full min-h-[48px] flex items-center justify-between p-3 border text-left transition-colors cursor-pointer gap-3 ${
                         isSelected
                           ? 'border-ya-lime bg-ya-lime/10'
                           : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-600'
                       } ${isDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
                           isSelected ? 'border-ya-lime bg-ya-lime' : 'border-zinc-600'
                         }`}>
                           {isSelected && <span className="w-1.5 h-1.5 bg-black rounded-full" />}
                         </div>
-                        <div>
-                          <p className="font-bold text-white text-xs uppercase">{v.name}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-white text-xs uppercase break-words whitespace-normal leading-snug">{v.name}</p>
                           {isDisabled && (
-                            <span className="text-[10px] text-red-400 font-mono">
+                            <span className="text-[10px] text-red-400 font-mono block">
                               {!v.active ? 'No disponible' : 'Agotado'}
                             </span>
                           )}
                         </div>
                       </div>
-                      <span className="font-mono text-xs font-black text-ya-lime">
+                      <span className="font-mono text-xs font-black text-ya-lime shrink-0 ml-2">
                         {euro(v.price)}
                       </span>
                     </button>

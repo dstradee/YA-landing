@@ -59,12 +59,12 @@ export function PackCard({ pack }: PackCardProps) {
         </div>
 
         {/* Visual / Emoji o Imagen Real de Cloudinary */}
-        <div className="h-28 my-2 bg-ya-black border-2 border-ya-gray/50 group-hover:border-ya-lime/40 flex items-center justify-center transition-colors overflow-hidden">
+        <div className="h-36 sm:h-40 my-2 bg-zinc-950 border-2 border-ya-gray/50 group-hover:border-ya-lime/40 flex items-center justify-center transition-colors overflow-hidden p-2.5">
           {isRealImageUrl(pack.image) ? (
             <img
               src={formatImageUrl(pack.image, 400)}
               alt={pack.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-contain object-center group-hover:scale-105 transition-transform duration-300"
               referrerPolicy="no-referrer"
             />
           ) : (

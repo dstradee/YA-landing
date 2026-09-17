@@ -408,7 +408,7 @@ export function AdminSourcingPage() {
                       src={item.product_image}
                       alt={item.product_name}
                       referrerPolicy="no-referrer"
-                      className="w-14 h-14 object-cover border-2 border-ya-gray shrink-0 bg-ya-gray/30"
+                      className="w-14 h-14 object-contain p-1 border-2 border-ya-gray shrink-0 bg-zinc-950"
                     />
                   ) : (
                     <div className="w-14 h-14 border-2 border-ya-gray shrink-0 bg-ya-gray/30 flex items-center justify-center text-ya-lime">

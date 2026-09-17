@@ -158,9 +158,14 @@ export function ImageManagerModal({
             </div>
             <div>
               <h2 className="font-black text-lg uppercase tracking-tight">{title}</h2>
-              <p className="text-xs text-gray-400 font-mono">
-                Gestión de 1 a 5 imágenes con Cloudinary (opción gratuita)
-              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="text-[10px] font-mono bg-zinc-900 border border-ya-lime/40 text-ya-lime px-2 py-0.5 font-bold">
+                  Recomendado: 1000 × 1000 px
+                </span>
+                <span className="text-[10px] font-mono bg-zinc-900 border border-zinc-700 text-gray-300 px-2 py-0.5 font-bold">
+                  Formato: JPG, PNG o WebP
+                </span>
+              </div>
             </div>
           </div>
           <button
@@ -349,11 +354,11 @@ export function ImageManagerModal({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="relative w-14 h-14 bg-black border border-ya-gray flex items-center justify-center shrink-0 overflow-hidden">
+                      <div className="relative w-14 h-14 bg-zinc-950 border border-ya-gray flex items-center justify-center shrink-0 overflow-hidden p-1">
                         <img
                           src={img.url}
                           alt={`Foto ${idx + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain object-center"
                           onError={(e) => {
                             (e.target as HTMLElement).style.display = 'none';
                           }}

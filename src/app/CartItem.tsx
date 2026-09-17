@@ -26,18 +26,18 @@ export function CartItem({ line }: { line: CartLine }) {
         id={`cart-item-${lineKey}`}
         className="flex gap-3 bg-ya-gray p-3 border-2 border-ya-lime/40 hover:border-ya-lime transition-colors relative"
       >
-        <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden relative">
+        <div className="w-16 h-16 shrink-0 bg-zinc-950 border border-ya-gray flex items-center justify-center text-3xl overflow-hidden relative p-1">
           {isImg ? (
             <img
               src={formatImageUrl(packImage, 150)}
               alt={packName}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain object-center"
               referrerPolicy="no-referrer"
             />
           ) : (
             <span>{packImage}</span>
           )}
-          <span className="absolute bottom-0 inset-x-0 bg-ya-lime text-ya-black text-[8px] font-black uppercase text-center tracking-wider">
+          <span className="absolute bottom-0 inset-x-0 bg-ya-lime text-ya-black text-[8px] font-black uppercase text-center tracking-wider z-10">
             PACK
           </span>
         </div>
@@ -171,19 +171,19 @@ export function CartItem({ line }: { line: CartLine }) {
           : 'bg-ya-gray border-ya-gray hover:border-ya-lime'
       }`}
     >
-      <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden relative">
+      <div className="w-16 h-16 shrink-0 bg-zinc-950 border border-ya-gray flex items-center justify-center text-3xl overflow-hidden relative p-1">
         {isImg ? (
           <img
             src={formatImageUrl(itemImage, 150)}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain object-center"
             referrerPolicy="no-referrer"
           />
         ) : (
           <span>{itemImage}</span>
         )}
         {isOut && (
-          <span className="absolute inset-x-0 bottom-0 bg-red-600 text-white text-[8px] font-black uppercase text-center tracking-wider">
+          <span className="absolute inset-x-0 bottom-0 bg-red-600 text-white text-[8px] font-black uppercase text-center tracking-wider z-10">
             AGOTADO
           </span>
         )}
@@ -194,10 +194,10 @@ export function CartItem({ line }: { line: CartLine }) {
 
         {/* Etiqueta de variante seleccionada */}
         {(line.variantName || matchedVariant) && (
-          <div className="mt-0.5">
-            <span className="inline-flex items-center gap-1 bg-zinc-800 text-ya-lime border border-zinc-700 text-[10px] font-bold px-1.5 py-0.5">
-              <span>{product.variantsTitle || 'Opción'}:</span>
-              <strong className="text-white">{line.variantName || matchedVariant?.name}</strong>
+          <div className="mt-1">
+            <span className="inline-flex flex-wrap items-center gap-1 bg-zinc-800 text-ya-lime border border-zinc-700 text-[10px] font-bold px-1.5 py-0.5 max-w-full break-words">
+              <span className="shrink-0">{product.variantsTitle || 'Opción'}:</span>
+              <strong className="text-white break-words">{line.variantName || matchedVariant?.name}</strong>
             </span>
           </div>
         )}

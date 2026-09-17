@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
   AlertCircle,
   Link as LinkIcon,
+  Smartphone,
 } from 'lucide-react';
 import {
   openCloudinaryUploadWidget,
@@ -28,6 +29,9 @@ interface ImageGalleryManagerProps {
   onChange: (images: string[]) => void;
   maxImages?: number;
   label?: string;
+  productName?: string;
+  productPrice?: number | string;
+  productCategory?: string;
 }
 
 export function ImageGalleryManager({
@@ -35,11 +39,16 @@ export function ImageGalleryManager({
   onChange,
   maxImages = 5,
   label = 'Imágenes (1 a 5 con Cloudinary)',
+  productName = 'Producto de ejemplo',
+  productPrice = 2.5,
+  productCategory = 'Bebidas',
 }: ImageGalleryManagerProps) {
   const [openingWidget, setOpeningWidget] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [manualUrl, setManualUrl] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
+  const [previewTab, setPreviewTab] = useState<'card' | 'detail'>('card');
 
   // Apertura del Cloudinary Upload Widget oficial
   const handleOpenCloudinary = async () => {
@@ -142,6 +151,37 @@ export function ImageGalleryManager({
         )}
       </div>
 
+      {/* Indicación clara para el administrador */}
+      <div className="bg-zinc-900/90 border border-zinc-700 p-3 rounded-none flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="bg-ya-lime text-ya-black text-[10px] font-black uppercase px-2 py-0.5 tracking-wider">
+              Recomendado: 1000 × 1000 px
+            </span>
+            <span className="text-[10px] font-mono text-zinc-300">
+              Proporción 1:1 · JPG, PNG o WebP
+            </span>
+          </div>
+          <p className="text-[11px] text-zinc-400 leading-snug">
+            Sube imágenes cuadradas con el producto centrado. En la app móvil se encuadran en modo completo (<span className="text-ya-lime font-mono">object-contain</span>) para que nunca se corten ni se desplacen.
+          </p>
+        </div>
+        {images.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowPreview(!showPreview)}
+            className={`px-3 py-1.5 border text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shrink-0 transition-colors ${
+              showPreview
+                ? 'bg-ya-lime text-ya-black border-ya-lime'
+                : 'bg-zinc-800 text-zinc-200 border-zinc-600 hover:border-ya-lime'
+            }`}
+          >
+            <Smartphone size={13} />
+            <span>{showPreview ? 'Ocultar Previa Móvil' : 'Ver Previa Móvil'}</span>
+          </button>
+        )}
+      </div>
+
       {uploadError && (
         <div className="p-2.5 border border-rose-500/80 bg-rose-950/40 text-rose-300 text-xs flex items-start gap-2 font-medium">
           <AlertCircle size={16} className="shrink-0 text-rose-400 mt-0.5" />
@@ -199,12 +239,12 @@ export function ImageGalleryManager({
               )}
 
               {/* Thumbnail con imagen real garantizada */}
-              <div className="w-full aspect-square bg-ya-black border border-ya-gray overflow-hidden flex items-center justify-center my-1 relative">
+              <div className="w-full aspect-square bg-zinc-950 border border-ya-gray overflow-hidden flex items-center justify-center my-1 relative p-1">
                 {isImg ? (
                   <img
                     src={displayUrl}
                     alt={`Foto ${index + 1}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain object-center"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       // Si la URL falla al cargar, mostrar icono de respaldo en vez de romper la UI
@@ -309,6 +349,162 @@ export function ImageGalleryManager({
       <p className="text-[11px] font-mono text-gray-400">
         * La primera imagen de la lista se utiliza como portada principal. Puedes añadir hasta {maxImages} fotos por producto o pack.
       </p>
+
+      {/* Simulación en Vivo de Vista Móvil para el Administrador */}
+      {images.length > 0 && showPreview && (
+        <div className="mt-4 p-4 border-2 border-zinc-700 bg-zinc-950/80 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-2">
+            <div className="flex items-center gap-2">
+              <Smartphone size={15} className="text-ya-lime" />
+              <h5 className="font-mono text-xs font-black uppercase tracking-wider text-white">
+                Simulación en Móvil (320px – 430px)
+              </h5>
+            </div>
+            <div className="flex items-center gap-1 font-mono text-[10px]">
+              <button
+                type="button"
+                onClick={() => setPreviewTab('card')}
+                className={`px-2.5 py-1 border transition-colors ${
+                  previewTab === 'card'
+                    ? 'border-ya-lime bg-ya-lime text-ya-black font-black'
+                    : 'border-zinc-700 text-zinc-400 hover:text-white bg-zinc-900'
+                }`}
+              >
+                Tarjeta Catálogo
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewTab('detail')}
+                className={`px-2.5 py-1 border transition-colors ${
+                  previewTab === 'detail'
+                    ? 'border-ya-lime bg-ya-lime text-ya-black font-black'
+                    : 'border-zinc-700 text-zinc-400 hover:text-white bg-zinc-900'
+                }`}
+              >
+                Ficha Detalle
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 py-2">
+            {/* Teléfono simulado */}
+            <div className="w-full max-w-[280px] bg-black border-2 border-zinc-700 p-3 shadow-xl">
+              <div className="flex items-center justify-between text-[9px] font-mono text-zinc-500 pb-2 mb-2 border-b border-zinc-800">
+                <span>VISTA PREVIA MÓVIL</span>
+                <span className="text-ya-lime font-bold">100% COMPLETO</span>
+              </div>
+
+              {previewTab === 'card' ? (
+                /* Simulación Tarjeta Catálogo */
+                <div className="border-2 border-ya-gray bg-ya-black p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-mono uppercase bg-zinc-900 text-zinc-400 px-1.5 py-0.5 border border-zinc-800">
+                      {productCategory}
+                    </span>
+                    <span className="text-[10px] font-mono text-ya-lime font-bold">
+                      {typeof productPrice === 'number' ? `${productPrice.toFixed(2)} €` : `${productPrice} €`}
+                    </span>
+                  </div>
+
+                  {/* Visual del producto con el mismo encuadre exacto del catálogo */}
+                  <div className="h-32 bg-zinc-950 border-2 border-ya-gray/60 flex items-center justify-center p-2 overflow-hidden">
+                    {isRealImageUrl(images[0]) ? (
+                      <img
+                        src={formatImageUrl(images[0], 300)}
+                        alt={productName}
+                        className="w-full h-full object-contain object-center"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-3xl">{images[0] || '📦'}</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="font-black text-xs uppercase tracking-tight text-white line-clamp-1">
+                      {productName}
+                    </p>
+                    <p className="text-[10px] text-zinc-400 line-clamp-1 mt-0.5">
+                      Entrega en 10-20 min
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* Simulación Ficha de Detalle */
+                <div className="border-2 border-ya-gray bg-ya-black p-3 space-y-2">
+                  <div className="aspect-square bg-zinc-950 border-2 border-ya-gray flex items-center justify-center p-3 overflow-hidden">
+                    {isRealImageUrl(images[0]) ? (
+                      <img
+                        src={formatImageUrl(images[0], 400)}
+                        alt={productName}
+                        className="w-full h-full object-contain object-center"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-4xl">{images[0] || '📦'}</span>
+                    )}
+                  </div>
+
+                  {/* Miniaturas de galería si hay más de 1 */}
+                  {images.length > 1 && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-1">
+                      {images.map((img, i) => (
+                        <div
+                          key={i}
+                          className={`w-8 h-8 shrink-0 bg-zinc-950 border ${
+                            i === 0 ? 'border-ya-lime' : 'border-zinc-800'
+                          } flex items-center justify-center p-0.5 overflow-hidden`}
+                        >
+                          {isRealImageUrl(img) ? (
+                            <img
+                              src={formatImageUrl(img, 80)}
+                              alt=""
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-xs">{img}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div>
+                    <span className="text-[9px] font-mono uppercase text-ya-lime">
+                      {productCategory}
+                    </span>
+                    <p className="font-black text-xs uppercase tracking-tight text-white line-clamp-1">
+                      {productName}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Checklist de verificación óptica */}
+            <div className="space-y-2 text-left max-w-xs font-mono text-[11px]">
+              <div className="flex items-start gap-2 text-emerald-400">
+                <span className="font-bold">✓</span>
+                <span>
+                  <strong>Encuadre:</strong> El producto se muestra entero sin recortes forzados en los bordes.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-emerald-400">
+                <span className="font-bold">✓</span>
+                <span>
+                  <strong>Posición:</strong> Mantiene la misma alineación óptica entre catálogo y detalle.
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-emerald-400">
+                <span className="font-bold">✓</span>
+                <span>
+                  <strong>Fondo:</strong> Contenedor <code className="text-ya-lime">zinc-950</code> uniforme para cualquier formato.
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

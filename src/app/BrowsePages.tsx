@@ -614,7 +614,7 @@ export function ProductPage() {
       <main id={`product-page-${product.slug || product.id}`} className="max-w-2xl mx-auto px-4 pt-6 pb-28">
         <Breadcrumbs items={breadcrumbs} className="mb-4" />
         {/* Visual Box */}
-        <div className="h-64 sm:h-80 bg-ya-gray border-2 border-ya-gray grid place-items-center text-8xl sm:text-9xl relative overflow-hidden">
+        <div className="h-64 sm:h-84 bg-zinc-950 border-2 border-ya-gray flex items-center justify-center text-8xl sm:text-9xl relative overflow-hidden p-4 sm:p-6">
           {isImageEmoji ? (
             <span>{currentImage}</span>
           ) : (
@@ -623,23 +623,23 @@ export function ProductPage() {
               alt={`${product.name} - Reparto a domicilio en Jerez YA Delivery`}
               loading="eager"
               decoding="async"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain object-center"
               referrerPolicy="no-referrer"
             />
           )}
-          <span className="absolute top-3 left-3 bg-ya-black border border-ya-gray px-2 py-1 text-[10px] font-black text-ya-lime uppercase tracking-widest">
+          <span className="absolute top-3 left-3 bg-ya-black border border-ya-gray px-2 py-1 text-[10px] font-black text-ya-lime uppercase tracking-widest z-10">
             {category?.name ?? product.category}
           </span>
           {!product.inStock ? (
-            <span className="absolute top-3 right-3 bg-red-600 text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border border-red-400">
+            <span className="absolute top-3 right-3 bg-red-600 text-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border border-red-400 z-10">
               Agotado
             </span>
           ) : product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) <= (product.minStock ?? 5) ? (
-            <span className="absolute top-3 right-3 bg-amber-500 text-ya-black px-2.5 py-1 text-[10px] font-black uppercase tracking-widest font-mono">
+            <span className="absolute top-3 right-3 bg-amber-500 text-ya-black px-2.5 py-1 text-[10px] font-black uppercase tracking-widest font-mono z-10">
               Últimas {product.stockQuantity} u.
             </span>
           ) : (
-            <span className="absolute top-3 right-3 bg-ya-lime text-ya-black px-2 py-1 text-[10px] font-black uppercase tracking-widest">
+            <span className="absolute top-3 right-3 bg-ya-lime text-ya-black px-2 py-1 text-[10px] font-black uppercase tracking-widest z-10">
               En stock
             </span>
           )}
@@ -656,7 +656,7 @@ export function ProductPage() {
                   key={idx}
                   type="button"
                   onClick={() => setActiveImageIdx(idx)}
-                  className={`w-14 h-14 shrink-0 border-2 overflow-hidden bg-ya-gray flex items-center justify-center transition-all ${
+                  className={`w-14 h-14 shrink-0 border-2 overflow-hidden bg-zinc-950 flex items-center justify-center p-1 transition-all ${
                     isSelected ? 'border-ya-lime scale-105 shadow-md' : 'border-ya-gray/70 opacity-60 hover:opacity-100'
                   }`}
                   aria-label={`Ver foto ${idx + 1}`}
@@ -666,7 +666,7 @@ export function ProductPage() {
                       src={formatImageUrl(img, 120)}
                       alt={`${product.name} detalle ${idx + 1}`}
                       loading="lazy"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain object-center"
                       referrerPolicy="no-referrer"
                     />
                   ) : (
@@ -690,18 +690,18 @@ export function ProductPage() {
         {/* Selector de Opciones / Variantes */}
         {hasVariants && (
           <div className="mt-8 border-t-2 border-ya-gray pt-6">
-            <div className="flex justify-between items-baseline mb-3">
+            <div className="flex flex-wrap justify-between items-baseline gap-2 mb-3">
               <h2 className="font-black text-sm uppercase tracking-wider text-white">
                 {product.variantsTitle || 'Opciones disponibles'}:
               </h2>
               {selectedVariant && (
-                <span className="text-xs font-mono font-bold text-ya-lime">
+                <span className="text-xs font-mono font-bold text-ya-lime break-words">
                   Seleccionado: {selectedVariant.name}
                 </span>
               )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 gap-2.5">
               {variantsList.map((variant) => {
                 const isSelected = variant.id === selectedVariantId;
                 const isVarOut = !variant.active || variant.stock <= 0;
@@ -719,7 +719,7 @@ export function ProductPage() {
                         if (imgIdx !== -1) setActiveImageIdx(imgIdx);
                       }
                     }}
-                    className={`p-3 border-2 text-left transition-all relative flex flex-col justify-between ${
+                    className={`min-h-[64px] p-2.5 sm:p-3 border-2 text-left transition-all relative flex flex-col justify-between cursor-pointer ${
                       isSelected
                         ? 'border-ya-lime bg-ya-lime/10 shadow-md ring-1 ring-ya-lime'
                         : isVarOut
@@ -727,44 +727,46 @@ export function ProductPage() {
                         : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'
                     }`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2.5 w-full min-w-0">
                       {variant.image && (
-                        <div className="w-9 h-9 shrink-0 bg-ya-black border border-zinc-700 overflow-hidden">
+                        <div className="w-9 h-9 shrink-0 bg-ya-black border border-zinc-700 overflow-hidden flex items-center justify-center p-0.5">
                           <img
                             src={formatImageUrl(variant.image, 80)}
                             alt={variant.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain object-center"
                             referrerPolicy="no-referrer"
                           />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <span className="font-black text-xs sm:text-sm text-white block truncate">
+                        <span className="font-black text-xs sm:text-sm text-white block break-words whitespace-normal leading-snug">
                           {variant.name}
                         </span>
-                        <span className="font-black text-xs text-ya-lime font-mono mt-0.5 block">
+                        <span className="font-black text-xs text-ya-lime font-mono mt-1 block">
                           {euro(variant.price)}
                         </span>
                       </div>
                     </div>
 
-                    <div className="mt-2 flex items-center justify-between">
-                      {isVarOut ? (
-                        <span className="text-[9px] font-black uppercase text-red-400 bg-red-950/80 px-1.5 py-0.5 border border-red-500/40">
-                          Agotado
-                        </span>
-                      ) : isVarLow ? (
-                        <span className="text-[9px] font-bold text-amber-400">
-                          Quedan {variant.stock} u.
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-bold text-emerald-400">
-                          En stock
-                        </span>
-                      )}
+                    <div className="mt-2.5 pt-1 border-t border-zinc-800/80 flex items-center justify-between w-full gap-2">
+                      <div className="min-w-0 flex-1">
+                        {isVarOut ? (
+                          <span className="text-[9px] font-black uppercase text-red-400 bg-red-950/80 px-1.5 py-0.5 border border-red-500/40 inline-block">
+                            Agotado
+                          </span>
+                        ) : isVarLow ? (
+                          <span className="text-[9px] font-bold text-amber-400 block truncate">
+                            Quedan {variant.stock} u.
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-emerald-400 block truncate">
+                            En stock
+                          </span>
+                        )}
+                      </div>
 
                       {isSelected && (
-                        <span className="text-ya-lime text-xs font-black">✓</span>
+                        <span className="text-ya-lime text-xs font-black shrink-0">✓</span>
                       )}
                     </div>
                   </button>

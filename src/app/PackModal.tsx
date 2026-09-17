@@ -220,12 +220,12 @@ export function PackModal({ pack, onClose }: PackModalProps) {
         <div className="p-5 overflow-y-auto space-y-6 flex-1 text-sm font-medium">
           {/* Descripción & Precios */}
           <div className="flex gap-4 items-start">
-            <div className="w-20 h-20 shrink-0 bg-ya-gray border-2 border-ya-lime/40 grid place-items-center overflow-hidden">
+            <div className="w-20 h-20 shrink-0 bg-zinc-950 border-2 border-ya-lime/40 flex items-center justify-center overflow-hidden p-1.5">
               {isRealImageUrl(pack.image) ? (
                 <img
                   src={formatImageUrl(pack.image, 200)}
                   alt={pack.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain object-center"
                   referrerPolicy="no-referrer"
                 />
               ) : (
