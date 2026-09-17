@@ -551,6 +551,148 @@ export async function playDrop(
   }
 }
 
+/**
+ * ==============================================================================
+ * 3b. MODO PRUEBA DE ADMIN (SIMULACIÓN AUTORITATIVA 100% AISLADA DE PRODUCCIÓN)
+ * ==============================================================================
+ * Permite a los administradores probar cualquier Drop en vivo con la mecánica
+ * y probabilidades reales del juego configurado, sin:
+ * - consumir intentos de usuarios
+ * - crear pedidos ni modificarlos
+ * - descontar stock de premios (inventory_consumed)
+ * - registrar premios en user_awarded_prizes
+ * - otorgar participaciones reales al sorteo mensual
+ * - alterar estadísticas ni cerrar Drops
+ */
+export async function adminTestPlayDrop(dropId: string): Promise<PlayDropResult> {
+  const { data: authData } = await supabase.auth.getSession();
+  const token = authData?.session?.access_token;
+
+  if (!token) {
+    throw new Error('Debes iniciar sesión con una cuenta de Administrador para probar el Drop.');
+  }
+
+  // 1. Intentar primero a través del endpoint seguro server-side
+  try {
+    const res = await fetch('/api/admin/test-play-drop', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ dropId }),
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      return result as PlayDropResult;
+    }
+
+    const errJson = await res.json().catch(() => ({}));
+    if (errJson?.error) {
+      throw new Error(errJson.error);
+    }
+  } catch (apiErr: any) {
+    // Si es un error de validación explícito (p.ej. sin premios o no admin), relanzarlo
+    if (
+      apiErr.message?.includes('premios') ||
+      apiErr.message?.includes('rol') ||
+      apiErr.message?.includes('denegado') ||
+      apiErr.message?.includes('encontrado')
+    ) {
+      throw apiErr;
+    }
+    console.info('[Drops] Fallback seguro a simulación de prueba en cliente:', apiErr.message);
+  }
+
+  // 2. Fallback de simulación en cliente validando rol admin
+  const { data: authUser } = await supabase.auth.getUser();
+  if (!authUser?.user) {
+    throw new Error('Debes iniciar sesión con rol de Administrador.');
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', authUser.user.id)
+    .maybeSingle();
+
+  if (profile?.role !== 'admin') {
+    throw new Error('Acceso denegado: solo los Administradores pueden probar Drops.');
+  }
+
+  const { data: drop, error: dropErr } = await supabase
+    .from('drops')
+    .select('*')
+    .eq('id', dropId)
+    .single();
+
+  if (dropErr || !drop) {
+    throw new Error('Drop no encontrado en la base de datos.');
+  }
+
+  const { data: rawPrizes, error: prizesErr } = await supabase
+    .from('drop_prizes')
+    .select('*')
+    .eq('drop_id', dropId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  if (prizesErr) {
+    throw new Error(`Error al cargar premios del Drop: ${prizesErr.message}`);
+  }
+
+  if (!rawPrizes || rawPrizes.length === 0) {
+    throw new Error('El Drop no tiene premios activos configurados. Añade al menos un premio para poder probarlo.');
+  }
+
+  const activePrizes = rawPrizes.filter((p) => Number(p.probability_pct || 0) > 0);
+  const rand = Math.random() * 100.0;
+  let cumulative = 0;
+  let wonPrize: any = null;
+
+  for (const p of activePrizes) {
+    cumulative += Number(p.probability_pct || 0);
+    if (rand < cumulative) {
+      wonPrize = p;
+      break;
+    }
+  }
+
+  const validityDays = wonPrize?.validity_days || drop.prize_validity_days || 7;
+  const expiresAt = new Date(Date.now() + validityDays * 86400000).toISOString();
+
+  // Aislamiento absoluto: no escribir en ninguna tabla de producción
+  return {
+    success: true,
+    is_test_mode: true,
+    outcome: wonPrize ? 'won_prize' : 'consolation',
+    attempt_id: `test_sim_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+    prize_id: wonPrize?.id,
+    prize: wonPrize
+      ? {
+          id: wonPrize.id,
+          awarded_prize_id: `test_award_${Date.now()}`,
+          name: wonPrize.name,
+          description: wonPrize.description,
+          prize_type: wonPrize.prize_type,
+          prize_value: Number(wonPrize.prize_value || 0),
+          validity_days: validityDays,
+          expires_at: expiresAt,
+        }
+      : undefined,
+    consolation_entries: drop.consolation_config?.entries_count || 1,
+    consolation: {
+      draw_title: 'Sorteo Mensual Activo (Simulación de Prueba)',
+      entries_awarded: drop.consolation_config?.entries_count || 1,
+      note: 'Simulación de prueba: no se ha sumado ninguna participación real.',
+    },
+    message: wonPrize
+      ? `[MODO PRUEBA] Simulación de premio ganado: ${wonPrize.name}`
+      : `[MODO PRUEBA] Simulación de consolación: +${drop.consolation_config?.entries_count || 1} participación simulada.`,
+  };
+}
+
 // ------------------------------------------------------------------------------
 // 4. CLIENTE: PREMIOS OTORGADOS AL USUARIO
 // ------------------------------------------------------------------------------
@@ -781,7 +923,28 @@ export async function adminCreateDrop(
   console.log(`Premios directos: ${totalProb}%`);
   console.log(`Consolación: ${Math.max(0, 100 - totalProb)}%`);
 
-  // 2. Normalizar payload para el esquema real de Supabase
+  // 2. Validar solapamientos de fechas con otros Drops activos o programados
+  const createStartsAt = dropData.starts_at;
+  const createEndsAt = dropData.ends_at;
+  const createStatus = dropData.status;
+
+  if (createStartsAt && createEndsAt && ['scheduled', 'active'].includes(createStatus)) {
+    const { data: overlappingDrops } = await supabase
+      .from('drops')
+      .select('id, title, drop_number, starts_at, ends_at, status')
+      .in('status', ['scheduled', 'active'])
+      .lt('starts_at', createEndsAt)
+      .gt('ends_at', createStartsAt);
+
+    if (overlappingDrops && overlappingDrops.length > 0) {
+      const conflict = overlappingDrops[0];
+      throw new Error(
+        `No se permiten solapamientos: Ya existe otro Drop ("${conflict.title}" - DROP #${conflict.drop_number}) activo o programado en el intervalo [${createStartsAt} - ${createEndsAt}].`
+      );
+    }
+  }
+
+  // 3. Normalizar payload para el esquema real de Supabase
   // Mapeamos game_key -> game_type y guardamos game_key en game_config para total compatibilidad
   const gameKey = (dropData as any).game_key || dropData.game_type || 'jackpot';
   const cleanPayload: Record<string, any> = {
@@ -805,7 +968,7 @@ export async function adminCreateDrop(
 
   const newDrop = (newRows && newRows[0]) || ({ ...cleanPayload, id: 'temp-id' } as any);
 
-  // 3. Insertar premios asociados
+  // 4. Insertar premios asociados
   if (prizesData.length > 0) {
     const formattedPrizes = prizesData.map((p, idx) => {
       const isShipping = (p.prize_type as string) === 'free_shipping';
@@ -858,6 +1021,29 @@ export async function adminUpdateDrop(
 
   // Evitar error de PostgREST schema cache eliminando la columna virtual antes del update si la tabla no la expone
   delete cleanPayload.game_key;
+
+  // Validar solapamientos excluyendo explícitamente el propio ID del Drop
+  // WHERE id <> p_drop_id AND starts_at < p_ends_at AND ends_at > p_starts_at AND status IN ('scheduled', 'active')
+  const updateStartsAt = cleanPayload.starts_at;
+  const updateEndsAt = cleanPayload.ends_at;
+  const updateStatus = cleanPayload.status;
+
+  if (updateStartsAt && updateEndsAt && ['scheduled', 'active'].includes(updateStatus)) {
+    const { data: overlappingDrops } = await supabase
+      .from('drops')
+      .select('id, title, drop_number, starts_at, ends_at, status')
+      .neq('id', dropId)
+      .in('status', ['scheduled', 'active'])
+      .lt('starts_at', updateEndsAt)
+      .gt('ends_at', updateStartsAt);
+
+    if (overlappingDrops && overlappingDrops.length > 0) {
+      const conflict = overlappingDrops[0];
+      throw new Error(
+        `No se permiten solapamientos: Ya existe otro Drop ("${conflict.title}" - DROP #${conflict.drop_number}) activo o programado en el intervalo [${updateStartsAt} - ${updateEndsAt}].`
+      );
+    }
+  }
 
   // Actualizar datos del Drop
   const { data: updatedRows, error: dropErr } = await supabase

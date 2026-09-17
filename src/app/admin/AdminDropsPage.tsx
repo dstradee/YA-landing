@@ -15,6 +15,7 @@ import {
   RefreshCw,
   X,
   Percent,
+  Play,
 } from 'lucide-react';
 import {
   adminFetchAllDrops,
@@ -27,7 +28,16 @@ import {
   formatMadridDate,
   getDropTimingStatus,
 } from '../../lib/drops';
-import type { DbDrop, DropGameType, DropPrizeType } from '../../types/drops';
+import type { DbDrop, DropGameType, DropPrizeType, ActiveDropPayload } from '../../types/drops';
+import { DropGameEngine } from '../../components/drops/DropGameEngine';
+
+function formatToDateTimeLocal(isoString?: string | null): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export function AdminDropsPage() {
   const [drops, setDrops] = useState<DbDrop[]>([]);
@@ -49,6 +59,10 @@ export function AdminDropsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
+
+  // Modo Prueba de Drops (Admin)
+  const [testingDropPayload, setTestingDropPayload] = useState<ActiveDropPayload | null>(null);
+  const [testingLoadingId, setTestingLoadingId] = useState<string | null>(null);
 
   // Form State
   const [dropNumber, setDropNumber] = useState(1);
@@ -152,8 +166,8 @@ export function AdminDropsPage() {
       setDescription(drop.description || '');
       setGameType(drop.game_key || drop.game_type || 'jackpot');
       setStatus(drop.status);
-      setStartsAt(new Date(drop.starts_at).toISOString().slice(0, 16));
-      setEndsAt(new Date(drop.ends_at).toISOString().slice(0, 16));
+      setStartsAt(formatToDateTimeLocal(drop.starts_at));
+      setEndsAt(formatToDateTimeLocal(drop.ends_at));
       setActivationTrigger(drop.activation_trigger);
       setPrizeValidityDays(drop.prize_validity_days || 7);
       setConsolationEntries(drop.consolation_config?.entries_count || 1);
@@ -177,6 +191,65 @@ export function AdminDropsPage() {
     }
   };
 
+  // Probar Drop en vivo (Modo Prueba de Admin)
+  const handleTestDrop = async (dropId: string) => {
+    setTestingLoadingId(dropId);
+    try {
+      const dropData = await adminFetchDropWithPrizes(dropId);
+      if (!dropData || !dropData.drop) {
+        alert('No se pudo encontrar la información del Drop seleccionado.');
+        return;
+      }
+
+      const rawPrizes = dropData.prizes || [];
+      const activePrizes = rawPrizes.filter((p) => p.is_active !== false);
+
+      if (activePrizes.length === 0) {
+        alert(
+          'Este Drop no tiene premios activos configurados. Para poder probar el juego, pulsa en "Probabilidades" y añade al menos un premio activo.'
+        );
+        return;
+      }
+
+      const effectiveGameKey = dropData.drop.game_key || dropData.drop.game_type || 'jackpot';
+
+      const payload: ActiveDropPayload = {
+        active: true,
+        drop: {
+          id: dropData.drop.id,
+          drop_number: dropData.drop.drop_number,
+          title: dropData.drop.title,
+          description: dropData.drop.description,
+          game_type: effectiveGameKey as any,
+          game_key: effectiveGameKey,
+          activation_trigger: dropData.drop.activation_trigger || 'after_payment',
+          game_config: dropData.drop.game_config || {},
+          consolation_reward_type: dropData.drop.consolation_reward_type || 'monthly_draw_entry',
+          consolation_config: dropData.drop.consolation_config || { entries_count: 1 },
+          starts_at: dropData.drop.starts_at,
+          ends_at: dropData.drop.ends_at,
+          prize_validity_days: dropData.drop.prize_validity_days || 7,
+        },
+        prizes: activePrizes.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          prize_type: p.prize_type,
+          prize_value: Number(p.prize_value || 0),
+          prize_config: p.prize_config || {},
+          sort_order: p.sort_order || 0,
+        })),
+      };
+
+      setTestingDropPayload(payload);
+    } catch (err: any) {
+      console.error('[AdminDropsPage] Error al iniciar prueba del Drop:', err);
+      alert(err?.message || 'Error al iniciar la prueba del Drop.');
+    } finally {
+      setTestingLoadingId(null);
+    }
+  };
+
   // Función para aplicar Preset de 8 Premios (Jackpot completo y equilibrado)
   const handleApplyJackpot8Preset = () => {
     setTitle(`Drop #${dropNumber} — Jackpot Especial YA`);
@@ -191,6 +264,38 @@ export function AdminDropsPage() {
       { name: 'Descuento 15% YA', description: '15% directo al checkout', prize_type: 'percentage_discount', prize_value: 15, probability_pct: 12, max_inventory: null, validity_days: 7, is_active: true },
       { name: 'Descuento 3€ Fijo', description: '3€ de descuento en tu cesta', prize_type: 'fixed_discount', prize_value: 3, probability_pct: 10, max_inventory: null, validity_days: 7, is_active: true },
       { name: 'Bebida Energética Gratis', description: 'Producto gratis con tu pedido', prize_type: 'product', prize_value: 0, probability_pct: 4.5, max_inventory: 50, validity_days: 7, is_active: true },
+    ]);
+  };
+
+  // Función para aplicar Preset DROP 002 — Rasca y Gana (3 Categorías: Principal, Secundario, Consolación)
+  const handleApplyScratchPreset = () => {
+    setTitle(`DROP 002 — RASCA Y GANA`);
+    setDescription('Rasca tu billete digital exclusivo tras realizar tu pedido. ¡Descubre premios directos o participaciones para el Sorteo Mensual!');
+    setGameType('scratch');
+    setActivationTrigger('after_payment');
+    setPrizeValidityDays(7);
+    setConsolationEntries(1);
+    setPrizes([
+      {
+        name: 'Pedido Gratis hasta 20 €',
+        description: 'Premio Principal (3x YA): Tu próximo pedido en YA Delivery es 100% gratis hasta 20 €.',
+        prize_type: 'free_order',
+        prize_value: 20,
+        probability_pct: 5,
+        max_inventory: 100,
+        validity_days: 7,
+        is_active: true,
+      },
+      {
+        name: '25 % Dto. en tu próximo pedido',
+        description: 'Premio Secundario (✦ · ✦ · 🥤): Ahorra un 25% directo en tu siguiente pedido.',
+        prize_type: 'percentage_discount',
+        prize_value: 25,
+        probability_pct: 20,
+        max_inventory: 500,
+        validity_days: 7,
+        is_active: true,
+      },
     ]);
   };
 
@@ -623,6 +728,17 @@ export function AdminDropsPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
+                      id={`btn-test-drop-${drop.id}`}
+                      onClick={() => handleTestDrop(drop.id)}
+                      disabled={testingLoadingId === drop.id}
+                      className="flex items-center gap-1.5 px-3 py-2 border border-amber-400 bg-amber-400/10 text-amber-300 hover:bg-amber-400 hover:text-ya-black text-xs font-mono font-black uppercase transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+                      title="Probar Drop en vivo (Modo Prueba de Admin)"
+                    >
+                      <Play size={14} className="fill-current" />
+                      <span>{testingLoadingId === drop.id ? 'Cargando...' : 'PROBAR DROP'}</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleOpenEdit(drop.id)}
                       className="flex items-center gap-1.5 px-3 py-2 border border-ya-lime/50 bg-ya-lime/10 text-ya-lime hover:bg-ya-lime hover:text-ya-black text-xs font-mono font-bold uppercase transition-colors"
                       title="Configurar Premios y Probabilidades del Drop"
@@ -675,7 +791,15 @@ export function AdminDropsPage() {
                       className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-ya-lime text-ya-lime text-[11px] font-black uppercase tracking-wider transition"
                       title="Cargar preset con 8 premios equilibrados"
                     >
-                      Preset 8 Premios
+                      Preset Jackpot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyScratchPreset}
+                      className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-amber-400 text-amber-400 text-[11px] font-black uppercase tracking-wider transition"
+                      title="Cargar preset Rasca y Gana (3 Categorías)"
+                    >
+                      Preset Rasca y Gana
                     </button>
                     <button
                       type="button"
@@ -1176,6 +1300,17 @@ export function AdminDropsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* MODAL DE PRUEBA DE DROP (ADMIN - SIMULACIÓN EN VIVO) */}
+      {testingDropPayload && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+          <DropGameEngine
+            dropPayload={testingDropPayload}
+            isTestMode={true}
+            onClose={() => setTestingDropPayload(null)}
+          />
         </div>
       )}
     </div>

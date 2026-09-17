@@ -8,11 +8,19 @@ import {
   Gift,
   Trophy,
   AlertCircle,
+  AlertTriangle,
+  RotateCcw,
   Clock,
   X,
   Ticket,
 } from 'lucide-react';
-import { checkDropEligibility, playDrop, formatMadridDate, saveAwardedPrizeCustomData } from '../../lib/drops';
+import {
+  checkDropEligibility,
+  playDrop,
+  adminTestPlayDrop,
+  formatMadridDate,
+  saveAwardedPrizeCustomData,
+} from '../../lib/drops';
 import type { ActiveDropPayload, PlayDropResult } from '../../types/drops';
 import { JackpotGame } from './games/JackpotGame';
 import { CoinFlipGame } from './games/CoinFlipGame';
@@ -22,6 +30,7 @@ import { ScratchGame, WheelGame, PickOneGame } from './games/ScratchGame';
 interface DropGameEngineProps {
   dropPayload: ActiveDropPayload;
   orderId?: string;
+  isTestMode?: boolean;
   onFinished?: (result: PlayDropResult) => void;
   onClose?: () => void;
 }
@@ -30,10 +39,12 @@ interface DropGameEngineProps {
 function CustomPrizeForm({
   prizeId,
   prizeConfig,
+  isTestMode,
   onSaved,
 }: {
   prizeId: string;
   prizeConfig?: Record<string, any>;
+  isTestMode?: boolean;
   onSaved: () => void;
 }) {
   // Configuración de campos dinámicos: por defecto Nombre, Instagram, Mensaje
@@ -48,6 +59,14 @@ function CustomPrizeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    if (isTestMode) {
+      setTimeout(() => {
+        setSaving(false);
+        setSaved(true);
+        onSaved();
+      }, 400);
+      return;
+    }
     const success = await saveAwardedPrizeCustomData(prizeId, formData);
     setSaving(false);
     if (success) {
@@ -59,7 +78,9 @@ function CustomPrizeForm({
   if (saved) {
     return (
       <div className="mt-4 p-4 border-2 border-ya-lime bg-ya-lime/10 text-center text-ya-lime font-bold text-xs">
-        ¡Datos guardados correctamente! Nos pondremos en contacto contigo para entregarte tu premio.
+        {isTestMode
+          ? '¡Simulación de datos completada en Modo Prueba! (No se han guardado datos en producción).'
+          : '¡Datos guardados correctamente! Nos pondremos en contacto contigo para entregarte tu premio.'}
       </div>
     );
   }
@@ -117,14 +138,15 @@ function CustomPrizeForm({
 export const DropGameEngine: React.FC<DropGameEngineProps> = ({
   dropPayload,
   orderId,
+  isTestMode = false,
   onFinished,
   onClose,
 }) => {
   const drop = dropPayload.drop;
 
   // Estados del ciclo de vida
-  const [eligibilityChecking, setEligibilityChecking] = useState(true);
-  const [isEligible, setIsEligible] = useState(false);
+  const [eligibilityChecking, setEligibilityChecking] = useState(!isTestMode);
+  const [isEligible, setIsEligible] = useState(isTestMode);
   const [ineligibleReason, setIneligibleReason] = useState<string | null>(null);
 
   // Estados de ejecución
@@ -135,7 +157,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
 
   // Clave de idempotencia única para esta sesión de tirada
   const [idempotencyKey] = useState<string>(
-    () => `drop_${drop?.id}_${orderId || 'free'}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    () => `drop_${drop?.id}_${orderId || (isTestMode ? 'test_admin' : 'free')}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
   );
 
   // Manejo de scroll del body y cierre seguro restaurando interacción
@@ -176,6 +198,13 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
         return;
       }
 
+      // En MODO PRUEBA (Admin), se ignora cualquier requisito de pedido, trigger o fechas
+      if (isTestMode) {
+        setIsEligible(true);
+        setEligibilityChecking(false);
+        return;
+      }
+
       setEligibilityChecking(true);
       const res = await checkDropEligibility(drop.id, orderId, drop.activation_trigger);
       if (isMounted) {
@@ -209,7 +238,9 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [drop?.id, orderId, drop?.activation_trigger]);
+  }, [drop?.id, orderId, drop?.activation_trigger, isTestMode]);
+
+  const activeGameKey = drop?.game_key || drop?.game_type || 'jackpot';
 
   // 2. Disparar tirada autoritativa en el servidor
   const handlePlay = async () => {
@@ -220,14 +251,22 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
     setErrorMessage(null);
 
     try {
-      // Llamada autoritativa 100% en backend
-      const result = await playDrop(drop.id, orderId, idempotencyKey, drop.activation_trigger);
+      let result: PlayDropResult;
 
-      // Entregar el resultado al juego para que coordine la desaceleración mecánica de los carretes
+      if (isTestMode) {
+        // En MODO PRUEBA: simulación autoritativa aislada de producción
+        result = await adminTestPlayDrop(drop.id);
+      } else {
+        // En PRODUCCIÓN: llamada autoritativa 100% en backend
+        result = await playDrop(drop.id, orderId, idempotencyKey, drop.activation_trigger);
+      }
+
+      // Entregar el resultado al juego para que coordine la desaceleración mecánica o el billete de rascado
       setPlayResult(result);
 
-      // Si no es jackpot, finalizar tras timeout estándar
-      if ((drop.game_type || 'jackpot') !== 'jackpot') {
+      // Si no es jackpot ni scratch, finalizar tras timeout estándar
+      const gameKey = drop.game_key || drop.game_type || 'jackpot';
+      if (gameKey !== 'jackpot' && gameKey !== 'scratch') {
         setTimeout(() => {
           setReelsFinished(true);
           if (onFinished) {
@@ -243,13 +282,28 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
     }
   };
 
+  // Si el juego es 'scratch' y el usuario es elegible, resolver autoritativamente en servidor
+  // antes de que el usuario empiece a rascar, cumpliendo el principio de que el resultado ya existe bajo la capa
+  useEffect(() => {
+    if (
+      isEligible &&
+      !eligibilityChecking &&
+      activeGameKey === 'scratch' &&
+      !playResult &&
+      !isPlaying &&
+      !reelsFinished
+    ) {
+      handlePlay();
+    }
+  }, [isEligible, eligibilityChecking, activeGameKey, playResult, isPlaying, reelsFinished]);
+
   if (!drop) {
     return null;
   }
 
-  // Renderizador dinámico del juego según game_type
+  // Renderizador dinámico del juego según game_key o game_type
   const renderGame = () => {
-    const gameType = drop.game_type || 'jackpot';
+    const gameType = drop.game_key || drop.game_type || 'jackpot';
     switch (gameType) {
       case 'coin_flip':
         return (
@@ -274,7 +328,14 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
           <ScratchGame
             isScratching={isPlaying}
             result={playResult}
+            prizes={dropPayload?.prizes}
             onScratch={handlePlay}
+            onScratchFinished={() => {
+              setReelsFinished(true);
+              if (onFinished && playResult) {
+                onFinished(playResult);
+              }
+            }}
             disabled={!isEligible}
           />
         );
@@ -333,6 +394,19 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
 
       {/* Cabecera del Drop */}
       <div className="mb-6 text-center">
+        {/* Banner destacado de MODO PRUEBA */}
+        {isTestMode && (
+          <div className="mb-4 p-3 border-2 border-amber-400 bg-amber-400/15 text-amber-200 text-xs font-mono text-center flex flex-col items-center justify-center gap-1 shadow-md">
+            <div className="flex items-center gap-1.5 font-black uppercase text-amber-300">
+              <AlertTriangle size={16} />
+              <span>⚠ MODO PRUEBA — SIMULACIÓN DE ADMIN</span>
+            </div>
+            <p className="text-[11px] text-amber-200/90 max-w-sm">
+              Prueba en vivo del juego y probabilidades. No consume intentos reales ni modifica pedidos ni premios de producción.
+            </p>
+          </div>
+        )}
+
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-ya-lime text-ya-black font-black font-mono text-[11px] uppercase tracking-wider mb-2">
           <span>DROP #{drop.drop_number}</span>
           <span>•</span>
@@ -386,8 +460,8 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
             </div>
           )}
 
-          {/* Tarjeta de Resultado revelado (mostrada tras la parada completa de los rodillos) */}
-          {playResult && ((drop.game_type || 'jackpot') !== 'jackpot' || reelsFinished) && (
+          {/* Tarjeta de Resultado revelado (mostrada tras la parada completa de rodillos o rascado del billete) */}
+          {playResult && reelsFinished && (
             <div id="jackpot-results-modal-card" className="mt-6 transition-all duration-500 animate-fadeIn relative">
               {/* Botón X claramente visible en la esquina superior derecha del modal de resultados */}
               {onClose && (
@@ -401,6 +475,14 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
                 >
                   <X size={20} className="stroke-[2.5]" />
                 </button>
+              )}
+
+              {/* Indicador de MODO PRUEBA en Resultados */}
+              {(isTestMode || playResult.is_test_mode) && (
+                <div className="mb-3 px-3 py-2 bg-amber-400/20 border-2 border-amber-400 text-amber-300 text-xs font-mono font-bold uppercase text-center flex items-center justify-center gap-2">
+                  <AlertTriangle size={15} className="shrink-0" />
+                  <span>MODO PRUEBA: Resultado de simulación. No se ha otorgado ningún premio real.</span>
+                </div>
               )}
 
               {playResult.outcome === 'won_prize' && playResult.prize ? (
@@ -429,7 +511,9 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
                   </div>
 
                   <div className="text-xs text-gray-300">
-                    Tu cupón ha quedado registrado en tu cuenta de YA y podrás aplicarlo en tu próximo pedido.
+                    {isTestMode
+                      ? 'Simulación técnica: el cupón y premio se mostrarían aquí al cliente final.'
+                      : 'Tu cupón ha quedado registrado en tu cuenta de YA y podrás aplicarlo en tu próximo pedido.'}
                   </div>
                   {playResult.prize.prize_type === 'custom' && (
                     <CustomPrizeForm
@@ -437,6 +521,7 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
                       prizeConfig={
                         dropPayload.prizes?.find((p) => p.name === playResult.prize?.name)?.prize_config
                       }
+                      isTestMode={isTestMode}
                       onSaved={() => {}}
                     />
                   )}
@@ -472,6 +557,28 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
                     <span>¡Tienes una oportunidad más para ganar el gran premio!</span>
                   </div>
                 </div>
+              )}
+
+              {/* Botón PROBAR DE NUEVO en Modo Prueba */}
+              {isTestMode && (
+                <button
+                  type="button"
+                  id="btn-replay-test-drop"
+                  onClick={() => {
+                    setPlayResult(null);
+                    setReelsFinished(false);
+                    setErrorMessage(null);
+                    if (activeGameKey === 'scratch') {
+                      setTimeout(() => {
+                        handlePlay();
+                      }, 100);
+                    }
+                  }}
+                  className="mt-3 w-full py-2.5 bg-amber-400 hover:bg-amber-300 text-ya-black font-black uppercase text-xs tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer shadow font-mono"
+                >
+                  <RotateCcw size={15} />
+                  <span>Probar de Nuevo (Simular otra tirada)</span>
+                </button>
               )}
 
               {onClose && (

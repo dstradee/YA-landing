@@ -224,6 +224,7 @@ export interface CheckDropEligibilityResult {
 
 export interface PlayDropResult {
   success: boolean;
+  is_test_mode?: boolean;
   already_processed?: boolean;
   attempt_id: string;
   outcome: DropAttemptOutcome;

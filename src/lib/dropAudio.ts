@@ -237,6 +237,74 @@ class DropAudioEngine {
       // Silencioso
     }
   }
+
+  // 7. Textura de raspado de billete (ruido suave filtrado tipo rascado)
+  public playScratchTick(): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      // Generar una ráfaga corta de ruido blanco sutil filtrado
+      const bufferSize = ctx.sampleRate * 0.04;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * 0.15;
+      }
+
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(2200, now);
+      filter.Q.setValueAtTime(3, now);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.038);
+
+      whiteNoise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      whiteNoise.start(now);
+    } catch {
+      // Silencioso
+    }
+  }
+
+  // 8. Revelación del billete de rascado completada
+  public playScratchReveal(): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const notes = [587.33, 739.99, 880.0, 1174.66]; // D5, F#5, A5, D6
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = now + idx * 0.06;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, start);
+
+        gain.gain.setValueAtTime(0.001, start);
+        gain.gain.linearRampToValueAtTime(0.16, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + 0.4);
+      });
+    } catch {
+      // Silencioso
+    }
+  }
 }
 
 export const dropAudio = new DropAudioEngine();
