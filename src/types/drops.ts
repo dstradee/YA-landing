@@ -9,6 +9,7 @@ export type DropGameType =
   | 'jackpot'
   | 'coin_flip'
   | 'cara_cruz'
+  | 'trile'
   | 'scratch'
   | 'mystery_box'
   | 'wheel'

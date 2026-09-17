@@ -321,6 +321,38 @@ export function AdminDropsPage() {
     ]);
   };
 
+  // Función para aplicar Preset DROP 004 — El Trile (10% Premio Gordo / 20% Descuento / 70% Consolación +2)
+  const handleApplyTrilePreset = () => {
+    setTitle(`DROP 004 — EL TRILE`);
+    setDescription('3 cartas boca abajo: elige una, descubre las tres. Consigue el Premio Gordo, un descuento directo en tu próximo pedido o participaciones para el Gran Sorteo Mensual.');
+    setGameType('trile');
+    setActivationTrigger('after_payment');
+    setPrizeValidityDays(14);
+    setConsolationEntries(2);
+    setPrizes([
+      {
+        name: 'Sudadera Exclusiva YA — Oversize Trile',
+        description: 'Premio Gordo oficial Drop 004: Sudadera con capucha bordada YA Neo-Brutalist edición especial Trile.',
+        prize_type: 'custom',
+        prize_value: 45,
+        probability_pct: 10,
+        max_inventory: 30,
+        validity_days: 14,
+        is_active: true,
+      },
+      {
+        name: '25% Descuento en tu próximo pedido',
+        description: 'Premio Secundario Drop 004: 25% de descuento directo en tu próximo pedido en YA.',
+        prize_type: 'percentage_discount',
+        prize_value: 25,
+        probability_pct: 20,
+        max_inventory: 500,
+        validity_days: 7,
+        is_active: true,
+      },
+    ]);
+  };
+
   // Función para importar configuración JSON de IA
   const handleImportAiJson = () => {
     try {
@@ -833,6 +865,14 @@ export function AdminDropsPage() {
                     </button>
                     <button
                       type="button"
+                      onClick={handleApplyTrilePreset}
+                      className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-ya-lime text-ya-lime text-[11px] font-black uppercase tracking-wider transition"
+                      title="Cargar preset El Trile (Drop 004: 10% Físico / 20% Dto / 70% Consolación +2)"
+                    >
+                      Preset El Trile
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setShowAiModal(true)}
                       className="px-2.5 py-1.5 bg-ya-lime text-ya-black hover:bg-white text-[11px] font-black uppercase tracking-wider transition"
                       title="Pegar JSON creado por IA"
@@ -917,6 +957,7 @@ export function AdminDropsPage() {
                     className="w-full bg-ya-gray/30 border border-ya-gray p-2 text-xs text-white font-mono"
                   />
                   <datalist id="game-keys-datalist">
+                    <option value="trile">Drop 004 — El Trile (3 Cartas YA)</option>
                     <option value="cara_cruz">Drop 003 — El Cara o Cruz (Moneda YA)</option>
                     <option value="jackpot">Jackpot YA (Rodillos)</option>
                     <option value="scratch">Rascar Tarjeta (Rasca y Gana)</option>

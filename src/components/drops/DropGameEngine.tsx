@@ -24,6 +24,7 @@ import {
 import type { ActiveDropPayload, PlayDropResult } from '../../types/drops';
 import { JackpotGame } from './games/JackpotGame';
 import { CoinFlipGame } from './games/CoinFlipGame';
+import { TrileGame } from './games/TrileGame';
 import { MysteryBoxGame } from './games/MysteryBoxGame';
 import { ScratchGame, WheelGame, PickOneGame } from './games/ScratchGame';
 
@@ -157,6 +158,14 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
   const [coinChoice, setCoinChoice] = useState<'cara' | 'cruz' | null>(() => {
     try {
       return (localStorage.getItem(`ya_drop_${drop?.id}_choice_${orderId || 'user'}`) as 'cara' | 'cruz') || null;
+    } catch (_) {
+      return null;
+    }
+  });
+  const [trileChoice, setTrileChoice] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem(`ya_drop_${drop?.id}_trile_choice_${orderId || 'user'}`);
+      return saved !== null ? Number(saved) : null;
     } catch (_) {
       return null;
     }
@@ -305,13 +314,14 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
       // Entregar el resultado al juego para que coordine la desaceleración mecánica o el billete de rascado
       setPlayResult(result);
 
-      // Si no es jackpot, scratch, cara_cruz ni coin_flip, finalizar tras timeout estándar
+      // Si no es jackpot, scratch, cara_cruz, coin_flip ni trile, finalizar tras timeout estándar
       const gameKey = drop.game_key || drop.game_type || 'jackpot';
       if (
         gameKey !== 'jackpot' &&
         gameKey !== 'scratch' &&
         gameKey !== 'cara_cruz' &&
-        gameKey !== 'coin_flip'
+        gameKey !== 'coin_flip' &&
+        gameKey !== 'trile'
       ) {
         setTimeout(() => {
           setReelsFinished(true);
@@ -328,13 +338,13 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
     }
   };
 
-  // Si el juego es 'scratch' y el usuario es elegible, resolver autoritativamente en servidor
-  // antes de que el usuario empiece a rascar, cumpliendo el principio de que el resultado ya existe bajo la capa
+  // Si el juego es 'scratch' o 'trile' y el usuario es elegible, resolver autoritativamente en servidor
+  // antes de que el usuario empiece a interactuar, cumpliendo el principio de que el resultado ya existe bajo la capa o cartas
   useEffect(() => {
     if (
       isEligible &&
       !eligibilityChecking &&
-      activeGameKey === 'scratch' &&
+      (activeGameKey === 'scratch' || activeGameKey === 'trile') &&
       !playResult &&
       !isPlaying &&
       !reelsFinished
@@ -342,6 +352,16 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
       handlePlay();
     }
   }, [isEligible, eligibilityChecking, activeGameKey, playResult, isPlaying, reelsFinished]);
+
+  const handlePickTrileCard = (cardIndex: number) => {
+    setTrileChoice(cardIndex);
+    try {
+      localStorage.setItem(`ya_drop_${drop?.id}_trile_choice_${orderId || 'user'}`, String(cardIndex));
+    } catch (_) {}
+    if (!playResult && !isPlaying) {
+      handlePlay();
+    }
+  };
 
   if (!drop) {
     return null;
@@ -351,6 +371,24 @@ export const DropGameEngine: React.FC<DropGameEngineProps> = ({
   const renderGame = () => {
     const gameType = drop.game_key || drop.game_type || 'jackpot';
     switch (gameType) {
+      case 'trile':
+        return (
+          <TrileGame
+            isPlaying={isPlaying}
+            result={playResult}
+            prizes={dropPayload?.prizes}
+            initialChoice={trileChoice}
+            onPickCard={handlePickTrileCard}
+            onAnimationFinished={() => {
+              setReelsFinished(true);
+              if (onFinished && playResult) {
+                onFinished(playResult);
+              }
+            }}
+            disabled={!isEligible}
+            isTestMode={isTestMode}
+          />
+        );
       case 'cara_cruz':
       case 'coin_flip':
         return (
