@@ -1,6 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { categories as fallbackCategories, products as fallbackProducts } from '../data/products';
-import type { DbCategory, DbProduct, Product, CategorySlug } from '../types/app';
+import type { DbCategory, DbProduct, Product, CategorySlug, ProductVariant } from '../types/app';
 
 // ==============================================================================
 // ADAPTADORES & HELPERS
@@ -44,6 +44,7 @@ export function adaptProduct(db: DbProduct, categorySlugMap?: Map<string, string
     estimatedCost: db.estimated_cost ? Number(db.estimated_cost) : Number(db.price) * 0.6,
     category: categorySlug,
     image: db.image || '📦',
+    images: db.images,
     description: db.description || '',
     active: db.active,
     inStock: isAvailable,
@@ -51,6 +52,9 @@ export function adaptProduct(db: DbProduct, categorySlugMap?: Map<string, string
     stockQuantity: db.stock_quantity ?? 0,
     minStock: db.min_stock ?? 5,
     internalInstructions: db.internal_courier_notes || '',
+    hasVariants: Boolean(db.has_variants),
+    variantsTitle: db.variants_title || undefined,
+    variants: Array.isArray(db.variants) ? db.variants : undefined,
   };
 }
 
@@ -113,7 +117,7 @@ export async function fetchActiveProducts(): Promise<Product[]> {
     // 2. Obtener productos activos (excluyendo notas internas y costes para el cliente)
     const { data, error } = await supabase
       .from('products')
-      .select('id, category_id, name, slug, description, image, price, active, stock_mode, stock_quantity, min_stock, created_at, updated_at')
+      .select('id, category_id, name, slug, description, image, images, price, active, stock_mode, stock_quantity, min_stock, has_variants, variants_title, variants, created_at, updated_at')
       .eq('active', true);
 
     if (error || !data || data.length === 0) {
@@ -144,7 +148,7 @@ export async function fetchProductById(idOrSlug: string): Promise<Product | null
 
     let query = supabase
       .from('products')
-      .select('id, category_id, name, slug, description, image, price, active, stock_mode, stock_quantity, min_stock, created_at, updated_at')
+      .select('id, category_id, name, slug, description, image, images, price, active, stock_mode, stock_quantity, min_stock, has_variants, variants_title, variants, created_at, updated_at')
       .eq('active', true);
 
     if (isUuid) {
@@ -376,13 +380,28 @@ export async function adminCreateProduct(prod: {
   min_stock?: number;
   internal_courier_notes?: string;
   suggested_purchase_locations?: string;
+  has_variants?: boolean;
+  variants_title?: string | null;
+  variants?: ProductVariant[] | null;
 }): Promise<{ success: boolean; error: string | null }> {
   try {
     const { error } = await supabase
       .from('products')
       .insert([prod]);
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      if (
+        error.message?.includes('has_variants') ||
+        error.message?.includes('variants_title') ||
+        error.message?.includes('variants')
+      ) {
+        const { has_variants: _hv, variants_title: _vt, variants: _v, ...safeProd } = prod as any;
+        const retry = await supabase.from('products').insert([safeProd]);
+        if (!retry.error) return { success: true, error: null };
+        return { success: false, error: retry.error.message };
+      }
+      return { success: false, error: error.message };
+    }
     return { success: true, error: null };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Error al crear producto' };
@@ -399,7 +418,22 @@ export async function adminUpdateProduct(
       .update({ ...prod, updated_at: new Date().toISOString() })
       .eq('id', id);
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      if (
+        error.message?.includes('has_variants') ||
+        error.message?.includes('variants_title') ||
+        error.message?.includes('variants')
+      ) {
+        const { has_variants: _hv, variants_title: _vt, variants: _v, ...safeProd } = prod as any;
+        const retry = await supabase
+          .from('products')
+          .update({ ...safeProd, updated_at: new Date().toISOString() })
+          .eq('id', id);
+        if (!retry.error) return { success: true, error: null };
+        return { success: false, error: retry.error.message };
+      }
+      return { success: false, error: error.message };
+    }
     return { success: true, error: null };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Error al actualizar producto' };

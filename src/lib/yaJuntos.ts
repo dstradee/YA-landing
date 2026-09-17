@@ -16,6 +16,7 @@ import { round2 } from './pricing';
 import { products } from '../data/products';
 
 const LOCAL_STORAGE_JUNTOS_KEY = 'ya_juntos_groups_v1';
+export const ACTIVE_YA_JUNTOS_CODE_KEY = 'ya_active_juntos_code_v1';
 
 // Helper local mock storage
 function getLocalGroups(): Record<string, YaJuntosGroupWithDetails> {
@@ -38,6 +39,80 @@ function saveLocalGroup(group: YaJuntosGroupWithDetails) {
   }
 }
 
+// Helpers para gestionar el código de grupo activo en localStorage
+export function getStoredActiveJuntosCode(): string | null {
+  try {
+    const code = localStorage.getItem(ACTIVE_YA_JUNTOS_CODE_KEY);
+    return code && code.trim() ? code.trim().toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredActiveJuntosCode(code: string | null): void {
+  try {
+    if (code && code.trim()) {
+      localStorage.setItem(ACTIVE_YA_JUNTOS_CODE_KEY, code.trim().toUpperCase());
+    } else {
+      localStorage.removeItem(ACTIVE_YA_JUNTOS_CODE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// ==============================================================================
+// 0. BUSCAR GRUPO ACTIVO DEL USUARIO (DB O LOCAL)
+// ==============================================================================
+
+export async function fetchUserActiveGroup(
+  userId?: string | null
+): Promise<{ group: YaJuntosGroupWithDetails | null; error: string | null }> {
+  // 1. Primero intentar consultar con Supabase si está disponible y hay usuario
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase.rpc('get_user_active_ya_juntos_group');
+      if (!error && data?.has_active_group && data?.group?.code) {
+        const fullGroup = await fetchYaJuntosGroupByCode(data.group.code, userId || undefined);
+        if (fullGroup.group && ['open', 'payment_pending'].includes(fullGroup.group.status)) {
+          setStoredActiveJuntosCode(fullGroup.group.code);
+          return { group: fullGroup.group, error: null };
+        }
+      }
+    } catch {
+      // Fallback a almacenamiento local / código guardado
+    }
+  }
+
+  // 2. Comprobar si hay un código guardado en localStorage
+  const storedCode = getStoredActiveJuntosCode();
+  if (storedCode) {
+    const fullGroup = await fetchYaJuntosGroupByCode(storedCode, userId || undefined);
+    if (fullGroup.group && ['open', 'payment_pending'].includes(fullGroup.group.status)) {
+      return { group: fullGroup.group, error: null };
+    } else {
+      // Grupo no válido, cerrado o no encontrado -> limpiar clave
+      setStoredActiveJuntosCode(null);
+    }
+  }
+
+  // 3. Si no hay Supabase o no encontró, escanear mock local
+  if (!isSupabaseConfigured && userId) {
+    const all = getLocalGroups();
+    const activeOne = Object.values(all).find(
+      (g) =>
+        ['open', 'payment_pending'].includes(g.status) &&
+        g.participants.some((p) => p.user_id === userId && p.status === 'active')
+    );
+    if (activeOne) {
+      setStoredActiveJuntosCode(activeOne.code);
+      return { group: activeOne, error: null };
+    }
+  }
+
+  return { group: null, error: null };
+}
+
 // ==============================================================================
 // 1. CREAR GRUPO COMPARTIDO
 // ==============================================================================
@@ -46,18 +121,35 @@ export async function createYaJuntosGroup(params: {
   title?: string;
   paymentMode?: YaJuntosPaymentMode;
   user?: { id: string; name?: string; email?: string } | null;
-}): Promise<{ success: boolean; group?: YaJuntosGroupWithDetails; error?: string }> {
+}): Promise<{ success: boolean; group?: YaJuntosGroupWithDetails; error?: string; existingCode?: string }> {
   const title = params.title?.trim() || 'Pedido en grupo YA';
   const paymentMode = params.paymentMode || 'split_by_items';
+  const userId = params.user?.id || 'mock-user-1';
 
   if (!isSupabaseConfigured) {
+    // Validación de grupo único activo en mock local
+    const all = getLocalGroups();
+    const existingActive = Object.values(all).find(
+      (g) =>
+        ['open', 'payment_pending'].includes(g.status) &&
+        g.participants.some((p) => p.user_id === userId && p.status === 'active')
+    );
+
+    if (existingActive) {
+      setStoredActiveJuntosCode(existingActive.code);
+      return {
+        success: false,
+        error: `Ya tienes un grupo activo (${existingActive.code}). Debes completarlo o salir antes de crear uno nuevo.`,
+        existingCode: existingActive.code,
+      };
+    }
+
     const randomChars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let code = '';
     for (let i = 0; i < 6; i++) {
       code += randomChars.charAt(Math.floor(Math.random() * randomChars.length));
     }
 
-    const userId = params.user?.id || 'mock-user-1';
     const userName = params.user?.name || 'Organizador';
 
     const newGroup: YaJuntosGroupWithDetails = {
@@ -107,6 +199,7 @@ export async function createYaJuntosGroup(params: {
     };
 
     saveLocalGroup(newGroup);
+    setStoredActiveJuntosCode(newGroup.code);
     return { success: true, group: newGroup };
   }
 
@@ -121,10 +214,17 @@ export async function createYaJuntosGroup(params: {
     }
 
     if (!data?.success) {
-      return { success: false, error: 'No se pudo crear el grupo compartido.' };
+      return {
+        success: false,
+        error: data?.error || 'No se pudo crear el grupo compartido.',
+        existingCode: data?.existing_code,
+      };
     }
 
     const fetched = await fetchYaJuntosGroupByCode(data.code, params.user?.id);
+    if (fetched.group) {
+      setStoredActiveJuntosCode(fetched.group.code);
+    }
     return { success: true, group: fetched.group || undefined };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado al crear el grupo.';
@@ -271,6 +371,9 @@ export async function joinYaJuntosGroup(params: {
     }
 
     const fetched = await fetchYaJuntosGroupByCode(cleanCode, params.user?.id);
+    if (fetched.group) {
+      setStoredActiveJuntosCode(fetched.group.code);
+    }
     return { success: true, group: fetched.group || undefined };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado al unirte al grupo.';
@@ -286,21 +389,49 @@ export async function leaveYaJuntosGroup(
   groupId: string,
   code: string,
   userId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; groupClosed?: boolean; error?: string }> {
+  // Limpiar el código activo si el usuario sale de su grupo activo
+  const stored = getStoredActiveJuntosCode();
+  if (stored && stored.toUpperCase() === code.toUpperCase()) {
+    setStoredActiveJuntosCode(null);
+  }
+
   if (!isSupabaseConfigured) {
     const all = getLocalGroups();
     const group = all[code];
     if (group) {
-      group.participants = group.participants.filter((p) => p.user_id !== userId);
+      // 1. Eliminar SOLO los productos del usuario que sale
       group.items = group.items.filter((i) => i.added_by_user_id !== userId);
+
+      // 2. Eliminar al participante
+      const wasCreator = group.creator_id === userId || group.participants.find((p) => p.user_id === userId)?.role === 'creator';
+      group.participants = group.participants.filter((p) => p.user_id !== userId);
+
+      // 3. Si no quedan participantes, cancelar/cerrar grupo
+      if (group.participants.length === 0) {
+        group.status = 'cancelled';
+        saveLocalGroup(group);
+        return { success: true, groupClosed: true };
+      }
+
+      // 4. Si era creador y quedan participantes, transferir rol de creador al primer participante activo
+      if (wasCreator && group.participants.length > 0) {
+        const nextCreator = group.participants[0];
+        nextCreator.role = 'creator';
+        group.creator_id = nextCreator.user_id;
+        if (group.payment_mode === 'single_payer') {
+          group.single_payer_user_id = nextCreator.user_id;
+        }
+      }
+
       recalculateLocalGroup(group);
       saveLocalGroup(group);
     }
-    return { success: true };
+    return { success: true, groupClosed: false };
   }
 
   try {
-    const { error } = await supabase.rpc('leave_ya_juntos_group', {
+    const { data, error } = await supabase.rpc('leave_ya_juntos_group', {
       p_group_id: groupId,
     });
 
@@ -308,7 +439,10 @@ export async function leaveYaJuntosGroup(
       return { success: false, error: error.message };
     }
 
-    return { success: true };
+    return {
+      success: true,
+      groupClosed: Boolean(data?.group_closed),
+    };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error al abandonar el grupo.';
     return { success: false, error: msg };
@@ -327,6 +461,10 @@ export async function addItemToYaJuntos(params: {
   isPack?: boolean;
   packId?: string;
   selections?: CartPackSelection[];
+  variantId?: string | null;
+  variantName?: string | null;
+  variantPrice?: number | null;
+  variantImage?: string | null;
   user?: { id: string; name?: string } | null;
 }): Promise<{ success: boolean; error?: string }> {
   const qty = Math.max(1, params.quantity || 1);
@@ -341,15 +479,20 @@ export async function addItemToYaJuntos(params: {
     }
 
     const prod = products.find((p) => p.id === params.productId || p.slug === params.productId);
-    const unitPrice = prod ? prod.price : 2.50;
+    const unitPrice = params.variantPrice !== undefined && params.variantPrice !== null
+      ? params.variantPrice
+      : (prod ? prod.price : 2.50);
     const lineSubtotal = round2(unitPrice * qty);
 
     const userId = params.user?.id || group.participants[0]?.user_id || 'mock-user-1';
     const userName = params.user?.name || group.participants.find((p) => p.user_id === userId)?.display_name || 'Participante';
 
-    // Check if user already has this product in group
+    // Check if user already has this product and variant in group
     const existing = group.items.find(
-      (i) => i.product_id === params.productId && i.added_by_user_id === userId && !params.isPack
+      (i) => i.product_id === params.productId &&
+             i.added_by_user_id === userId &&
+             !params.isPack &&
+             ((!i.variant_id && !params.variantId) || i.variant_id === params.variantId)
     );
 
     if (existing) {
@@ -365,11 +508,13 @@ export async function addItemToYaJuntos(params: {
         is_pack: Boolean(params.isPack),
         pack_id: params.packId || null,
         selections: params.selections || [],
+        variant_id: params.variantId || null,
+        variant_name: params.variantName || null,
         unit_price: unitPrice,
         discounted_unit_price: unitPrice,
         line_subtotal: lineSubtotal,
         product_name: prod?.name || 'Producto YA',
-        product_image: prod?.image || '🛒',
+        product_image: params.variantImage || prod?.image || '🛒',
         added_by_name: userName,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -389,6 +534,8 @@ export async function addItemToYaJuntos(params: {
       p_is_pack: Boolean(params.isPack),
       p_pack_id: params.packId || null,
       p_selections: params.selections || [],
+      p_variant_id: params.variantId || null,
+      p_variant_name: params.variantName || null,
     });
 
     if (error) {

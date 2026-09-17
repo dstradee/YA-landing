@@ -24,6 +24,8 @@ import {
 import { useAuth } from '../lib/auth';
 import { euro } from '../data/products';
 import { ImageGalleryManager } from '../components/admin/ImageGalleryManager';
+import { VariantManager } from '../components/admin/VariantManager';
+import type { ProductVariant } from '../types/app';
 import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 import { AdminLayout } from './admin/AdminLayout';
 import { AdminDashboardPage } from './admin/AdminDashboardPage';
@@ -499,6 +501,9 @@ export function AdminProductsPage() {
   const [stockQuantity, setStockQuantity] = useState('10');
   const [internalCourierNotes, setInternalCourierNotes] = useState('');
   const [suggestedPurchaseLocations, setSuggestedPurchaseLocations] = useState('');
+  const [hasVariants, setHasVariants] = useState(false);
+  const [variantsTitle, setVariantsTitle] = useState('Sabores');
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const loadData = async () => {
@@ -545,6 +550,9 @@ export function AdminProductsPage() {
     setStockQuantity('10');
     setInternalCourierNotes('');
     setSuggestedPurchaseLocations('Comercio o gasolinera local en Jerez');
+    setHasVariants(false);
+    setVariantsTitle('Sabores');
+    setVariants([]);
     setIsFormOpen(true);
   };
 
@@ -566,6 +574,9 @@ export function AdminProductsPage() {
     setStockQuantity(String(prod.stock_quantity ?? 0));
     setInternalCourierNotes(prod.internal_courier_notes || '');
     setSuggestedPurchaseLocations(prod.suggested_purchase_locations || '');
+    setHasVariants(Boolean((prod as any).has_variants));
+    setVariantsTitle((prod as any).variants_title || 'Sabores');
+    setVariants(Array.isArray((prod as any).variants) ? (prod as any).variants : []);
     setIsFormOpen(true);
   };
 
@@ -602,6 +613,9 @@ export function AdminProductsPage() {
       stock_quantity: parseInt(stockQuantity, 10) || 0,
       internal_courier_notes: internalCourierNotes,
       suggested_purchase_locations: suggestedPurchaseLocations,
+      has_variants: hasVariants,
+      variants_title: hasVariants ? (variantsTitle.trim() || 'Opciones') : null,
+      variants: hasVariants ? variants : null,
     };
 
     if (editingProd) {
@@ -749,7 +763,14 @@ export function AdminProductsPage() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <p className="font-black text-white uppercase tracking-tight">{prod.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-black text-white uppercase tracking-tight">{prod.name}</p>
+                        {prod.has_variants && (
+                          <span className="text-[9px] bg-ya-lime text-ya-black font-black px-1.5 py-0.5 uppercase tracking-wider">
+                            {prod.variants?.length || 0} {prod.variants_title || 'Variantes'}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs font-mono text-ya-lime">{prod.slug}</p>
                       {prod.internal_courier_notes && (
                         <p className="text-[10px] text-gray-400 italic mt-0.5 max-w-xs truncate">
@@ -970,6 +991,18 @@ export function AdminProductsPage() {
                   className="w-full bg-ya-gray border-2 border-ya-gray focus:border-ya-lime p-3 text-white outline-none"
                 />
               </div>
+
+              {/* Gestor de Variantes / Subproductos */}
+              <VariantManager
+                hasVariants={hasVariants}
+                onHasVariantsChange={setHasVariants}
+                variantsTitle={variantsTitle}
+                onVariantsTitleChange={setVariantsTitle}
+                variants={variants}
+                onVariantsChange={setVariants}
+                parentMainImage={images.length > 0 ? images[0] : (image.trim() || undefined)}
+                defaultPrice={price}
+              />
 
               {/* CAMPOS INTERNOS RESTRINGIDOS */}
               <div className="p-3 border-2 border-ya-gray bg-ya-gray/30 space-y-3">

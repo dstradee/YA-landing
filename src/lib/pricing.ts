@@ -269,12 +269,21 @@ export function calculateCartPricing(params: {
         packSelectionsSummary: selectionsSummary,
       });
     } else {
-      // Cálculo de línea de Producto individual
+      // Cálculo de línea de Producto individual (con soporte de variantes)
       const product = products.find(
         (p) => p.id === line.productId || ('slug' in p && p.slug === line.productId)
       );
 
-      const basePrice = product ? Number(product.price) : Number(line.unitPrice || 0);
+      // Si la línea tiene variante seleccionada, buscarla o usar sus datos de línea
+      const matchedVariant = product?.variants?.find((v) => v.id === line.variantId);
+      const basePrice = line.variantPrice !== undefined
+        ? Number(line.variantPrice)
+        : matchedVariant
+        ? Number(matchedVariant.price)
+        : product
+        ? Number(product.price)
+        : Number(line.unitPrice || 0);
+
       const categoryId =
         product && 'category_id' in product
           ? (product as DbProduct).category_id
@@ -298,11 +307,19 @@ export function calculateCartPricing(params: {
       subtotal += lineSub;
       totalLineDiscounts += round2(unitDiscount * quantity);
 
+      const displayName = line.variantName
+        ? `${product?.name || 'Producto'} (${line.variantName})`
+        : matchedVariant
+        ? `${product?.name || 'Producto'} (${matchedVariant.name})`
+        : product?.name || 'Producto';
+
+      const displayImage = line.variantImage || matchedVariant?.image || product?.image || '🛒';
+
       lineDetails.push({
         lineId: line.lineId || line.productId,
         isPack: false,
-        name: product?.name || 'Producto',
-        image: product?.image || '🛒',
+        name: displayName,
+        image: displayImage,
         quantity,
         originalUnitPrice: basePrice,
         discountedUnitPrice: unitPrice,

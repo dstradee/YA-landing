@@ -7,6 +7,7 @@ import { CartItem } from './CartItem';
 import { loadOrders, useCart } from './CartContext';
 import { useCatalog } from './CatalogContext';
 import { useAuth } from '../lib/auth';
+import { useYaJuntos } from './YaJuntosContext';
 import {
   fetchUserAddresses,
   createUserAddress,
@@ -42,6 +43,35 @@ import type { ActiveDropPayload } from '../types/drops';
 
 export function CartPage() {
   const { lines, clearCart, pricing, hasOutOfStockItems, activeSubscription } = useCart();
+  const { activeGroup, hasActiveGroup, activeCode, addItemToActiveGroup } = useYaJuntos();
+  const [addingToJuntos, setAddingToJuntos] = useState(false);
+  const [juntosNotice, setJuntosNotice] = useState<string | null>(null);
+
+  // Transferir productos del carrito personal al grupo compartido activo
+  const handleTransferToGroup = async () => {
+    if (!hasActiveGroup || !activeCode || lines.length === 0) return;
+    try {
+      setAddingToJuntos(true);
+      setJuntosNotice(null);
+      let addedCount = 0;
+      for (const line of lines) {
+        const res = await addItemToActiveGroup(
+          line.productId,
+          line.quantity,
+          line.isPack,
+          line.packId,
+          line.packSelections
+        );
+        if (res.success) addedCount++;
+      }
+      clearCart();
+      setJuntosNotice(`¡${addedCount} producto(s) transferidos a tu grupo YA Juntos #${activeCode}!`);
+    } catch {
+      setJuntosNotice('Error al transferir productos al grupo.');
+    } finally {
+      setAddingToJuntos(false);
+    }
+  };
 
   return (
     <>
@@ -59,6 +89,59 @@ export function CartPage() {
             </button>
           )}
         </div>
+
+        {/* NOTIFICACIÓN O BANNER DE GRUPO YA JUNTOS ACTIVO */}
+        {hasActiveGroup && activeCode && (
+          <div className="mt-4 border-2 border-ya-lime bg-zinc-950 p-4 shadow-[4px_4px_0px_0px_#B6FF00]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Users className="h-5 w-5 text-ya-lime shrink-0" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-ya-lime px-1.5 py-0.2 font-mono text-[9px] font-black text-ya-black uppercase">
+                      GRUPO ACTIVO
+                    </span>
+                    <span className="font-mono text-xs font-black text-ya-lime uppercase">
+                      #{activeCode}
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-sm text-white mt-0.5">
+                    {activeGroup?.title || 'Tu pedido compartido de YA Juntos'}
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Puedes añadir productos directamente al carrito del grupo o transferir lo que tienes aquí.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to={`/app/juntos/${activeCode}`}
+                className="shrink-0 border border-ya-lime bg-ya-lime/10 px-3 py-1.5 font-mono text-[11px] font-black text-ya-lime hover:bg-ya-lime hover:text-ya-black transition"
+              >
+                VER GRUPO →
+              </Link>
+            </div>
+
+            {lines.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-zinc-300">
+                  ¿Quieres meter los {lines.length} productos de este carrito a tu grupo?
+                </span>
+                <button
+                  type="button"
+                  onClick={handleTransferToGroup}
+                  disabled={addingToJuntos}
+                  className="border border-ya-lime bg-ya-lime px-3 py-1 font-mono text-[11px] font-black text-ya-black hover:bg-white cursor-pointer disabled:opacity-50"
+                >
+                  {addingToJuntos ? 'TRANSFIRIENDO...' : 'METER AL GRUPO'}
+                </button>
+              </div>
+            )}
+
+            {juntosNotice && (
+              <p className="mt-2 text-xs font-bold text-ya-lime">{juntosNotice}</p>
+            )}
+          </div>
+        )}
 
         {!lines.length ? (
           <div className="mt-8">

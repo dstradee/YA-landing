@@ -536,21 +536,65 @@ export function ProductPage() {
     .filter((p) => p.category === product.category && p.id !== product.id && p.active)
     .slice(0, 4);
 
-  const quantity = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
+  // Variantes del producto
+  const hasVariants = Boolean(product.hasVariants && product.variants && product.variants.length > 0);
+  const variantsList = product.variants || [];
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(() => {
+    if (!hasVariants) return null;
+    const firstActive = variantsList.find((v) => v.active && v.stock > 0) || variantsList.find((v) => v.active) || variantsList[0];
+    return firstActive?.id || null;
+  });
 
+  const selectedVariant = variantsList.find((v) => v.id === selectedVariantId) || null;
+
+  // Si tiene variante seleccionada, el precio y stock provienen de ella
+  const currentPrice = selectedVariant ? Number(selectedVariant.price) : product.price;
+  const isVariantOutOfStock = selectedVariant ? (!selectedVariant.active || selectedVariant.stock <= 0) : false;
+  const isProductOutOfStock = !product.inStock || (product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) <= 0);
+  const isEffectiveOutOfStock = hasVariants ? isVariantOutOfStock : isProductOutOfStock;
+
+  // Galería e imagen activa
   const gallery = useMemo(() => {
-    if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
-      return product.images;
+    const list: string[] = [];
+    if (selectedVariant?.image) {
+      list.push(selectedVariant.image);
     }
-    return product?.image ? [product.image] : [];
-  }, [product]);
+    if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
+      product.images.forEach((img) => {
+        if (!list.includes(img)) list.push(img);
+      });
+    } else if (product?.image && !list.includes(product.image)) {
+      list.push(product.image);
+    }
+    return list;
+  }, [product, selectedVariant]);
 
   const [activeImageIdx, setActiveImageIdx] = useState(0);
-  const currentImage = gallery[activeImageIdx] || product?.image || '📦';
+  const currentImage = gallery[activeImageIdx] || selectedVariant?.image || product?.image || '📦';
   const isImageEmoji = !isRealImageUrl(currentImage);
 
+  // Cantidad en carrito según si tiene variantes o no
+  const matchingLine = hasVariants && selectedVariant
+    ? lines.find((line) => line.productId === product.id && line.variantId === selectedVariant.id)
+    : lines.find((line) => line.productId === product.id && !line.variantId);
+
+  const quantity = matchingLine?.quantity ?? 0;
+  const lineKey = matchingLine?.lineId || (hasVariants && selectedVariant ? `prod-${product.id}-var-${selectedVariant.id}` : product.id);
+
   const handleAdd = () => {
-    addToCart(product.id);
+    if (hasVariants && !selectedVariant) {
+      return;
+    }
+    if (hasVariants && selectedVariant) {
+      addToCart(product.id, 1, {
+        variantId: selectedVariant.id,
+        variantName: selectedVariant.name,
+        variantImage: selectedVariant.image || product.image,
+        variantPrice: Number(selectedVariant.price),
+      });
+    } else {
+      addToCart(product.id);
+    }
     setAddedNotice(true);
     setTimeout(() => setAddedNotice(false), 2000);
   };
@@ -635,20 +679,109 @@ export function ProductPage() {
         )}
 
         <p className="font-bold text-ya-lime uppercase tracking-widest text-xs mt-6">
-          {product.inStock ? 'Disponible para entrega inmediata en Jerez' : 'Temporalmente fuera de inventario'}
+          {!isEffectiveOutOfStock ? 'Disponible para entrega inmediata en Jerez' : 'Temporalmente fuera de inventario'}
         </p>
         <h1 className="font-black text-3xl sm:text-5xl tracking-tighter mt-2">{product.name}</h1>
-        <p className="font-black text-3xl mt-4 text-ya-lime">{euro(product.price)}</p>
+        <p className="font-black text-3xl mt-4 text-ya-lime">{euro(currentPrice)}</p>
         <p className="text-gray-300 text-base sm:text-lg mt-4 leading-relaxed">
           {product.description}
         </p>
 
-        {/* Alerta de producto agotado */}
-        {!product.inStock && (
+        {/* Selector de Opciones / Variantes */}
+        {hasVariants && (
+          <div className="mt-8 border-t-2 border-ya-gray pt-6">
+            <div className="flex justify-between items-baseline mb-3">
+              <h2 className="font-black text-sm uppercase tracking-wider text-white">
+                {product.variantsTitle || 'Opciones disponibles'}:
+              </h2>
+              {selectedVariant && (
+                <span className="text-xs font-mono font-bold text-ya-lime">
+                  Seleccionado: {selectedVariant.name}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {variantsList.map((variant) => {
+                const isSelected = variant.id === selectedVariantId;
+                const isVarOut = !variant.active || variant.stock <= 0;
+                const isVarLow = variant.active && variant.stock > 0 && variant.stock <= 5;
+
+                return (
+                  <button
+                    key={variant.id}
+                    id={`variant-btn-${variant.id}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedVariantId(variant.id);
+                      if (variant.image) {
+                        const imgIdx = gallery.indexOf(variant.image);
+                        if (imgIdx !== -1) setActiveImageIdx(imgIdx);
+                      }
+                    }}
+                    className={`p-3 border-2 text-left transition-all relative flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-ya-lime bg-ya-lime/10 shadow-md ring-1 ring-ya-lime'
+                        : isVarOut
+                        ? 'border-zinc-800 bg-zinc-900/40 opacity-50 cursor-pointer hover:border-zinc-700'
+                        : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {variant.image && (
+                        <div className="w-9 h-9 shrink-0 bg-ya-black border border-zinc-700 overflow-hidden">
+                          <img
+                            src={formatImageUrl(variant.image, 80)}
+                            alt={variant.name}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="font-black text-xs sm:text-sm text-white block truncate">
+                          {variant.name}
+                        </span>
+                        <span className="font-black text-xs text-ya-lime font-mono mt-0.5 block">
+                          {euro(variant.price)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between">
+                      {isVarOut ? (
+                        <span className="text-[9px] font-black uppercase text-red-400 bg-red-950/80 px-1.5 py-0.5 border border-red-500/40">
+                          Agotado
+                        </span>
+                      ) : isVarLow ? (
+                        <span className="text-[9px] font-bold text-amber-400">
+                          Quedan {variant.stock} u.
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold text-emerald-400">
+                          En stock
+                        </span>
+                      )}
+
+                      {isSelected && (
+                        <span className="text-ya-lime text-xs font-black">✓</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Alerta de producto o variante agotado */}
+        {isEffectiveOutOfStock && (
           <div className="mt-6 bg-red-950/60 border-2 border-red-500/60 p-4 text-red-200 text-xs sm:text-sm font-bold flex items-center gap-3">
             <span className="text-2xl">⚠️</span>
             <span>
-              Este producto se encuentra <strong>agotado</strong> en nuestro almacén de Jerez. No es posible tramitar pedidos de este artículo hasta su próxima reposición.
+              {hasVariants
+                ? `La opción seleccionada (${selectedVariant?.name || 'variante'}) se encuentra agotada temporalmente.`
+                : 'Este producto se encuentra agotado en nuestro almacén de Jerez. No es posible tramitar pedidos de este artículo hasta su próxima reposición.'}
             </span>
           </div>
         )}
@@ -670,20 +803,20 @@ export function ProductPage() {
               <span className="text-xs font-bold uppercase text-gray-400 px-2">En carrito:</span>
               <QuantitySelector
                 quantity={quantity}
-                max={product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
-                onAdd={() => increaseQuantity(product.id)}
-                onRemove={() => decreaseQuantity(product.id)}
+                max={hasVariants && selectedVariant ? selectedVariant.stock : product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
+                onAdd={() => increaseQuantity(lineKey)}
+                onRemove={() => decreaseQuantity(lineKey)}
               />
             </div>
           )}
 
-          {!product.inStock ? (
+          {isEffectiveOutOfStock ? (
             <button
               id={`sold-out-btn-${product.id}`}
               disabled
               className="flex-1 min-h-12 bg-ya-gray border-2 border-red-500/40 text-red-400 font-black uppercase text-base tracking-wider cursor-not-allowed opacity-80 py-3 px-6"
             >
-              Producto Agotado
+              {hasVariants ? 'Opción Agotada' : 'Producto Agotado'}
             </button>
           ) : (
             <button

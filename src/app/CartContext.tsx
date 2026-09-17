@@ -24,7 +24,16 @@ import { fetchUserActiveSubscription } from '../lib/yaPlus';
 
 type CartApi = {
   lines: CartLine[];
-  addToCart: (id: string, quantity?: number) => void;
+  addToCart: (
+    id: string,
+    quantity?: number,
+    variantOption?: {
+      variantId?: string;
+      variantName?: string;
+      variantImage?: string | null;
+      variantPrice?: number;
+    }
+  ) => void;
   addPackToCart: (pack: PackWithDetails, selections?: CartPackSelection[], quantity?: number) => void;
   removeFromCart: (lineIdOrProductId: string) => void;
   increaseQuantity: (lineIdOrProductId: string) => void;
@@ -156,10 +165,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [lines]);
 
   const api = useMemo<CartApi>(() => {
-    // Añadir producto regular al carrito con validación estricta de stock disponible
-    const addToCart = (id: string, quantity = 1) => {
+    // Añadir producto regular o con variante al carrito con validación estricta de stock disponible
+    const addToCart = (
+      id: string,
+      quantity = 1,
+      variantOption?: {
+        variantId?: string;
+        variantName?: string;
+        variantImage?: string | null;
+        variantPrice?: number;
+      }
+    ) => {
       const prod = products.find((p) => p.id === id || p.slug === id);
-      if (
+
+      // Si se especificó variante, comprobar stock de la variante
+      const matchedVariant = variantOption?.variantId && prod?.variants
+        ? prod.variants.find((v) => v.id === variantOption.variantId)
+        : undefined;
+
+      if (matchedVariant) {
+        if (!matchedVariant.active || matchedVariant.stock <= 0) {
+          return; // Variante agotada
+        }
+      } else if (
         prod &&
         (!prod.inStock ||
           (prod.stockMode === 'in_stock' && (prod.stockQuantity ?? 0) <= 0))
@@ -168,16 +196,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const maxAllowed =
-        prod && prod.stockMode === 'in_stock'
-          ? Math.max(0, prod.stockQuantity ?? 99)
-          : 99;
+      const maxAllowed = matchedVariant
+        ? Math.max(0, matchedVariant.stock)
+        : prod && prod.stockMode === 'in_stock'
+        ? Math.max(0, prod.stockQuantity ?? 99)
+        : 99;
 
       if (maxAllowed <= 0) return;
 
+      const targetVariantId = variantOption?.variantId || undefined;
+      const computedLineId = targetVariantId
+        ? `prod-${prod ? prod.id : id}-var-${targetVariantId}`
+        : `prod-${prod ? prod.id : id}`;
+
       setLines((old) => {
         const existingIdx = old.findIndex(
-          (item) => !item.isPack && (item.productId === id || item.lineId === id || (prod && (item.productId === prod.id || item.productId === prod.slug)))
+          (item) => !item.isPack && (item.lineId === computedLineId || (!targetVariantId && !item.variantId && (item.productId === id || item.lineId === id || (prod && (item.productId === prod.id || item.productId === prod.slug)))))
         );
         if (existingIdx !== -1) {
           const currentQty = old[existingIdx].quantity;
@@ -192,10 +226,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return [
           ...old,
           {
-            lineId: `prod-${prod ? prod.id : id}`,
+            lineId: computedLineId,
             productId: prod ? prod.id : id,
             quantity: Math.min(quantity, maxAllowed),
             isPack: false,
+            variantId: targetVariantId,
+            variantName: variantOption?.variantName || matchedVariant?.name,
+            variantImage: variantOption?.variantImage ?? matchedVariant?.image,
+            variantPrice: variantOption?.variantPrice ?? (matchedVariant ? Number(matchedVariant.price) : undefined),
           },
         ];
       });
@@ -273,7 +311,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
               const prod = products.find(
                 (p) => p.id === item.productId || p.slug === item.productId
               );
-              if (
+              // Si la línea tiene variante, comprobar el stock de la variante
+              const matchedVariant = item.variantId && prod?.variants
+                ? prod.variants.find((v) => v.id === item.variantId)
+                : undefined;
+
+              if (matchedVariant) {
+                if (item.quantity >= matchedVariant.stock) {
+                  return item; // Límite de stock de variante alcanzado
+                }
+              } else if (
                 prod &&
                 prod.stockMode === 'in_stock' &&
                 item.quantity >= (prod.stockQuantity ?? 0)
@@ -317,15 +364,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
       yaPlusBenefits: activeSubscription.has_active_subscription ? activeSubscription.benefits : null,
     });
 
-    // Validación de stock de líneas en el carrito (Fase 5)
+    // Validación de stock de líneas en el carrito (Fase 5 y Variantes)
     const outOfStockLineIds = lines
       .filter((item) => {
         if (item.isPack) return false;
         const prod = products.find(
           (p) => p.id === item.productId || p.slug === item.productId
         );
+        if (!prod) return true;
+
+        if (item.variantId && prod.variants) {
+          const matchedVariant = prod.variants.find((v) => v.id === item.variantId);
+          return (
+            !matchedVariant ||
+            !matchedVariant.active ||
+            matchedVariant.stock < item.quantity
+          );
+        }
+
         return (
-          !prod ||
           !prod.inStock ||
           (prod.stockMode === 'in_stock' && (prod.stockQuantity ?? 0) < item.quantity)
         );

@@ -136,17 +136,35 @@ export function CartItem({ line }: { line: CartLine }) {
     );
   }
 
-  const isImg = isRealImageUrl(product.image);
-  const unitPrice = detail ? detail.discountedUnitPrice : product.price;
-  const originalUnitPrice = detail ? detail.originalUnitPrice : product.price;
+  // Comprobar si el item tiene variante
+  const matchedVariant = line.variantId && product.variants
+    ? product.variants.find((v) => v.id === line.variantId)
+    : undefined;
+
+  const itemImage = line.variantImage || matchedVariant?.image || product.image;
+  const isImg = isRealImageUrl(itemImage);
+  const unitPrice = detail ? detail.discountedUnitPrice : (line.variantPrice ?? (matchedVariant ? matchedVariant.price : product.price));
+  const originalUnitPrice = detail ? detail.originalUnitPrice : (line.variantPrice ?? (matchedVariant ? matchedVariant.price : product.price));
   const hasDiscount = originalUnitPrice > unitPrice;
 
-  const isOut = !product.inStock || (product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) <= 0);
-  const exceedsStock = product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) < line.quantity;
+  // Lógica de stock por variante o por producto
+  const isOut = matchedVariant
+    ? !matchedVariant.active || matchedVariant.stock <= 0
+    : !product.inStock || (product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) <= 0);
+
+  const exceedsStock = matchedVariant
+    ? matchedVariant.stock < line.quantity
+    : product.stockMode === 'in_stock' && (product.stockQuantity ?? 0) < line.quantity;
+
+  const availableStock = matchedVariant
+    ? matchedVariant.stock
+    : product.stockMode === 'in_stock'
+    ? product.stockQuantity
+    : undefined;
 
   return (
     <article
-      id={`cart-item-${product.id}`}
+      id={`cart-item-${lineKey}`}
       className={`flex gap-3 p-3 border-2 transition-colors ${
         isOut || exceedsStock
           ? 'bg-red-950/20 border-red-500/60'
@@ -156,13 +174,13 @@ export function CartItem({ line }: { line: CartLine }) {
       <div className="w-16 h-16 shrink-0 bg-ya-black border border-ya-gray grid place-items-center text-3xl overflow-hidden relative">
         {isImg ? (
           <img
-            src={formatImageUrl(product.image, 150)}
+            src={formatImageUrl(itemImage, 150)}
             alt={product.name}
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <span>{product.image}</span>
+          <span>{itemImage}</span>
         )}
         {isOut && (
           <span className="absolute inset-x-0 bottom-0 bg-red-600 text-white text-[8px] font-black uppercase text-center tracking-wider">
@@ -174,13 +192,23 @@ export function CartItem({ line }: { line: CartLine }) {
       <div className="flex-1 min-w-0">
         <h3 className="font-black truncate text-sm text-white">{product.name}</h3>
 
+        {/* Etiqueta de variante seleccionada */}
+        {(line.variantName || matchedVariant) && (
+          <div className="mt-0.5">
+            <span className="inline-flex items-center gap-1 bg-zinc-800 text-ya-lime border border-zinc-700 text-[10px] font-bold px-1.5 py-0.5">
+              <span>{product.variantsTitle || 'Opción'}:</span>
+              <strong className="text-white">{line.variantName || matchedVariant?.name}</strong>
+            </span>
+          </div>
+        )}
+
         {(isOut || exceedsStock) && (
           <p className="text-[11px] font-bold text-red-400 mt-0.5 flex items-center gap-1">
             <span>⚠️</span>
             <span>
               {isOut
-                ? 'Producto agotado. Quítalo para continuar.'
-                : `Solo quedan ${product.stockQuantity} u. disponibles.`}
+                ? 'Opción agotada. Quítala para continuar.'
+                : `Solo quedan ${availableStock} u. disponibles.`}
             </span>
           </p>
         )}
@@ -202,12 +230,12 @@ export function CartItem({ line }: { line: CartLine }) {
         <div className="flex justify-between items-center mt-2">
           <QuantitySelector
             quantity={line.quantity}
-            max={isOut ? 0 : product.stockMode === 'in_stock' ? product.stockQuantity : undefined}
+            max={isOut ? 0 : availableStock}
             onAdd={() => increaseQuantity(lineKey)}
             onRemove={() => decreaseQuantity(lineKey)}
           />
           <button
-            id={`remove-${product.id}`}
+            id={`remove-${lineKey}`}
             type="button"
             onClick={() => removeFromCart(lineKey)}
             className="text-xs font-black text-gray-400 hover:text-rose-400 uppercase tracking-wider px-2 py-1"

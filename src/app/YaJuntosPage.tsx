@@ -14,9 +14,13 @@ import {
   Sparkles,
   ShoppingBag,
   Info,
+  LogOut,
+  ArrowRight,
+  X,
 } from 'lucide-react';
 import { AppHeader } from './components';
 import { useAuth } from '../lib/auth';
+import { useYaJuntos } from './YaJuntosContext';
 import { products, euro } from '../data/products';
 import {
   createYaJuntosGroup,
@@ -26,17 +30,26 @@ import {
   removeItemFromYaJuntos,
   confirmYaJuntosOrder,
   simulateJuntosLocalPayment,
+  leaveYaJuntosGroup,
 } from '../lib/yaJuntos';
 import type {
   YaJuntosGroupWithDetails,
   YaJuntosPaymentMode,
   Product,
+  ProductVariant,
 } from '../types/app';
 
 export default function YaJuntosPage() {
   const { code: routeCode } = useParams<{ code?: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const {
+    activeGroup: contextActiveGroup,
+    hasActiveGroup,
+    activeCode,
+    refreshActiveGroup,
+    setActiveGroupCode,
+  } = useYaJuntos();
 
   // State for hub (no code)
   const [createTitle, setCreateTitle] = useState('');
@@ -52,9 +65,15 @@ export default function YaJuntosPage() {
   const [groupError, setGroupError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
+  // Exit / Cancel participation state
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leavingGroup, setLeavingGroup] = useState(false);
+
   // Product quick-add picker
   const [productSearch, setProductSearch] = useState('');
   const [addingProduct, setAddingProduct] = useState(false);
+  const [variantProductModal, setVariantProductModal] = useState<Product | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
   // Order confirmation & address modal
   const [confirmingOrder, setConfirmingOrder] = useState(false);
@@ -78,6 +97,7 @@ export default function YaJuntosPage() {
         setGroup(null);
       } else {
         setGroup(res.group);
+        setActiveGroupCode(res.group.code);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al cargar el grupo.';
@@ -85,7 +105,7 @@ export default function YaJuntosPage() {
     } finally {
       setLoadingGroup(false);
     }
-  }, [user?.id]);
+  }, [user?.id, setActiveGroupCode]);
 
   useEffect(() => {
     if (routeCode) {
@@ -110,8 +130,17 @@ export default function YaJuntosPage() {
       });
 
       if (!res.success || !res.group) {
-        setHubError(res.error || 'No se pudo crear el grupo.');
+        if (res.existingCode) {
+          setHubError(`${res.error} Serás redirigido a tu grupo activo.`);
+          setTimeout(() => {
+            navigate(`/app/juntos/${res.existingCode}`);
+          }, 1200);
+        } else {
+          setHubError(res.error || 'No se pudo crear el grupo.');
+        }
       } else {
+        setActiveGroupCode(res.group.code);
+        await refreshActiveGroup();
         navigate(`/app/juntos/${res.group.code}`);
       }
     } catch {
@@ -141,6 +170,8 @@ export default function YaJuntosPage() {
       if (!res.success || !res.group) {
         setHubError(res.error || 'No se pudo unir al grupo.');
       } else {
+        setActiveGroupCode(res.group.code);
+        await refreshActiveGroup();
         navigate(`/app/juntos/${res.group.code}`);
       }
     } catch {
@@ -167,9 +198,41 @@ export default function YaJuntosPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
+  // Salir de YA Juntos (creador o participante)
+  const handleLeaveGroup = async () => {
+    if (!group) return;
+
+    try {
+      setLeavingGroup(true);
+      const currentUserId = user?.id || group.current_user_participant?.user_id || 'mock-user-1';
+      const res = await leaveYaJuntosGroup(group.id, group.code, currentUserId);
+
+      if (!res.success) {
+        setGroupError(res.error || 'No se pudo salir del grupo.');
+      } else {
+        setShowLeaveModal(false);
+        setActiveGroupCode(null);
+        await refreshActiveGroup();
+        navigate('/app/juntos');
+      }
+    } catch {
+      setGroupError('Error al salir del grupo.');
+    } finally {
+      setLeavingGroup(false);
+    }
+  };
+
   // Add product to group
-  const handleAddProduct = async (product: Product) => {
+  const handleAddProduct = async (product: Product, variant?: ProductVariant) => {
     if (!group || group.status !== 'open') return;
+
+    // Si el producto tiene variantes y no se ha especificado variante, abrir modal de selección
+    if (product.hasVariants && product.variants && product.variants.length > 0 && !variant) {
+      setVariantProductModal(product);
+      const firstActive = product.variants.find((v) => v.active && v.stock > 0) || product.variants[0];
+      setSelectedVariantId(firstActive ? firstActive.id : null);
+      return;
+    }
 
     try {
       setAddingProduct(true);
@@ -178,11 +241,18 @@ export default function YaJuntosPage() {
         code: group.code,
         productId: product.id,
         quantity: 1,
+        variantId: variant ? variant.id : null,
+        variantName: variant ? variant.name : null,
+        variantPrice: variant ? variant.price : product.price,
+        variantImage: variant ? (variant.image || product.image) : product.image,
         user: user ? { id: user.id, name: user.email?.split('@')[0] || 'Tú' } : null,
       });
 
       if (res.success) {
+        setVariantProductModal(null);
+        setSelectedVariantId(null);
         await loadGroup(group.code);
+        await refreshActiveGroup();
       }
     } finally {
       setAddingProduct(false);
@@ -339,8 +409,8 @@ export default function YaJuntosPage() {
                 </p>
               </div>
 
-              {/* Share actions */}
-              <div className="flex items-center gap-2">
+              {/* Share actions & Exit Button */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={handleCopyLink}
@@ -357,6 +427,17 @@ export default function YaJuntosPage() {
                   <Share2 className="h-3.5 w-3.5" />
                   WHATSAPP
                 </button>
+                {group.status === 'open' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowLeaveModal(true)}
+                    className="flex items-center gap-1.5 border border-red-500/60 bg-red-950/40 px-3 py-2 font-mono text-xs font-bold text-red-300 hover:border-red-400 hover:bg-red-900/50 cursor-pointer transition"
+                    title="Salir del grupo o cancelar participación"
+                  >
+                    <LogOut className="h-3.5 w-3.5 text-red-400" />
+                    SALIR DEL GRUPO
+                  </button>
+                )}
               </div>
             </div>
 
@@ -541,7 +622,14 @@ export default function YaJuntosPage() {
                           {item.product_image || '🛒'}
                         </div>
                         <div>
-                          <h4 className="font-bold text-white text-sm">{item.product_name}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-white text-sm">{item.product_name}</h4>
+                            {item.variant_name && (
+                              <span className="text-[9px] bg-ya-lime/20 text-ya-lime border border-ya-lime/40 px-1.5 py-0.2 font-mono font-bold uppercase">
+                                {item.variant_name}
+                              </span>
+                            )}
+                          </div>
                           <p className="font-mono text-[11px] text-zinc-400">
                             {item.quantity} x {euro(item.unit_price)} · Añadido por{' '}
                             <span className="text-zinc-200 font-bold">{item.added_by_name}</span>
@@ -637,6 +725,157 @@ export default function YaJuntosPage() {
           )}
         </div>
 
+        {/* MODAL: SELECCIÓN DE VARIANTE */}
+        {variantProductModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md border-4 border-ya-lime bg-zinc-950 p-6 shadow-[8px_8px_0px_0px_#B6FF00]">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] font-mono text-ya-lime font-bold uppercase tracking-wider">
+                    {variantProductModal.variantsTitle || 'ELIGE TU OPCIÓN'}
+                  </span>
+                  <h3 className="text-lg font-black uppercase text-white mt-1">
+                    {variantProductModal.name}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVariantProductModal(null)}
+                  className="text-zinc-400 hover:text-white p-1"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pr-1">
+                {variantProductModal.variants?.map((v) => {
+                  const isSelected = selectedVariantId === v.id;
+                  const isOutOfStock = v.stock <= 0;
+                  const isDisabled = !v.active || isOutOfStock;
+
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => setSelectedVariantId(v.id)}
+                      className={`w-full flex items-center justify-between p-3 border text-left transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'border-ya-lime bg-ya-lime/10'
+                          : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-600'
+                      } ${isDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                          isSelected ? 'border-ya-lime bg-ya-lime' : 'border-zinc-600'
+                        }`}>
+                          {isSelected && <span className="w-1.5 h-1.5 bg-black rounded-full" />}
+                        </div>
+                        <div>
+                          <p className="font-bold text-white text-xs uppercase">{v.name}</p>
+                          {isDisabled && (
+                            <span className="text-[10px] text-red-400 font-mono">
+                              {!v.active ? 'No disponible' : 'Agotado'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-mono text-xs font-black text-ya-lime">
+                        {euro(v.price)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 font-mono text-xs">
+                <button
+                  type="button"
+                  onClick={() => setVariantProductModal(null)}
+                  className="border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-white hover:bg-zinc-700 cursor-pointer"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedVariantId || addingProduct}
+                  onClick={() => {
+                    const sel = variantProductModal.variants?.find((v) => v.id === selectedVariantId);
+                    if (sel) {
+                      handleAddProduct(variantProductModal, sel);
+                    }
+                  }}
+                  className="border-2 border-ya-lime bg-ya-lime px-5 py-2.5 font-black text-ya-black hover:bg-white hover:border-white transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {addingProduct ? 'AÑADIENDO...' : 'AÑADIR AL GRUPO'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: SALIR DE YA JUNTOS / CANCELAR PARTICIPACIÓN */}
+        {showLeaveModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md border-4 border-red-500 bg-zinc-950 p-6 shadow-[8px_8px_0px_0px_#EF4444]">
+              <div className="flex items-center gap-3 text-red-400">
+                <LogOut className="h-6 w-6 shrink-0" />
+                <h3 className="text-lg font-black uppercase text-white">¿SALIR DE YA JUNTOS?</h3>
+              </div>
+
+              <div className="mt-4 space-y-2 text-xs text-zinc-300 font-sans">
+                <p>
+                  Si sales del grupo:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-zinc-400">
+                  <li>Se cancelará tu participación en este pedido conjunto.</li>
+                  <li>Se eliminarán <strong className="text-white">únicamente tus productos</strong> del carrito compartido.</li>
+                  <li>Los productos del resto de participantes se mantendrán intactos.</li>
+                  {group.is_creator && group.participants.length > 1 && (
+                    <li className="text-ya-lime">
+                      El rol de organizador pasará automáticamente al siguiente participante.
+                    </li>
+                  )}
+                  {group.participants.length <= 1 && (
+                    <li className="text-amber-400">
+                      Como eres el único participante, el grupo quedará cerrado.
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3 font-mono text-xs">
+                <button
+                  type="button"
+                  disabled={leavingGroup}
+                  onClick={() => setShowLeaveModal(false)}
+                  className="border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-white hover:bg-zinc-700 cursor-pointer"
+                >
+                  SEGUIR EN EL GRUPO
+                </button>
+                <button
+                  type="button"
+                  disabled={leavingGroup}
+                  onClick={handleLeaveGroup}
+                  className="flex items-center gap-1.5 border-2 border-red-500 bg-red-600 px-4 py-2.5 font-black text-white hover:bg-red-500 disabled:opacity-50 cursor-pointer"
+                >
+                  {leavingGroup ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      SALIENDO...
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="h-3.5 w-3.5" />
+                      CONFIRMAR SALIDA
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* MODAL: SELECT ADDRESS & CONFIRM FOR ORGANIZER */}
         {showAddressModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
@@ -726,6 +965,34 @@ export default function YaJuntosPage() {
       </div>
 
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-8">
+        {/* BANNER DE GRUPO ACTIVO EXISTENTE (PERSISTENCIA TOTAL) */}
+        {hasActiveGroup && activeCode && (
+          <div className="border-3 border-ya-lime bg-zinc-900 p-5 shadow-[6px_6px_0px_0px_#B6FF00]">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <span className="inline-block bg-ya-lime px-2 py-0.5 font-mono text-[10px] font-black text-ya-black uppercase">
+                  GRUPO ACTIVO DETECTADO
+                </span>
+                <h3 className="mt-2 text-lg font-black uppercase text-white">
+                  {contextActiveGroup?.title || `Pedido en grupo #${activeCode}`}
+                </h3>
+                <p className="mt-0.5 text-xs text-zinc-300 font-mono">
+                  Código: <span className="text-ya-lime font-bold">{activeCode}</span> · Ya estás participando en este grupo
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate(`/app/juntos/${activeCode}`)}
+                className="flex items-center justify-center gap-2 border-2 border-ya-lime bg-ya-lime px-5 py-3 font-mono text-xs font-black text-ya-black uppercase transition hover:bg-white hover:border-white cursor-pointer shrink-0"
+              >
+                <span>VOLVER A MI GRUPO</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {hubError && (
           <div className="flex items-center gap-3 border-2 border-red-500 bg-red-950/40 p-4 text-sm text-red-200">
             <AlertCircle className="h-5 w-5 shrink-0 text-red-400" />

@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { CatalogProvider } from './CatalogContext';
 import { CartProvider } from './CartContext';
+import { YaJuntosProvider } from './YaJuntosContext';
 import { AppHome, CategoryPage, ProductPage, SearchPage } from './BrowsePages';
 import { CartPage, CheckoutPage, OrderPage } from './CommercePages';
 import { PayPalReturnPage } from './PayPalReturnPage';
@@ -15,12 +16,14 @@ import { BottomNav } from './components';
 function AppFrame({ children }: { children: ReactNode }) {
   return (
     <CatalogProvider>
-      <CartProvider>
-        <div className="min-h-screen bg-ya-black text-white font-sans selection:bg-ya-lime selection:text-ya-black">
-          {children}
-          <BottomNav />
-        </div>
-      </CartProvider>
+      <YaJuntosProvider>
+        <CartProvider>
+          <div className="min-h-screen bg-ya-black text-white font-sans selection:bg-ya-lime selection:text-ya-black">
+            {children}
+            <BottomNav />
+          </div>
+        </CartProvider>
+      </YaJuntosProvider>
     </CatalogProvider>
   );
 }

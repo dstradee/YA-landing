@@ -6,6 +6,16 @@
 // --- 1. MODELO FRONTEND ACTUAL (MOCK COMPATIBLE) ---
 export type CategorySlug = 'energeticas' | 'bebidas' | 'snacks' | 'dulces' | 'hielo' | 'comida' | 'mas';
 
+export type ProductVariant = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  active: boolean;
+  image?: string | null;
+  sku?: string | null;
+};
+
 export type Product = {
   id: string;
   slug: string;
@@ -22,6 +32,9 @@ export type Product = {
   stockMode?: StockMode;
   stockQuantity?: number;
   minStock?: number;
+  hasVariants?: boolean;
+  variantsTitle?: string;
+  variants?: ProductVariant[];
 };
 
 export type CartPackSelection = {
@@ -47,6 +60,11 @@ export type CartLine = {
   packSelections?: CartPackSelection[];
   packFreeShipping?: boolean;
   packSkipMinOrder?: boolean;
+  // Sistema de Variantes / Subproductos
+  variantId?: string;
+  variantName?: string;
+  variantImage?: string | null;
+  variantPrice?: number;
 };
 
 export type Address = {
@@ -129,6 +147,9 @@ export type DbProduct = {
   min_stock?: number;
   internal_courier_notes: string | null;
   suggested_purchase_locations: string | null;
+  has_variants?: boolean;
+  variants_title?: string | null;
+  variants?: ProductVariant[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -216,6 +237,9 @@ export type DbOrderItem = {
   subtotal: number;
   is_pack?: boolean;
   pack_id?: string | null;
+  variant_id?: string | null;
+  variant_name?: string | null;
+  variant_snapshot?: any;
   discount_applied?: number;
   discount_amount?: number;
   pack_snapshot?: any;
@@ -1070,6 +1094,8 @@ export type DbYaJuntosItem = {
   is_pack: boolean;
   pack_id: string | null;
   selections: CartPackSelection[];
+  variant_id?: string | null;
+  variant_name?: string | null;
   unit_price: number;
   discounted_unit_price: number;
   line_subtotal: number;

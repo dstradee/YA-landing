@@ -18,12 +18,14 @@ import { Link, NavLink } from 'react-router-dom';
 import { euro } from '../data/products';
 import type { OrderStatus, Product } from '../types/app';
 import { useCart } from './CartContext';
+import { useYaJuntos } from './YaJuntosContext';
 import { useCatalog } from './CatalogContext';
 import { NotificationBell } from '../components/notifications/NotificationComponents';
 import { isRealImageUrl, formatImageUrl } from '../lib/cloudinary';
 
 export function AppHeader({ back }: { back?: boolean }) {
   const { count } = useCart();
+  const { hasActiveGroup, activeCode } = useYaJuntos();
   return (
     <header id="app-header" className="sticky top-0 z-30 bg-ya-black border-b-2 border-ya-gray">
       <div className="max-w-5xl mx-auto h-16 px-3 sm:px-4 flex items-center justify-between gap-1.5 sm:gap-3">
@@ -56,12 +58,19 @@ export function AppHeader({ back }: { back?: boolean }) {
             YA+
           </Link>
           <Link
-            to="/app/juntos"
+            to={hasActiveGroup && activeCode ? `/app/juntos/${activeCode}` : '/app/juntos'}
             id="header-ya-juntos-link"
-            className="flex items-center gap-1 border border-zinc-700 sm:border-2 bg-zinc-900 px-2 sm:px-2.5 py-1 sm:py-1.5 font-mono text-[10px] sm:text-[11px] font-bold text-zinc-300 hover:border-white hover:text-white transition shrink-0 whitespace-nowrap"
+            className={`flex items-center gap-1 sm:border-2 px-2 sm:px-2.5 py-1 sm:py-1.5 font-mono text-[10px] sm:text-[11px] transition shrink-0 whitespace-nowrap ${
+              hasActiveGroup
+                ? 'border-2 border-ya-lime bg-ya-lime/20 text-ya-lime font-black'
+                : 'border border-zinc-700 bg-zinc-900 font-bold text-zinc-300 hover:border-white hover:text-white'
+            }`}
           >
             <Users size={12} className="sm:w-3.5 sm:h-3.5" />
-            YA Juntos
+            <span>{hasActiveGroup && activeCode ? `JUNTOS #${activeCode}` : 'YA Juntos'}</span>
+            {hasActiveGroup && (
+              <span className="h-1.5 w-1.5 rounded-full bg-ya-lime animate-pulse ml-0.5" />
+            )}
           </Link>
         </div>
 
@@ -189,6 +198,13 @@ export function ProductCard({ product }: { product: Product }) {
   const category = categories.find((item) => item.slug === product.category);
   const isImg = isRealImageUrl(product.image);
 
+  // Comprobar variantes
+  const hasVariants = Boolean(product.hasVariants && product.variants && product.variants.length > 0);
+  const activeVariants = product.variants?.filter((v) => v.active) || [];
+  const minVariantPrice = activeVariants.length > 0
+    ? Math.min(...activeVariants.map((v) => Number(v.price)))
+    : product.price;
+
   const isLowStock =
     product.inStock &&
     product.stockMode === 'in_stock' &&
@@ -220,6 +236,10 @@ export function ProductCard({ product }: { product: Product }) {
             <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-red-400 bg-ya-black/90 px-2 py-0.5 border border-red-500/50">
               AGOTADO
             </span>
+          ) : hasVariants ? (
+            <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-ya-lime bg-ya-black/90 px-1.5 py-0.5 border border-ya-lime/50">
+              {activeVariants.length} {product.variantsTitle ? product.variantsTitle.toLowerCase() : 'opciones'}
+            </span>
           ) : isLowStock ? (
             <span className="absolute top-2 right-2 text-[9px] font-black uppercase tracking-wider text-amber-400 bg-ya-black/90 px-1.5 py-0.5 border border-amber-500/50">
               Últimas {product.stockQuantity} u.
@@ -236,7 +256,16 @@ export function ProductCard({ product }: { product: Product }) {
         <h3 className="font-black text-base leading-tight mt-1 min-h-10 line-clamp-2 text-white">
           {product.name}
         </h3>
-        <p className="font-black text-lg mt-2 text-ya-white">{euro(product.price)}</p>
+        <p className="font-black text-lg mt-2 text-ya-white">
+          {hasVariants ? (
+            <span>
+              <span className="text-xs text-gray-400 font-normal mr-1">Desde</span>
+              {euro(minVariantPrice)}
+            </span>
+          ) : (
+            euro(product.price)
+          )}
+        </p>
       </Link>
 
       {!product.inStock ? (
@@ -248,6 +277,14 @@ export function ProductCard({ product }: { product: Product }) {
         >
           AGOTADO
         </button>
+      ) : hasVariants ? (
+        <Link
+          id={`choose-option-btn-${product.id}`}
+          to={'/app/producto/' + (product.slug || product.id)}
+          className="m-4 mt-0 w-[calc(100%-2rem)] min-h-11 border-2 border-ya-lime bg-ya-lime/10 text-ya-lime hover:bg-ya-lime hover:text-ya-black font-black uppercase text-xs tracking-wider transition-colors flex items-center justify-center text-center"
+        >
+          Elegir {product.variantsTitle ? product.variantsTitle.toLowerCase() : 'opción'}
+        </Link>
       ) : quantity ? (
         <div className="px-4 pb-4">
           <QuantitySelector

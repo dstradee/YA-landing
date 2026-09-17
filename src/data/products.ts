@@ -17,7 +17,17 @@ const product = (id: string, name: string, slug: string, price: number, category
 
 export const products: Product[] = [
   product('red-bull', 'Red Bull 250 ml', 'red-bull', 2.45, 'energeticas', '⚡', 'El clásico para aguantar el ritmo.'),
-  product('monster', 'Monster Energy 500 ml', 'monster-energy', 3.15, 'energeticas', '🟢', 'Energía grande para noches largas.'),
+  {
+    ...product('monster', 'Monster Energy 500 ml', 'monster-energy', 3.15, 'energeticas', '🟢', 'Energía grande para noches largas.'),
+    hasVariants: true,
+    variantsTitle: 'Sabores',
+    variants: [
+      { id: 'v-monster-original', name: 'Original Clásico', price: 3.15, stock: 12, active: true, image: '🟢' },
+      { id: 'v-monster-mango', name: 'Mango Loco', price: 3.30, stock: 8, active: true, image: '🥭' },
+      { id: 'v-monster-pipeline', name: 'Pipeline Punch', price: 3.30, stock: 5, active: true, image: '🌸' },
+      { id: 'v-monster-white', name: 'Ultra White (Cero Azúcar)', price: 3.15, stock: 0, active: true, image: '⚪' },
+    ],
+  },
   product('cocacola', 'Coca-Cola 2 L', 'coca-cola', 3.20, 'bebidas', '🥤', 'La de siempre, bien fría.'),
   product('cocacolazero', 'Coca-Cola Zero 2 L', 'coca-cola-zero', 3.20, 'bebidas', '◼', 'Todo el sabor, cero azúcar.'),
   product('fanta', 'Fanta Naranja 2 L', 'fanta-naranja', 2.95, 'bebidas', '🍊', 'Naranja y burbujas.'),
