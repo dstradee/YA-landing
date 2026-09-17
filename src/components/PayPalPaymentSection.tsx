@@ -25,8 +25,8 @@ type PayPalPaymentSectionProps = {
   orderId: string;
   orderNumber: string;
   amount: number;
-  selectedMethod: string;
-  onMethodChange: (method: string) => void;
+  selectedMethod?: string;
+  onMethodChange?: (method: string) => void;
   onPaymentSuccess: (details: {
     orderId: string;
     orderNumber: string;
@@ -41,8 +41,8 @@ export function PayPalPaymentSection({
   orderId,
   orderNumber,
   amount,
-  selectedMethod,
-  onMethodChange,
+  selectedMethod = 'Tarjeta',
+  onMethodChange: _onMethodChange,
   onPaymentSuccess,
   onPaymentError,
   onPaymentCancel,
@@ -179,10 +179,10 @@ export function PayPalPaymentSection({
         </div>
         <div className="space-y-1">
           <p className="font-black text-white uppercase tracking-wide">
-            Pasarela Oficial · Stripe & Tarjetas
+            Pasarela Oficial · Tarjeta
           </p>
           <p className="text-gray-300 text-[11px] leading-relaxed">
-            Transacción 100% encriptada y protegida procesada directamente por Stripe.
+            Pago seguro procesado mediante Stripe.
           </p>
           {paypalOrderId && (
             <p className="text-ya-lime text-[10px] font-mono">
@@ -204,45 +204,27 @@ export function PayPalPaymentSection({
         </div>
       </div>
 
-      {/* Selección Simplificada de Método de Pago: Solo PayPal y Tarjeta */}
+      {/* Método de Pago: Solo Tarjeta */}
       <div className="space-y-2">
         <p className="text-xs font-black uppercase tracking-wider text-gray-300">
-          Selecciona tu método de pago:
+          Método de pago:
         </p>
 
-        <div className="grid grid-cols-2 gap-3">
-          {/* 1. Stripe / Pasarela */}
-          <button
-            type="button"
-            id="select-method-paypal-btn"
-            onClick={() => onMethodChange('Stripe')}
-            className={`p-4 border-2 font-black text-xs uppercase tracking-wider text-center transition-colors flex flex-col items-center justify-center gap-1.5 ${
-              !isCard
-                ? 'border-ya-lime bg-ya-lime text-ya-black'
-                : 'border-ya-gray bg-ya-gray text-white hover:border-gray-400'
-            }`}
+        <div className="grid grid-cols-1">
+          <div
+            className="p-3.5 border-2 border-ya-lime bg-ya-lime text-ya-black font-black text-xs uppercase tracking-wider flex items-center justify-between"
           >
-            <span className="font-black text-sm">Stripe</span>
-            <span className="text-[10px] font-normal opacity-80 lowercase">Pago seguro Stripe</span>
-          </button>
-
-          {/* 2. Tarjeta */}
-          <button
-            type="button"
-            id="select-method-card-btn"
-            onClick={() => onMethodChange('Tarjeta')}
-            className={`p-4 border-2 font-black text-xs uppercase tracking-wider text-center transition-colors flex flex-col items-center justify-center gap-1.5 ${
-              isCard
-                ? 'border-ya-lime bg-ya-lime text-ya-black'
-                : 'border-ya-gray bg-ya-gray text-white hover:border-gray-400'
-            }`}
-          >
-            <span className="font-black text-sm flex items-center gap-1.5">
-              <CreditCard size={16} /> Tarjeta
+            <span className="font-black text-sm flex items-center gap-2">
+              <CreditCard size={18} /> Tarjeta
             </span>
-            <span className="text-[10px] font-normal opacity-80 lowercase">Débito o Crédito</span>
-          </button>
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-black/10 px-2 py-0.5">
+              Stripe
+            </span>
+          </div>
         </div>
+        <p className="text-xs text-gray-400 font-medium">
+          Pago seguro procesado mediante Stripe.
+        </p>
       </div>
 
       {/* Alerta de Error con opción de reintento */}
@@ -290,11 +272,7 @@ export function PayPalPaymentSection({
             className="w-full p-4 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-base hover:bg-white transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer"
           >
             <ShieldCheck size={20} />
-            <span>
-              {isCard
-                ? `Pagar con Tarjeta · ${euro(amount)}`
-                : `Pagar con Stripe · ${euro(amount)}`}
-            </span>
+            <span>Pagar con Tarjeta · {euro(amount)}</span>
           </button>
 
           {/* Controles de Simulación Sandbox: Visibles ÚNICAMENTE si isSandbox === true */}

@@ -187,10 +187,27 @@ export async function createOrderViaRpc(input: CreateOrderInput): Promise<Create
       }),
       p_notes: input.notes && input.notes.trim() ? input.notes.trim() : null,
       p_payment_method: paymentMethodType,
-      p_user_awarded_prize_id: input.userAwardedPrizeId || null,
     };
 
-    const { data, error } = await supabase.rpc('create_order', rpcPayload);
+    let rpcResponse = await (async () => {
+      if (input.userAwardedPrizeId) {
+        // Intentar con 5 parámetros si hay un premio de Drops seleccionado
+        const payloadWithPrize = {
+          ...rpcPayload,
+          p_user_awarded_prize_id: input.userAwardedPrizeId,
+        };
+        const resWithPrize = await supabase.rpc('create_order', payloadWithPrize);
+        // Si no existe la firma con 5 parámetros en el schema cache (PGRST202), hacer fallback a la firma real de 4 parámetros
+        if (resWithPrize.error && (resWithPrize.error.code === 'PGRST202' || resWithPrize.error.message?.includes('schema cache'))) {
+          return await supabase.rpc('create_order', rpcPayload);
+        }
+        return resWithPrize;
+      }
+      // Llamada directa a la firma real existente en Supabase (4 parámetros)
+      return await supabase.rpc('create_order', rpcPayload);
+    })();
+
+    const { data, error } = rpcResponse;
 
     if (error) {
       return {

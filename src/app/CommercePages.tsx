@@ -380,7 +380,7 @@ export function CheckoutPage() {
 
   // Estados de checkout
   const [checkoutMode, setCheckoutMode] = useState<'paypal' | 'test_free'>('paypal');
-  const [payment, setPayment] = useState('PayPal');
+  const [payment, setPayment] = useState('Tarjeta');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<{
@@ -766,7 +766,7 @@ export function CheckoutPage() {
             </span>
           </div>
           <p className="text-gray-400 mt-1 font-bold text-sm">
-            Tu pedido está registrado en reserva. Paga ahora con PayPal Sandbox para iniciar la preparación inmediata en Jerez.
+            Tu pedido está registrado en reserva. Paga ahora con Tarjeta para iniciar la preparación inmediata en Jerez.
           </p>
 
           <PayPalPaymentSection
@@ -1094,30 +1094,27 @@ export function CheckoutPage() {
               <legend className="font-black text-xl px-2 text-ya-lime flex items-center gap-2">
                 <CreditCard size={20} /> Método de pago
               </legend>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {['PayPal', 'Tarjeta'].map((method) => (
-                  <label
-                    key={method}
-                    className={
-                      'border-2 p-3 font-black cursor-pointer text-center select-none transition-colors text-xs uppercase ' +
-                      (payment === method
-                        ? 'border-ya-lime bg-ya-lime text-ya-black'
-                        : 'border-ya-gray bg-ya-gray text-white hover:border-gray-500')
-                    }
-                  >
-                    <input
-                      className="sr-only"
-                      type="radio"
-                      name="payment-method"
-                      checked={payment === method}
-                      onChange={() => setPayment(method)}
-                    />
-                    {method}
-                  </label>
-                ))}
+              <div className="mt-2">
+                <label
+                  className="border-2 p-3 font-black cursor-pointer select-none transition-colors text-xs uppercase flex items-center justify-between border-ya-lime bg-ya-lime text-ya-black"
+                >
+                  <input
+                    className="sr-only"
+                    type="radio"
+                    name="payment-method"
+                    checked={true}
+                    readOnly
+                  />
+                  <span className="flex items-center gap-2 text-sm font-black">
+                    <CreditCard size={18} /> Tarjeta
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-black/10 px-2 py-0.5">
+                    Seleccionado
+                  </span>
+                </label>
               </div>
-              <p className="text-xs text-gray-400 mt-3">
-                ⚡ Fase 3C: Pasarela PayPal Sandbox v2. Pagos procesados de forma segura mediante PayPal y Tarjeta.
+              <p className="text-xs text-gray-400 mt-3 font-medium">
+                Pago seguro procesado mediante Stripe.
               </p>
             </fieldset>
           )}
