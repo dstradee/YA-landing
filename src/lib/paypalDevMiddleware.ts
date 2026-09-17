@@ -6,6 +6,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import handleAdminTestOrder from '../../api/admin/create-test-order';
 import handleAdminTestPlayDrop from '../../api/admin/test-play-drop';
+import handleAdminTestTelegram from '../../api/admin/test-telegram';
 import {
   createPayPalOrderOnGateway,
   capturePayPalOrderOnGateway,
@@ -63,6 +64,11 @@ export async function handlePayPalDevRequest(
     // 0a-2. /api/admin/test-play-drop
     if (url === '/api/admin/test-play-drop') {
       return await handleAdminTestPlayDrop(req as any, res as any);
+    }
+
+    // 0a-3. /api/admin/test-telegram
+    if (url === '/api/admin/test-telegram') {
+      return await handleAdminTestTelegram(req as any, res as any);
     }
 
     // 0b. /api/drops/record-entry

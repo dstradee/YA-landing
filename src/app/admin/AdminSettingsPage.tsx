@@ -6,6 +6,11 @@ import {
   MapPin,
   Clock,
   CreditCard,
+  Send,
+  BellRing,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
@@ -14,6 +19,49 @@ export function AdminSettingsPage() {
   const { user, role } = useAuth();
   const [deliveryZones, setDeliveryZones] = useState<{ id: string; name: string; city: string; delivery_fee: number; active: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [testingTg, setTestingTg] = useState(false);
+  const [tgResult, setTgResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  async function handleTestTelegram() {
+    setTestingTg(true);
+    setTgResult(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setTgResult({ type: 'error', message: 'No hay sesión de usuario activa.' });
+        return;
+      }
+
+      const res = await fetch('/api/admin/test-telegram', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setTgResult({
+          type: 'error',
+          message: data.error || 'Error al enviar notificación de prueba a Telegram.',
+        });
+      } else {
+        setTgResult({
+          type: 'success',
+          message: '¡Mensaje "🟢 YA TELEGRAM OK" enviado con éxito a tu chat de Telegram!',
+        });
+      }
+    } catch (err: any) {
+      setTgResult({
+        type: 'error',
+        message: err?.message || 'Error de conexión con el endpoint /api/admin/test-telegram.',
+      });
+    } finally {
+      setTestingTg(false);
+    }
+  }
 
   useEffect(() => {
     async function loadZones() {
@@ -151,6 +199,86 @@ export function AdminSettingsPage() {
             Zona por defecto: <strong>Jerez de la Frontera Centro y Distritos</strong> • Coste: <strong>2,90 €</strong>
           </div>
         )}
+      </div>
+
+      {/* Notificaciones Telegram de Pedidos para Administrador */}
+      <div className="border-4 border-ya-gray bg-ya-black p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-ya-gray pb-3">
+          <div className="flex items-center gap-2">
+            <BellRing size={20} className="text-ya-lime" />
+            <h2 className="text-base font-black uppercase tracking-wider text-white font-sans">
+              Notificaciones Telegram de Pedidos (Admin)
+            </h2>
+          </div>
+          <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-zinc-900 border border-ya-lime/40 text-ya-lime self-start sm:self-auto">
+            CANAL PRIVADO
+          </span>
+        </div>
+
+        <p className="text-xs text-gray-300 leading-relaxed font-sans">
+          Cada vez que un cliente realiza un <strong>pedido real y completa el pago</strong>, el servidor de YA envía
+          automáticamente un aviso inmediato a tu cuenta de Telegram con los datos del pedido y el botón directo para
+          abrirlo en este panel.
+        </p>
+
+        <div className="p-4 border-2 border-zinc-800 bg-zinc-950 space-y-3">
+          <div className="text-xs space-y-1.5">
+            <div className="flex justify-between py-1 border-b border-zinc-900">
+              <span className="text-gray-400">Canal de entrega:</span>
+              <span className="text-white font-bold">Telegram Bot API (sendMessage)</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-zinc-900">
+              <span className="text-gray-400">Ejecución:</span>
+              <span className="text-emerald-400 font-bold">100% Server-side (Vercel Serverless)</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-gray-400">Seguridad:</span>
+              <span className="text-zinc-300 font-mono text-[11px]">Token protegido en servidor · Sin exposición pública</span>
+            </div>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <button
+              type="button"
+              onClick={handleTestTelegram}
+              disabled={testingTg}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-ya-lime text-ya-black font-black uppercase tracking-wider text-xs border-2 border-ya-lime hover:bg-white hover:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {testingTg ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Enviando prueba...</span>
+                </>
+              ) : (
+                <>
+                  <Send size={16} />
+                  <span>Probar Notificación Telegram</span>
+                </>
+              )}
+            </button>
+
+            <span className="text-[11px] text-gray-400">
+              Enviará el mensaje de verificación <em>"🟢 YA TELEGRAM OK"</em> a tu chat.
+            </span>
+          </div>
+
+          {tgResult && (
+            <div
+              className={`p-3 border-2 flex items-start gap-2 text-xs ${
+                tgResult.type === 'success'
+                  ? 'border-emerald-500/50 bg-emerald-950/40 text-emerald-300'
+                  : 'border-red-500/50 bg-red-950/40 text-red-300'
+              }`}
+            >
+              {tgResult.type === 'success' ? (
+                <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              )}
+              <span className="font-sans font-medium">{tgResult.message}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Placeholders for Future Modules */}

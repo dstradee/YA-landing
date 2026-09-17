@@ -5,6 +5,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { sendTelegramOrderNotification } from './telegram.js';
 
 let stripeClient: Stripe | null = null;
 
@@ -442,7 +443,7 @@ export async function confirmOrderInDatabase(params: {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.orderId);
   let orderQuery = supabase
     .from('orders')
-    .select('id, user_id, order_number, total, status, payment_status');
+    .select('id, user_id, order_number, total, status, payment_status, is_test, delivery_address_snapshot');
 
   if (isUuid) {
     orderQuery = orderQuery.eq('id', params.orderId);
@@ -543,6 +544,22 @@ export async function confirmOrderInDatabase(params: {
     });
   } catch {
     // Si la tabla no existe o falla por RLS, no impedir la confirmación
+  }
+
+  // 5. Notificación Telegram al Administrador para pedidos reales pagados
+  // Idempotente y no bloqueante: Si Telegram falla o no está configurado, el pedido sigue adelante
+  try {
+    await sendTelegramOrderNotification({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      total: Number(order.total) || params.amount,
+      paymentMethod: params.method || 'card',
+      userId: order.user_id,
+      deliveryAddressSnapshot: order.delivery_address_snapshot,
+      isTest: Boolean(order.is_test),
+    });
+  } catch (tgErr: any) {
+    console.error('⚠️ [Telegram] Error no bloqueante al notificar pedido a Telegram:', tgErr?.message || tgErr);
   }
 
   return {
