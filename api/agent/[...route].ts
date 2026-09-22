@@ -15,8 +15,15 @@ import {
 
 function parts(req: VercelRequest): string[] {
   const value = req.query?.route;
-  if (Array.isArray(value)) return value.filter(Boolean);
+  if (Array.isArray(value) && value.length > 0) return value.filter(Boolean);
   if (typeof value === 'string' && value) return value.split('/').filter(Boolean);
+
+  if (req.url) {
+    const pathname = req.url.split('?')[0] || '';
+    const normalized = pathname.replace(/^\/?api\/agent\/?/i, '');
+    return normalized.split('/').filter(Boolean);
+  }
+
   return [];
 }
 
