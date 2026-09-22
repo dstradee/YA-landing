@@ -1,6 +1,6 @@
 import type { ProductVariant, StockMode } from '../../src/types/app.ts';
 import { getSupabaseServerClient } from '../_lib/paypalServer.ts';
-import { getOptimizedImageUrl, uploadImageToCloudinary } from '../../src/lib/cloudinary.ts';
+import { getOptimizedImageUrl, uploadImageToCloudinary } from './_cloudinary.ts';
 
 const STOCK_MODES: StockMode[] = ['in_stock', 'out_of_stock', 'on_demand'];
 

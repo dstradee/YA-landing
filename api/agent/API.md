@@ -351,6 +351,7 @@ Solo se crean archivos nuevos dentro de api/agent:
 
 - api/agent/_auth.ts
 - api/agent/_catalog.ts
+- api/agent/_cloudinary.ts
 - api/agent/[...route].ts
 - api/agent/API.md
 
