@@ -13,15 +13,30 @@ import {
   uploadMedia
 } from './_catalog.ts';
 
+function safeDecode(val: string): string {
+  try {
+    return decodeURIComponent(val);
+  } catch {
+    return val;
+  }
+}
+
 function parts(req: VercelRequest): string[] {
   const value = req.query?.route;
-  if (Array.isArray(value) && value.length > 0) return value.filter(Boolean);
-  if (typeof value === 'string' && value) return value.split('/').filter(Boolean);
+  if (value) {
+    const rawSegments = Array.isArray(value) ? value : [value];
+    const segments = rawSegments
+      .flatMap((item) => (typeof item === 'string' ? safeDecode(item).split('/') : []))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (segments.length > 0) return segments;
+  }
 
   if (req.url) {
     const pathname = req.url.split('?')[0] || '';
-    const normalized = pathname.replace(/^\/?api\/agent\/?/i, '');
-    return normalized.split('/').filter(Boolean);
+    const decoded = safeDecode(pathname);
+    const normalized = decoded.replace(/^\/?api\/agent\/?/i, '');
+    return normalized.split('/').map((s) => s.trim()).filter(Boolean);
   }
 
   return [];
