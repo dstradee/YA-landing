@@ -77,6 +77,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/agent/:path*",
+      "destination": "/api/agent/[...route]"
+    },
+    {
       "source": "/((?!api/|sitemap\\.xml|robots\\.txt|favicon|apple-touch-icon|logo\\.png|site\\.webmanifest|.*\\.(?:ico|png|svg|webp|webmanifest|xml|txt|json)).*)",
       "destination": "/index.html"
     }
