@@ -349,8 +349,8 @@ Esto es intencionado: el Agent API no puede eliminar productos ni física ni ló
 
 Solo se crean archivos nuevos dentro de api/agent:
 
-- api/agent/auth.ts
-- api/agent/catalog.ts
+- api/agent/_auth.ts
+- api/agent/_catalog.ts
 - api/agent/[...route].ts
 - api/agent/API.md
 

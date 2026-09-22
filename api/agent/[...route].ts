@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '../_lib/types.ts';
-import { requireAgentAuth } from './auth.ts';
+import { requireAgentAuth } from './_auth.ts';
 import {
   AgentServiceError,
   AgentValidationError,
@@ -11,7 +11,7 @@ import {
   listProducts,
   updateProduct,
   uploadMedia
-} from './catalog.ts';
+} from './_catalog.ts';
 
 function parts(req: VercelRequest): string[] {
   const value = req.query?.route;
